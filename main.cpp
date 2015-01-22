@@ -14,6 +14,10 @@ int mouse_x;
 int mouse_y;
 int hold_off_x;
 int hold_off_y;
+ALLEGRO_COLOR color_blue;
+ALLEGRO_COLOR color_grey;
+ALLEGRO_COLOR color_grey2;
+ALLEGRO_COLOR color_grey3;
 
 using namespace std;
 
@@ -53,11 +57,13 @@ struct Tile {
 
 struct TileMap {
     int cols;
+    int view_x;
+    int view_y;
     vector<Tile> tiles;
     vector<ALLEGRO_BITMAP *>bitmaps;
 
     void generate(void);
-    void draw(int x, int y);
+    void draw(void);
 };
 
 void TileMap::generate(void) {
@@ -68,17 +74,17 @@ void TileMap::generate(void) {
     }
 }
 
-void TileMap::draw(int x, int y) {
-    int start = cols * y + x;
+void TileMap::draw(void) {
+    int start = cols * view_y + view_x;
     int rows = 14;
     for(int i = start; i < start + cols * rows; i++) {
         int idx = i - start;
         int off_x = idx % cols * 80;
-        int off_y = (idx + x) % 2  == 0 ? 0 : 20;
+        int off_y = (idx + view_x) % 2  == 0 ? 0 : 20;
         off_y = off_y + (40 * floor(idx / cols));
-        int dst_y = 0 + off_y;
-        int dst_x = 0 + off_x;
-        al_draw_bitmap(bitmaps[tiles[i].bitmap_index], dst_x-80, dst_y-60, 0);
+        int dst_x = off_x - 80;
+        int dst_y = off_y - 60;
+        al_draw_bitmap(bitmaps[tiles[i].bitmap_index], dst_x, dst_y, 0);
     }
 }
 
@@ -88,15 +94,12 @@ void GridSystem::draw(void) {
 }
 
 void Grid::draw(void) {
-    ALLEGRO_COLOR col = al_map_rgb(200, 200, 200);
-    ALLEGRO_COLOR l = al_map_rgb(240, 240, 240);
-    
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, col);
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, color_grey2);
 
     for (int x = pos.x1; x <= pos.x2; x = x + 10)
-        al_draw_line(x, pos.y1, x, pos.y2, l, 1);
+        al_draw_line(x, pos.y1, x, pos.y2, color_grey3, 1);
     for (int y = pos.y1; y <= pos.y2; y = y + 10)
-        al_draw_line(pos.x1, y, pos.x2, y, l, 1);
+        al_draw_line(pos.x1, y, pos.x2, y, color_grey3, 1);
     
     for (auto i : items)
         i.draw();
@@ -135,12 +138,10 @@ Item *Grid::get_item(int x, int y) {
             Item *a = new(Item);
             *a = items[c];
             items.erase(items.begin() + c);
-            cout << c << "\n";
             return a;
         }
         c++;
     }
-    //printf("No item here\n");
     return NULL;
 }
 
@@ -154,23 +155,29 @@ int main(void) {
     al_install_mouse();
     
     ALLEGRO_DISPLAY *display = al_create_display(1280, 720);
-    ALLEGRO_COLOR color_blue = al_color_name("steelblue");
-    ALLEGRO_COLOR color_grey = al_color_name("grey");
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
     ALLEGRO_TIMER *timer = al_create_timer(1.0 / 60);
     ALLEGRO_EVENT ev;
-    //ALLEGRO_TIMEOUT timeout;
     ALLEGRO_MOUSE_STATE mouse_state;
     ALLEGRO_KEYBOARD_STATE keyboard_state;
     al_start_timer(timer);
+    al_set_target_backbuffer(display);
 
-    TileMap tm;
-    tm.cols = 10;
-    tm.generate();
+    color_blue = al_color_name("steelblue");
+    color_grey = al_color_name("grey");
+    color_grey2 = al_map_rgb(200, 200, 200);
+    color_grey3 = al_map_rgb(240, 240, 240);
 
     ALLEGRO_BITMAP *tile_grass = al_load_bitmap("tile_grass.png");
     ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
     ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
+
+    TileMap tm;
+    tm.cols = 10;
+    tm.generate();
+    tm.view_x = 4;
+    tm.view_y = 4;
+
     tm.bitmaps.push_back(tile_grass);
     tm.bitmaps.push_back(tile_grass);
     tm.bitmaps.push_back(tile_grass);
@@ -183,41 +190,40 @@ int main(void) {
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
     GridSystem gs;
-    Grid g1;
-    g1.pos.x1 = 10;
-    g1.pos.y1 = 10;
-    g1.pos.x2 = 200;
-    g1.pos.y2 = 300;
-    Item i1;
-    i1.pos.x1 = 3;
-    i1.pos.y1 = 3;
-    i1.pos.x2 = 7;
-    i1.pos.y2 = 1;
-    i1.parent = &g1;
-    i1.name = "item 1";
-    Item i2;
-    i2.pos.x1 = 3;
-    i2.pos.y1 = 10;
-    i2.pos.x2 = 4;
-    i2.pos.y2 = 4;
-    i2.parent = &g1;
-    i2.name = "item 2";
-    g1.items.push_back(i1);
-    g1.items.push_back(i2);
-    Grid g2;
-    g2.pos.x1 = 250;
-    g2.pos.y1 = 10;
-    g2.pos.x2 = 450;
-    g2.pos.y2 = 200;
-    gs.grids.push_back(g1);
-    gs.grids.push_back(g2);
+    {
+        Grid g1;
+        g1.pos.x1 = 10;
+        g1.pos.y1 = 10;
+        g1.pos.x2 = 200;
+        g1.pos.y2 = 300;
+        Item i1;
+        i1.pos.x1 = 3;
+        i1.pos.y1 = 3;
+        i1.pos.x2 = 7;
+        i1.pos.y2 = 1;
+        i1.parent = &g1;
+        i1.name = "item 1";
+        Item i2;
+        i2.pos.x1 = 3;
+        i2.pos.y1 = 10;
+        i2.pos.x2 = 4;
+        i2.pos.y2 = 4;
+        i2.parent = &g1;
+        i2.name = "item 2";
+        g1.items.push_back(i1);
+        g1.items.push_back(i2);
+        Grid g2;
+        g2.pos.x1 = 250;
+        g2.pos.y1 = 10;
+        g2.pos.x2 = 450;
+        g2.pos.y2 = 200;
+        gs.grids.push_back(g1);
+        gs.grids.push_back(g2);
+    }
     
-    int x = 4;
-    int y = 4;
     bool redraw = true;
     bool was_mouse_down = false;
     Item *held = NULL;
-    al_set_target_backbuffer(display);
 
     while(1) {
         al_get_mouse_state(&mouse_state);
@@ -230,7 +236,6 @@ int main(void) {
                 // mouse down event
                 Item *i = gs.grids[0].get_item(mouse_x, mouse_y);
                 if(i != NULL) {
-                    cout << "Clicked on item: " << i->name << "\n";
                     held = i;
                     hold_off_x =
                         mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
@@ -238,16 +243,10 @@ int main(void) {
                         mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
                     held->parent = NULL;
                 }
-                cout << "pressed mouse key\n";
                 was_mouse_down = true;
-                cout << gs.grids[0].items.size() << "\n";
             }
-            
-            //printf("Mouse position: (%d, %d)\n", state.x, state.y);
-        }
-        else if (was_mouse_down) {
-            // mouse down event
-            cout << "released mouse key\n";
+        } else if (was_mouse_down) {
+            // mouse up event
             was_mouse_down = false;
             
             if(held != NULL) {
@@ -256,7 +255,7 @@ int main(void) {
                     ((mouse_x - hold_off_x) - gs.grids[0].pos.x1) / 10;
                 int drop_y =
                     ((mouse_y - hold_off_y) - gs.grids[0].pos.y1) / 10;
-                cout << "dropping at " << drop_x << " " << drop_y << "\n";
+
                 held->parent = &gs.grids[0];
                 held->pos.x1 = drop_x;
                 held->pos.y1 = drop_y;
@@ -264,34 +263,29 @@ int main(void) {
                 delete held;
                 held = NULL;
             }
-            cout << gs.grids[0].items.size() << "\n";
-            
         }
  
         al_wait_for_event(event_queue, &ev);
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
             if(ev.keyboard.keycode == ALLEGRO_KEY_DOWN)
-                if(y < 150)
-                    y++;
+                if(tm.view_y < 150)
+                    tm.view_y++;
             if(ev.keyboard.keycode == ALLEGRO_KEY_UP)
-                if(y > 0)
-                    y--;
+                if(tm.view_y > 0)
+                    tm.view_y--;
             if(ev.keyboard.keycode == ALLEGRO_KEY_LEFT)
-                if(x > 0)
-                    x--;
+                if(tm.view_x > 0)
+                    tm.view_x--;
             if(ev.keyboard.keycode == ALLEGRO_KEY_RIGHT)
-                if(x < 150)
-                    x++;
+                if(tm.view_x < 150)
+                    tm.view_x++;
             if(ev.keyboard.keycode == ALLEGRO_KEY_ESCAPE)
                 break;
         }
 
         if(ev.type == ALLEGRO_EVENT_TIMER) {
-            //x++;
-            //y++;
-            //x = x % 400;
-            //y = y % 400;
+            // logic goes here
             redraw = true;
         }
         else if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
@@ -300,26 +294,15 @@ int main(void) {
 
         
         if(redraw && al_is_event_queue_empty(event_queue)) {
-            // drawing goes here
             redraw = false;
             al_clear_to_color(color_grey);
-            al_draw_line(10, 10, x, y, color_blue, 10);
-            /*
-              al_draw_bitmap(tile_grass, 300, 300, 0);
-              al_draw_bitmap(tile_tree, 380, 320, 0);
-              al_draw_bitmap(tile_grass, 460, 300, 0);
-              al_draw_bitmap(tile_tree, 300, 340, 0);
-              al_draw_bitmap(tile_city, 380, 360, 0);
-              al_draw_bitmap(tile_tree, 460, 340, 0);
-              al_draw_bitmap(tile_tree, 300, 380, 0);
-              al_draw_bitmap(tile_grass, 380, 400, 0);
-              al_draw_bitmap(tile_grass, 460, 380, 0);
-            */
-            tm.draw(x, y);
-            gs.draw();
-            if(held != NULL) {
-                printf("drawing held %d %d %d %d\n", mouse_x, mouse_y, hold_off_x, hold_off_y);
-                held->draw();
+
+            { // drawing goes here
+                tm.draw();
+                gs.draw();
+                if(held != NULL) {
+                    held->draw();
+                }
             }
             al_flip_display();
         }
