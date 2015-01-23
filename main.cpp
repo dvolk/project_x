@@ -411,29 +411,40 @@ TestGridSystem::TestGridSystem() {
     g1.pos.y1 = 10;
     g1.pos.x2 = 200;
     g1.pos.y2 = 300;
+    Grid g2;
+    g2.pos.x1 = 250;
+    g2.pos.y1 = 10;
+    g2.pos.x2 = 450;
+    g2.pos.y2 = 200;
     Item i1;
     i1.pos.x1 = 3;
     i1.pos.y1 = 3;
     i1.pos.x2 = 7;
     i1.pos.y2 = 1;
-    i1.parent = &g1;
     i1.name = "item 1";
     Item i2;
     i2.pos.x1 = 3;
     i2.pos.y1 = 10;
     i2.pos.x2 = 4;
     i2.pos.y2 = 4;
-    i2.parent = &g1;
     i2.name = "item 2";
+
     g1.items.push_back(i1);
     g1.items.push_back(i2);
-    Grid g2;
-    g2.pos.x1 = 250;
-    g2.pos.y1 = 10;
-    g2.pos.x2 = 450;
-    g2.pos.y2 = 200;
     grids.push_back(g1);
     grids.push_back(g2);
+
+    // REALLY set item parents
+    int i = 0;
+    for(auto grid : grids) {
+        int j = 0;
+        for(auto item : grid.items) {
+            grids[i].items[j].parent = &grids[i];
+            j++;
+        }
+        i++;
+    }
+
     pos.x1 = 0;
     pos.y1 = 0;
     pos.x2 = 1280;
