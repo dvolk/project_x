@@ -60,7 +60,7 @@ struct Widget {
     signal<void> onKeyDown;
 
     virtual void draw(void) = 0;
-    virtual void update(int x, int y) { };
+    virtual void update() { };
 };
 
 struct Grid {
@@ -118,8 +118,15 @@ struct UI {
     void mouseDownEvent(void);
     void mouseUpEvent(void);
     void keyDownEvent(void);
+
+    void update(void);
     void draw(void);
 };
+
+void UI::update(void) {
+    for(auto widget : widgets)
+        widget->update();
+}
 
 void UI::mouseDownEvent(void) {
     for(auto widget : widgets) {
@@ -168,7 +175,7 @@ struct Button : public Widget {
 
     void press(void);
     void draw(void);
-    void update(int x, int y);
+    void update(void);
 };
 
 struct MessageLog : public Widget {
@@ -221,14 +228,7 @@ void Button::draw(void) {
     }
 }
 
-void Button::update(int x, int y) {
-    if(pos.x1 <= x &&
-       pos.y1 <= y &&
-       pos.x1 + pos.x2 >= x &&
-       pos.y1 + pos.y2 >= y) {
-        onMouseDown.emit();
-        pressed = !pressed;
-    }
+void Button::update() {
 }
 
 void TileMap::generate(void) {
@@ -624,7 +624,7 @@ int main(void) {
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
-
+                g_ui->update();
             }
             redraw = true;
         }
