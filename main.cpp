@@ -2,6 +2,7 @@
 #include <allegro5/allegro_color.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_image.h>
+#include <allegro5/allegro_font.h>
 
 #include <stdint.h>
 
@@ -10,16 +11,34 @@
 #include <memory>
 #include <cmath>
 
+#include <sigc++/sigc++.h>
+
+using namespace std;
+using namespace sigc;
+
+struct MessageLog;
+struct Grid;
+struct UI;
+struct Widget;
+struct Button;
+struct GridSystem;
+
 int mouse_x;
 int mouse_y;
 int hold_off_x;
 int hold_off_y;
-ALLEGRO_COLOR color_blue;
+int key;
+
 ALLEGRO_COLOR color_grey;
 ALLEGRO_COLOR color_grey2;
 ALLEGRO_COLOR color_grey3;
+ALLEGRO_COLOR color_black;
 
-using namespace std;
+ALLEGRO_FONT *font;
+
+MessageLog *g_log;
+UI *g_ui;
+GridSystem *g_gs;
 
 struct Rect {
     float x1;
@@ -28,13 +47,21 @@ struct Rect {
     float y2;
 };
 
-struct Grid;
-
 struct Item {
     Rect pos;
     string name;
     Grid *parent;
     void draw(void);
+};
+
+struct Widget {
+    Rect pos;
+    signal<void> onMouseDown;
+    signal<void> onMouseUp;
+    signal<void> onKeyDown;
+
+    virtual void draw(void) = 0;
+    virtual void update(int x, int y) { };
 };
 
 struct Grid {
@@ -45,26 +72,164 @@ struct Grid {
     Item *get_item(int x, int y); // get item at screen position
 };
 
-struct GridSystem {
+struct GridSystem : public Widget {
     vector<Grid> grids;
+    Item *held;
 
+    GridSystem(void) { held = NULL; }
+    ~GridSystem(void) { grids.clear(); }
+
+    void gsMouseDownEvent(void);
+    void gsMouseUpEvent(void);
     void draw(void);
+};
+
+struct TestGridSystem : public GridSystem {
+    TestGridSystem();
+    ~TestGridSystem();
 };
 
 struct Tile {
     int16_t bitmap_index;
 };
 
-struct TileMap {
+struct TileMap : public Widget {
     int cols;
     int view_x;
     int view_y;
     vector<Tile> tiles;
     vector<ALLEGRO_BITMAP *>bitmaps;
 
+    ~TileMap(void);
+
     void generate(void);
     void draw(void);
+    void tmKeyDownEvent(void);
 };
+
+TileMap::~TileMap(void) {
+    for(auto bitmap : bitmaps)
+        free(bitmap);
+}
+
+struct UI {
+    vector<Widget *> widgets;
+
+    void mouseDownEvent(void);
+    void mouseUpEvent(void);
+    void keyDownEvent(void);
+    void draw(void);
+};
+
+void UI::mouseDownEvent(void) {
+    for(auto widget : widgets) {
+        if(widget->pos.x1 <= mouse_x &&
+           widget->pos.y1 <= mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= mouse_y) {
+            widget->onMouseDown.emit();
+        }
+    }
+}
+
+void UI::mouseUpEvent(void) {
+    for(auto widget : widgets) {
+        if(widget->pos.x1 <= mouse_x &&
+           widget->pos.y1 <= mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= mouse_y) {
+            widget->onMouseUp.emit();
+        }
+    }
+}
+
+void UI::keyDownEvent(void) {
+    for(auto widget : widgets) {
+        if(widget->pos.x1 <= mouse_x &&
+           widget->pos.y1 <= mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= mouse_y) {
+            widget->onKeyDown.emit();
+        }
+    }
+}
+void UI::draw(void) {
+    for(auto widget : widgets) {
+        widget->draw();
+    }
+}
+
+struct Button : public Widget {
+    bool pressed;
+    ALLEGRO_BITMAP *up;
+    ALLEGRO_BITMAP *down;
+
+    ~Button();
+
+    void press(void);
+    void draw(void);
+    void update(int x, int y);
+};
+
+struct MessageLog : public Widget {
+    ALLEGRO_BITMAP *background;
+    ALLEGRO_FONT *font;
+    vector<string> lines;
+
+    ~MessageLog();
+
+    void draw(void);
+};
+
+void switch_ui(bool p);
+static bool blah = 1;
+
+void Button::press(void) {
+    pressed = !pressed;
+    g_log->lines.push_back("pressed button");
+    blah = !blah;
+    switch_ui(blah);
+}
+
+Button::~Button(void) {
+    free(up);
+    free(down);
+}
+
+MessageLog::~MessageLog(void) {
+    free(background);
+    free(font);
+}
+
+void MessageLog::draw(void) {
+    if(background != NULL) {
+        al_draw_bitmap(background, pos.x1, pos.y1, 0);
+    }
+
+    int off_y = 8;
+    int lines_n = lines.size();
+    int start = max(0, lines_n - 23);
+    for(int i = start; i < lines_n; i++) {
+        al_draw_text(font, color_black, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
+        off_y = off_y + 8;
+    }
+}
+
+void Button::draw(void) {
+    if(up != NULL && down != NULL) {
+        al_draw_bitmap(pressed ? down : up, pos.x1, pos.y1, 0);
+    }
+}
+
+void Button::update(int x, int y) {
+    if(pos.x1 <= x &&
+       pos.y1 <= y &&
+       pos.x1 + pos.x2 >= x &&
+       pos.y1 + pos.y2 >= y) {
+        onMouseDown.emit();
+        pressed = !pressed;
+    }
+}
 
 void TileMap::generate(void) {
     for(int i = 0; i < 150*150; i++) {
@@ -76,7 +241,7 @@ void TileMap::generate(void) {
 
 void TileMap::draw(void) {
     int start = cols * view_y + view_x;
-    int rows = 14;
+    int rows = 20;
     for(int i = start; i < start + cols * rows; i++) {
         int idx = i - start;
         int off_x = idx % cols * 80;
@@ -88,9 +253,57 @@ void TileMap::draw(void) {
     }
 }
 
+void TileMap::tmKeyDownEvent(void) {
+    if(key == ALLEGRO_KEY_DOWN)
+        if(view_y < 150)
+            view_y++;
+    if(key == ALLEGRO_KEY_UP)
+        if(view_y > 0)
+            view_y--;
+    if(key == ALLEGRO_KEY_LEFT)
+        if(view_x > 0)
+            view_x--;
+    if(key == ALLEGRO_KEY_RIGHT)
+        if(view_x < 150)
+            view_x++;
+}
+
 void GridSystem::draw(void) {
     for (auto g : grids)
         g.draw();
+
+    if(held != NULL)
+        held->draw();
+}
+
+void GridSystem::gsMouseDownEvent() {
+    Item *i = grids[0].get_item(mouse_x, mouse_y);
+    if(i != NULL) {
+        held = i;
+        hold_off_x =
+            mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
+        hold_off_y =
+            mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
+        held->parent = NULL;
+    }
+}
+
+void GridSystem::gsMouseUpEvent() {
+    if(held != NULL) {
+        // mouse is holding an item
+        int drop_x =
+            ((mouse_x - hold_off_x) - grids[0].pos.x1) / 10;
+        int drop_y =
+            ((mouse_y - hold_off_y) - grids[0].pos.y1) / 10;
+
+        held->parent = &grids[0];
+        held->pos.x1 = drop_x;
+        held->pos.y1 = drop_y;
+        grids[0].items.push_back(*held);
+        delete held;
+        held = NULL;
+        g_log->lines.push_back("You moved the block! Congratulations!");
+    }
 }
 
 void Grid::draw(void) {
@@ -145,12 +358,163 @@ Item *Grid::get_item(int x, int y) {
     return NULL;
 }
 
+struct TestUI : public UI {
+    TestUI();
+    ~TestUI();
+};
 
+struct TestUI2 : public UI {
+    TestUI2();
+    ~TestUI2();
+};
+
+
+
+void switch_ui(bool p) {
+    cout << p << endl;
+    if(p) {
+        TestUI *ui = new(TestUI);
+        delete g_ui;
+        g_ui = ui;
+    } else {
+        TestUI2 *ui = new(TestUI2);
+        delete g_ui;
+        g_ui = ui;
+    }
+}
+
+TestUI2::TestUI2(void) {
+    ALLEGRO_BITMAP *button_up = al_load_bitmap("button_up.png");
+    ALLEGRO_BITMAP *button_down = al_load_bitmap("button_down.png");
+    Button *test_button = new(Button);
+    test_button->pos.x1 = 400;
+    test_button->pos.y1 = 400;
+    test_button->pos.x2 = 100;
+    test_button->pos.y2 = 100;
+    test_button->up = button_up;
+    test_button->down = button_down;
+    test_button->pressed = false;
+    test_button->onMouseDown.connect(mem_fun(test_button, &Button::press));
+
+    widgets.push_back(test_button);
+}
+
+TestUI2::~TestUI2() {
+    widgets.clear();
+}
+
+TestGridSystem::TestGridSystem() {
+    Grid g1;
+    g1.pos.x1 = 10;
+    g1.pos.y1 = 10;
+    g1.pos.x2 = 200;
+    g1.pos.y2 = 300;
+    Item i1;
+    i1.pos.x1 = 3;
+    i1.pos.y1 = 3;
+    i1.pos.x2 = 7;
+    i1.pos.y2 = 1;
+    i1.parent = &g1;
+    i1.name = "item 1";
+    Item i2;
+    i2.pos.x1 = 3;
+    i2.pos.y1 = 10;
+    i2.pos.x2 = 4;
+    i2.pos.y2 = 4;
+    i2.parent = &g1;
+    i2.name = "item 2";
+    g1.items.push_back(i1);
+    g1.items.push_back(i2);
+    Grid g2;
+    g2.pos.x1 = 250;
+    g2.pos.y1 = 10;
+    g2.pos.x2 = 450;
+    g2.pos.y2 = 200;
+    grids.push_back(g1);
+    grids.push_back(g2);
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+}
+
+TestGridSystem::~TestGridSystem() {
+    //
+}
+
+TestUI::TestUI() {
+    ALLEGRO_BITMAP *button_up = al_load_bitmap("button_up.png");
+    ALLEGRO_BITMAP *button_down = al_load_bitmap("button_down.png");
+    ALLEGRO_BITMAP *messagelogbg = al_load_bitmap("messagelogbg.png");
+
+    Button *test_button = new(Button);
+    test_button->pos.x1 = 400;
+    test_button->pos.y1 = 400;
+    test_button->pos.x2 = 100;
+    test_button->pos.y2 = 100;
+    test_button->up = button_up;
+    test_button->down = button_down;
+    test_button->pressed = false;
+    test_button->onMouseDown.connect(mem_fun(test_button, &Button::press));
+
+    MessageLog *log = new(MessageLog);
+    log->pos.x1 = 100;
+    log->pos.y1 = 520;
+    log->pos.x2 = 1080;
+    log->pos.y2 = 200;
+    log->background = messagelogbg;
+    log->font = font;
+    log->lines.push_back("Player is dying.");
+    log->lines.push_back("Player is dead. Blegrgrgrvddgd...");
+
+    TestGridSystem *tgs = new(TestGridSystem);
+    {
+        tgs->onMouseUp.connect(mem_fun(tgs, &TestGridSystem::gsMouseUpEvent));
+        tgs->onMouseDown.connect(mem_fun(tgs, &TestGridSystem::gsMouseDownEvent));
+    }
+    g_log = log;
+    g_gs = tgs;
+
+    TileMap *tm = new(TileMap);
+    {
+        tm->cols = 18;
+        tm->generate();
+        tm->view_x = 4;
+        tm->view_y = 4;
+        tm->pos.x1 = 0;
+        tm->pos.y1 = 0;
+        tm->pos.x2 = 1280;
+        tm->pos.y2 = 720;
+
+        ALLEGRO_BITMAP *tile_grass = al_load_bitmap("tile_grass.png");
+        ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
+        ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
+
+        tm->bitmaps.push_back(tile_grass);
+        tm->bitmaps.push_back(tile_grass);
+        tm->bitmaps.push_back(tile_grass);
+        tm->bitmaps.push_back(tile_tree);
+        tm->bitmaps.push_back(tile_tree);
+        tm->bitmaps.push_back(tile_city);
+
+        tm->onKeyDown.connect(mem_fun(tm, &TileMap::tmKeyDownEvent));
+    }
+
+    widgets.push_back(tm);
+    widgets.push_back(log);
+    widgets.push_back(test_button);
+    widgets.push_back(tgs);
+}
+
+TestUI::~TestUI(void) {
+    widgets.clear();
+}
 
 int main(void) {
     al_init();
     al_init_primitives_addon();
     al_init_image_addon();
+    al_init_font_addon();
     al_install_keyboard();
     al_install_mouse();
     
@@ -160,70 +524,27 @@ int main(void) {
     ALLEGRO_EVENT ev;
     ALLEGRO_MOUSE_STATE mouse_state;
     ALLEGRO_KEYBOARD_STATE keyboard_state;
+    font = al_create_builtin_font();
+
     al_start_timer(timer);
     al_set_target_backbuffer(display);
-
-    color_blue = al_color_name("steelblue");
-    color_grey = al_color_name("grey");
-    color_grey2 = al_map_rgb(200, 200, 200);
-    color_grey3 = al_map_rgb(240, 240, 240);
-
-    ALLEGRO_BITMAP *tile_grass = al_load_bitmap("tile_grass.png");
-    ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
-    ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
-
-    TileMap tm;
-    tm.cols = 10;
-    tm.generate();
-    tm.view_x = 4;
-    tm.view_y = 4;
-
-    tm.bitmaps.push_back(tile_grass);
-    tm.bitmaps.push_back(tile_grass);
-    tm.bitmaps.push_back(tile_grass);
-    tm.bitmaps.push_back(tile_tree);
-    tm.bitmaps.push_back(tile_tree);
-    tm.bitmaps.push_back(tile_city);
 
     al_register_event_source(event_queue, al_get_display_event_source(display));
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
-    GridSystem gs;
-    {
-        Grid g1;
-        g1.pos.x1 = 10;
-        g1.pos.y1 = 10;
-        g1.pos.x2 = 200;
-        g1.pos.y2 = 300;
-        Item i1;
-        i1.pos.x1 = 3;
-        i1.pos.y1 = 3;
-        i1.pos.x2 = 7;
-        i1.pos.y2 = 1;
-        i1.parent = &g1;
-        i1.name = "item 1";
-        Item i2;
-        i2.pos.x1 = 3;
-        i2.pos.y1 = 10;
-        i2.pos.x2 = 4;
-        i2.pos.y2 = 4;
-        i2.parent = &g1;
-        i2.name = "item 2";
-        g1.items.push_back(i1);
-        g1.items.push_back(i2);
-        Grid g2;
-        g2.pos.x1 = 250;
-        g2.pos.y1 = 10;
-        g2.pos.x2 = 450;
-        g2.pos.y2 = 200;
-        gs.grids.push_back(g1);
-        gs.grids.push_back(g2);
-    }
-    
+    color_grey = al_color_name("grey");
+    color_grey2 = al_map_rgb(200, 200, 200);
+    color_grey3 = al_map_rgb(240, 240, 240);
+    color_black = al_map_rgb(0, 0, 0);
+
     bool redraw = true;
     bool was_mouse_down = false;
-    Item *held = NULL;
+
+    {
+        TestUI *ui = new(TestUI);
+        g_ui = ui;
+    }
 
     while(1) {
         al_get_mouse_state(&mouse_state);
@@ -231,83 +552,51 @@ int main(void) {
         
         mouse_x = mouse_state.x;
         mouse_y = mouse_state.y;
+
         if (mouse_state.buttons & 1) {
             if (!was_mouse_down) {
                 // mouse down event
-                Item *i = gs.grids[0].get_item(mouse_x, mouse_y);
-                if(i != NULL) {
-                    held = i;
-                    hold_off_x =
-                        mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
-                    hold_off_y =
-                        mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
-                    held->parent = NULL;
-                }
+                g_ui->mouseDownEvent();
                 was_mouse_down = true;
             }
-        } else if (was_mouse_down) {
+        }
+        else if (was_mouse_down) {
+            g_ui->mouseUpEvent();
             // mouse up event
             was_mouse_down = false;
             
-            if(held != NULL) {
-                // mouse is holding an item
-                int drop_x =
-                    ((mouse_x - hold_off_x) - gs.grids[0].pos.x1) / 10;
-                int drop_y =
-                    ((mouse_y - hold_off_y) - gs.grids[0].pos.y1) / 10;
-
-                held->parent = &gs.grids[0];
-                held->pos.x1 = drop_x;
-                held->pos.y1 = drop_y;
-                gs.grids[0].items.push_back(*held);
-                delete held;
-                held = NULL;
-            }
         }
  
         al_wait_for_event(event_queue, &ev);
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
-            if(ev.keyboard.keycode == ALLEGRO_KEY_DOWN)
-                if(tm.view_y < 150)
-                    tm.view_y++;
-            if(ev.keyboard.keycode == ALLEGRO_KEY_UP)
-                if(tm.view_y > 0)
-                    tm.view_y--;
-            if(ev.keyboard.keycode == ALLEGRO_KEY_LEFT)
-                if(tm.view_x > 0)
-                    tm.view_x--;
-            if(ev.keyboard.keycode == ALLEGRO_KEY_RIGHT)
-                if(tm.view_x < 150)
-                    tm.view_x++;
-            if(ev.keyboard.keycode == ALLEGRO_KEY_ESCAPE)
+            key = ev.keyboard.keycode;
+            if(key == ALLEGRO_KEY_ESCAPE)
                 break;
+            else
+                g_ui->keyDownEvent();
         }
 
         if(ev.type == ALLEGRO_EVENT_TIMER) {
-            // logic goes here
+            { // logic goes here
+            }
             redraw = true;
         }
         else if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
             break;
         }
-
         
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
             al_clear_to_color(color_grey);
 
             { // drawing goes here
-                tm.draw();
-                gs.draw();
-                if(held != NULL) {
-                    held->draw();
-                }
+                g_ui->draw();
             }
             al_flip_display();
         }
     }
-    
+
     al_destroy_display(display);
     return 0;
 }
