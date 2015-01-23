@@ -508,21 +508,68 @@ TestUI::~TestUI(void) {
     widgets.clear();
 }
 
+void allegro_init(void) {
+    int ret = 0;
+
+    al_init(); // no return value
+
+    ret = al_init_primitives_addon();
+    if(ret == false) {
+        cout << "failed to initialize allegro addon: primitives" << endl;
+        exit(1);
+    }
+
+    ret = al_init_image_addon();
+    if(ret == false) {
+        cout << "failed to initialize allegro addon: image" << endl;
+        exit(1);
+    }
+
+    al_init_font_addon(); // no return value
+
+    ret = al_install_keyboard();
+    if(ret == false) {
+        cout << "failed to initialize keyboard" << endl;
+        exit(1);
+    }
+
+    ret = al_install_mouse();
+    if(ret == false) {
+        cout << "failed to initialize mouse" << endl;
+        exit(1);
+    }
+}
+
 int main(void) {
-    al_init();
-    al_init_primitives_addon();
-    al_init_image_addon();
-    al_init_font_addon();
-    al_install_keyboard();
-    al_install_mouse();
+    allegro_init();
     
     ALLEGRO_DISPLAY *display = al_create_display(1280, 720);
+    if(display == NULL) {
+        cout << "failed to create display" << endl;
+        exit(1);
+    }
+
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
+    if(event_queue == NULL) {
+        cout << "failed to create event queue" << endl;
+        exit(1);
+    }
+
     ALLEGRO_TIMER *timer = al_create_timer(1.0 / 60);
+    if(timer == NULL) {
+        cout << "failed to create timer" << endl;
+        exit(1);
+    }
+
+    font = al_create_builtin_font();
+    if(font == NULL) {
+        cout << "failed to load builtin font" << endl;
+        exit(1);
+    }
+
     ALLEGRO_EVENT ev;
     ALLEGRO_MOUSE_STATE mouse_state;
     ALLEGRO_KEYBOARD_STATE keyboard_state;
-    font = al_create_builtin_font();
 
     al_start_timer(timer);
     al_set_target_backbuffer(display);
@@ -562,7 +609,6 @@ int main(void) {
             g_ui->mouseUpEvent();
             // mouse up event
             was_mouse_down = false;
-            
         }
  
         al_wait_for_event(event_queue, &ev);
@@ -574,9 +620,9 @@ int main(void) {
             else
                 g_ui->keyDownEvent();
         }
-
-        if(ev.type == ALLEGRO_EVENT_TIMER) {
+        else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
+
             }
             redraw = true;
         }
@@ -595,6 +641,7 @@ int main(void) {
         }
     }
 
+    // don't really need to deallocate if we're quitting...
     al_destroy_display(display);
     return 0;
 }
