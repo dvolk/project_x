@@ -38,7 +38,6 @@ ALLEGRO_FONT *font;
 
 MessageLog *g_log;
 UI *g_ui;
-GridSystem *g_gs;
 
 struct Rect {
     float x1;
@@ -473,7 +472,6 @@ TestUI::TestUI() {
         tgs->onMouseDown.connect(mem_fun(tgs, &TestGridSystem::gsMouseDownEvent));
     }
     g_log = log;
-    g_gs = tgs;
 
     TileMap *tm = new(TileMap);
     {
