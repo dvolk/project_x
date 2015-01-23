@@ -101,6 +101,7 @@ struct TileMap : public Widget {
 
     ~TileMap(void);
 
+    // must be called after the bitmaps vector is filled
     void generate(void);
     void draw(void);
     void tmKeyDownEvent(void);
@@ -231,10 +232,12 @@ void Button::update(int x, int y) {
 }
 
 void TileMap::generate(void) {
+    tiles.reserve(150*150);
+    int up_to = bitmaps.size();
     for(int i = 0; i < 150*150; i++) {
         Tile t;
-        t.bitmap_index = rand() % 6;
-        tiles.push_back(t);
+        t.bitmap_index = rand() % up_to;
+        tiles[i] = t;
     }
 }
 
@@ -476,7 +479,6 @@ TestUI::TestUI() {
     TileMap *tm = new(TileMap);
     {
         tm->cols = 18;
-        tm->generate();
         tm->view_x = 4;
         tm->view_y = 4;
         tm->pos.x1 = 0;
@@ -488,13 +490,13 @@ TestUI::TestUI() {
         ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
         ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
 
-        tm->bitmaps.push_back(tile_grass);
-        tm->bitmaps.push_back(tile_grass);
-        tm->bitmaps.push_back(tile_grass);
-        tm->bitmaps.push_back(tile_tree);
+        for(int i = 0; i < 5; i++)
+            tm->bitmaps.push_back(tile_grass);
+
         tm->bitmaps.push_back(tile_tree);
         tm->bitmaps.push_back(tile_city);
 
+        tm->generate();
         tm->onKeyDown.connect(mem_fun(tm, &TileMap::tmKeyDownEvent));
     }
 
