@@ -23,25 +23,6 @@ struct Widget;
 struct Button;
 struct GridSystem;
 
-int mouse_x;
-int mouse_y;
-int hold_off_x;
-int hold_off_y;
-int key;
-
-ALLEGRO_COLOR color_grey;
-ALLEGRO_COLOR color_grey2;
-ALLEGRO_COLOR color_grey3;
-ALLEGRO_COLOR color_black;
-
-ALLEGRO_FONT *font;
-
-MessageLog *g_log;
-UI *g_ui;
-
-UI *MainUI;
-UI *LootUI;
-
 void errorQuit(string str) {
     cout << "Error: " << str << endl;
     exit(1);
@@ -50,6 +31,34 @@ void errorQuit(string str) {
 void info(string str) {
     cout << "Info: " << str << endl;
 }
+
+// global state
+struct Game {
+    ALLEGRO_DISPLAY *display;
+    ALLEGRO_FONT *font;
+
+    ALLEGRO_COLOR color_black;
+    ALLEGRO_COLOR color_grey;
+    ALLEGRO_COLOR color_grey2;
+    ALLEGRO_COLOR color_grey3;
+
+    UI *ui; // current UI
+
+    UI *MainUI;
+    UI *LootUI;
+
+    MessageLog *log;
+
+    int mouse_x;
+    int mouse_y;
+    int hold_off_x;
+    int hold_off_y;
+    int key;
+
+    void AddMessage(string str);
+};
+
+Game g;
 
 struct Rect {
     float x1;
@@ -163,10 +172,10 @@ void UI::update(void) {
 
 void UI::mouseDownEvent(void) {
     for(auto& widget : widgets) {
-        if(widget->pos.x1 <= mouse_x &&
-           widget->pos.y1 <= mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= mouse_y) {
+        if(widget->pos.x1 <= g.mouse_x &&
+           widget->pos.y1 <= g.mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->onMouseDown.emit();
         }
     }
@@ -174,10 +183,10 @@ void UI::mouseDownEvent(void) {
 
 void UI::mouseUpEvent(void) {
     for(auto& widget : widgets) {
-        if(widget->pos.x1 <= mouse_x &&
-           widget->pos.y1 <= mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= mouse_y) {
+        if(widget->pos.x1 <= g.mouse_x &&
+           widget->pos.y1 <= g.mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->onMouseUp.emit();
         }
     }
@@ -185,10 +194,10 @@ void UI::mouseUpEvent(void) {
 
 void UI::keyDownEvent(void) {
     for(auto& widget : widgets) {
-        if(widget->pos.x1 <= mouse_x &&
-           widget->pos.y1 <= mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= mouse_y) {
+        if(widget->pos.x1 <= g.mouse_x &&
+           widget->pos.y1 <= g.mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->onKeyDown.emit();
         }
     }
@@ -221,14 +230,14 @@ struct MessageLog : public Widget {
     void draw(void);
 };
 
-void switch_ui(bool p);
-static bool blah = 1;
+void Game::AddMessage(string str) {
+    if(log != NULL)
+        log->lines.push_back(str);
+}
 
 void Button::press(void) {
     pressed = !pressed;
-    g_log->lines.push_back("pressed button");
-    blah = !blah;
-    switch_ui(blah);
+    g.AddMessage("pressed button");
 }
 
 Button::~Button(void) {
@@ -253,7 +262,7 @@ void MessageLog::draw(void) {
     int lines_n = lines.size();
     int start = max(0, lines_n - 23);
     for(int i = start; i < lines_n; i++) {
-        al_draw_text(font, color_black, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
+        al_draw_text(font, g.color_black, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
         off_y = off_y + 8;
     }
 }
@@ -292,16 +301,16 @@ void TileMap::draw(void) {
 }
 
 void TileMap::tmKeyDownEvent(void) {
-    if(key == ALLEGRO_KEY_DOWN)
+    if(g.key == ALLEGRO_KEY_DOWN)
         if(view_y < 150)
             view_y++;
-    if(key == ALLEGRO_KEY_UP)
+    if(g.key == ALLEGRO_KEY_UP)
         if(view_y > 0)
             view_y--;
-    if(key == ALLEGRO_KEY_LEFT)
+    if(g.key == ALLEGRO_KEY_LEFT)
         if(view_x > 0)
             view_x--;
-    if(key == ALLEGRO_KEY_RIGHT)
+    if(g.key == ALLEGRO_KEY_RIGHT)
         if(view_x < 150)
             view_x++;
 }
@@ -315,13 +324,13 @@ void GridSystem::draw(void) {
 }
 
 void GridSystem::gsMouseDownEvent() {
-    Item *i = grids[0]->get_item(mouse_x, mouse_y);
+    Item *i = grids[0]->get_item(g.mouse_x, g.mouse_y);
     if(i != NULL) {
         held = i;
-        hold_off_x =
-            mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
-        hold_off_y =
-            mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
+        g.hold_off_x =
+            g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
+        g.hold_off_y =
+            g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
         held->parent = NULL;
     }
 }
@@ -330,9 +339,9 @@ void GridSystem::gsMouseUpEvent() {
     if(held != NULL) {
         // mouse is holding an item
         int drop_x =
-            ((mouse_x - hold_off_x) - grids[0]->pos.x1) / 10;
+            ((g.mouse_x - g.hold_off_x) - grids[0]->pos.x1) / 10;
         int drop_y =
-            ((mouse_y - hold_off_y) - grids[0]->pos.y1) / 10;
+            ((g.mouse_y - g.hold_off_y) - grids[0]->pos.y1) / 10;
 
         held->parent = grids[0];
         held->pos.x1 = drop_x;
@@ -340,17 +349,17 @@ void GridSystem::gsMouseUpEvent() {
         grids[0]->items.push_back(held);
         //delete held;
         held = NULL;
-        g_log->lines.push_back("You moved the block! Congratulations!");
+        g.AddMessage("You moved the block! Congratulations!");
     }
 }
 
 void Grid::draw(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, color_grey2);
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
 
     for (int x = pos.x1; x <= pos.x2; x = x + 10)
-        al_draw_line(x, pos.y1, x, pos.y2, color_grey3, 1);
+        al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
     for (int y = pos.y1; y <= pos.y2; y = y + 10)
-        al_draw_line(pos.x1, y, pos.x2, y, color_grey3, 1);
+        al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
 
     for (auto& i : items)
         i->draw();
@@ -368,10 +377,10 @@ void Item::draw(void) {
                                  col);
     } else {
         // we're held by the mouse
-        al_draw_filled_rectangle(mouse_x - hold_off_x,
-                                 mouse_y - hold_off_y,
-                                 mouse_x - hold_off_x + pos.x2 * 10,
-                                 mouse_y - hold_off_y + pos.y2 * 10,
+        al_draw_filled_rectangle(g.mouse_x - g.hold_off_x,
+                                 g.mouse_y - g.hold_off_y,
+                                 g.mouse_x - g.hold_off_x + pos.x2 * 10,
+                                 g.mouse_y - g.hold_off_y + pos.y2 * 10,
                                  col);
     }
 
@@ -406,12 +415,11 @@ struct TestUI2 : public UI {
     ~TestUI2();
 };
 
-void switch_ui(bool p) {
-    cout << p << endl;
-    if(!p) {
-        g_ui = LootUI;
+void switch_ui(void) {
+    if(g.ui == g.MainUI) {
+        g.ui = g.LootUI;
     } else {
-        g_ui = MainUI;
+        g.ui = g.MainUI;
     }
 }
 
@@ -509,7 +517,7 @@ TestUI::TestUI() {
     log->pos.x2 = 1080;
     log->pos.y2 = 200;
     log->background = messagelogbg;
-    log->font = font;
+    log->font = g.font;
     log->lines.push_back("Player is dying.");
     log->lines.push_back("Player is dead. Blegrgrgrvddgd...");
 
@@ -519,7 +527,7 @@ TestUI::TestUI() {
         tgs->onMouseDown.connect(mem_fun(tgs, &TestGridSystem::gsMouseDownEvent));
     }
 
-    g_log = log;
+    g.log = log;
 
     TileMap *tm = new(TileMap);
     {
@@ -608,8 +616,8 @@ int main(void) {
     else
         info("Created timer.");
 
-    font = al_create_builtin_font();
-    if(font == NULL)
+    g.font = al_create_builtin_font();
+    if(g.font == NULL)
         errorQuit("failed to load builtin font.");
     else
         info("Loaded builtin font.");
@@ -625,38 +633,38 @@ int main(void) {
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
-    color_grey = al_color_name("grey");
-    color_grey2 = al_map_rgb(200, 200, 200);
-    color_grey3 = al_map_rgb(240, 240, 240);
-    color_black = al_map_rgb(0, 0, 0);
+    g.color_grey = al_color_name("grey");
+    g.color_grey2 = al_map_rgb(200, 200, 200);
+    g.color_grey3 = al_map_rgb(240, 240, 240);
+    g.color_black = al_map_rgb(0, 0, 0);
 
     bool redraw = true;
     bool was_mouse_down = false;
 
     {
         UI *ui = new(TestUI);
-        MainUI = ui;
-        g_ui = ui;
+        g.MainUI = ui;
+        g.ui = ui;
         ui = new(TestUI2);
-        LootUI = ui;
+        g.LootUI = ui;
     }
 
     while(1) {
         al_get_mouse_state(&mouse_state);
         al_get_keyboard_state(&keyboard_state);
 
-        mouse_x = mouse_state.x;
-        mouse_y = mouse_state.y;
+        g.mouse_x = mouse_state.x;
+        g.mouse_y = mouse_state.y;
 
         if (mouse_state.buttons & 1) {
             if (!was_mouse_down) {
                 // mouse down event
-                g_ui->mouseDownEvent();
+                g.ui->mouseDownEvent();
                 was_mouse_down = true;
             }
         }
         else if (was_mouse_down) {
-            g_ui->mouseUpEvent();
+            g.ui->mouseUpEvent();
             // mouse up event
             was_mouse_down = false;
         }
@@ -664,15 +672,15 @@ int main(void) {
         al_wait_for_event(event_queue, &ev);
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
-            key = ev.keyboard.keycode;
-            if(key == ALLEGRO_KEY_ESCAPE)
+            g.key = ev.keyboard.keycode;
+            if(g.key == ALLEGRO_KEY_ESCAPE)
                 break;
             else
-                g_ui->keyDownEvent();
+                g.ui->keyDownEvent();
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
-                g_ui->update();
+                g.ui->update();
             }
             redraw = true;
         }
@@ -682,10 +690,10 @@ int main(void) {
 
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
-            al_clear_to_color(color_grey);
+            al_clear_to_color(g.color_grey);
 
             { // drawing goes here
-                g_ui->draw();
+                g.ui->draw();
             }
             al_flip_display();
         }
@@ -693,7 +701,7 @@ int main(void) {
 
     // don't really need to deallocate if we're quitting...
     al_destroy_display(display);
-    delete g_ui;
+    delete g.ui;
 
     return 0;
 }
