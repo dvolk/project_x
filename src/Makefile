@@ -23,14 +23,14 @@ $(PCH): %.h.gch: %.h
 	$(MV) $@.tmp $@
 
 all: $(OBJS)
-#ifneq (,$(STRIP))
-#	$(STRIP) ../project_x
-#endif
 	$(CXX) $(CXXFLAGS) -o ../project_x $(OBJS) $(LIBS)
+ifneq (,$(STRIP))
+	$(STRIP) ../project_x
+endif
 
 clean:
 	-$(RM) $(OBJS) $(PCH) ../project_x
 
 depend:
 	makedepend -Y $(subst .o,.cpp,$(OBJS))
-	makedepend -a -o.h.gch -Y -Ishared -Iengine -Irpggame $(PCH:.h.gch=.h)
+	makedepend -a -o.h.gch -Y $(PCH:.h.gch=.h)
