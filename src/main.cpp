@@ -83,7 +83,7 @@ struct Grid {
 
     ~Grid() {
         info("~Grid()");
-        for(auto item : items)
+        for(auto& item : items)
             delete item;
     }
 
@@ -98,7 +98,7 @@ struct GridSystem : public Widget {
     GridSystem(void) { }
     ~GridSystem(void) {
         info("~GridSystem()");
-        for(auto grid : grids)
+        for(auto& grid : grids)
             delete grid;
     }
 
