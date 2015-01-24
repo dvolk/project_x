@@ -142,6 +142,12 @@ TileMap::~TileMap(void) {
 struct UI {
     vector<Widget *> widgets;
 
+    virtual ~UI() {
+        info("~UI()");
+        for(auto& widget : widgets)
+            delete widget;
+    }
+
     void mouseDownEvent(void);
     void mouseUpEvent(void);
     void keyDownEvent(void);
@@ -427,9 +433,6 @@ TestUI2::TestUI2(void) {
 
 TestUI2::~TestUI2() {
     info("~TestUI2()");
-    for(auto& widget : widgets)
-        delete widget;
-    //widgets.clear();
 }
 
 TestGridSystem::TestGridSystem() {
@@ -548,9 +551,6 @@ TestUI::TestUI() {
 
 TestUI::~TestUI(void) {
     info("~TestUI()");
-    for(auto& widget : widgets)
-        delete widget;
-    //widgets.clear();
 }
 
 void allegro_init(void) {
