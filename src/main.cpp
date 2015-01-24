@@ -86,7 +86,8 @@ struct Grid {
 
     ~Grid() {
         info("~Grid()");
-        //items.clear();
+        for(auto item : items)
+            delete item;
     }
 
     void draw(void);
@@ -100,8 +101,8 @@ struct GridSystem : public Widget {
     GridSystem(void) { }
     ~GridSystem(void) {
         info("~GridSystem()");
-
-        //grids.clear();
+        for(auto grid : grids)
+            delete grid;
     }
 
     void gsMouseDownEvent(void);
@@ -347,7 +348,7 @@ void Grid::draw(void) {
         al_draw_line(x, pos.y1, x, pos.y2, color_grey3, 1);
     for (int y = pos.y1; y <= pos.y2; y = y + 10)
         al_draw_line(pos.x1, y, pos.x2, y, color_grey3, 1);
-    
+
     for (auto& i : items)
         i->draw();
 }
@@ -370,7 +371,7 @@ void Item::draw(void) {
                                  mouse_y - hold_off_y + pos.y2 * 10,
                                  col);
     }
-        
+
 }
 
 Item *Grid::get_item(int x, int y) {
@@ -412,8 +413,8 @@ void switch_ui(bool p) {
 }
 
 TestUI2::TestUI2(void) {
-    ALLEGRO_BITMAP *button_up = al_load_bitmap("button_up.png");
-    ALLEGRO_BITMAP *button_down = al_load_bitmap("button_down.png");
+    ALLEGRO_BITMAP *button_up = al_load_bitmap("media/buttons/button_up.png");
+    ALLEGRO_BITMAP *button_down = al_load_bitmap("media/buttons/button_down.png");
     Button *test_button = new(Button);
     test_button->pos.x1 = 400;
     test_button->pos.y1 = 400;
@@ -488,9 +489,9 @@ TestGridSystem::~TestGridSystem() {
 }
 
 TestUI::TestUI() {
-    ALLEGRO_BITMAP *button_up = al_load_bitmap("button_up.png");
-    ALLEGRO_BITMAP *button_down = al_load_bitmap("button_down.png");
-    ALLEGRO_BITMAP *messagelogbg = al_load_bitmap("messagelogbg.png");
+    ALLEGRO_BITMAP *button_up = al_load_bitmap("media/buttons/button_up.png");
+    ALLEGRO_BITMAP *button_down = al_load_bitmap("media/buttons/button_down.png");
+    ALLEGRO_BITMAP *messagelogbg = al_load_bitmap("media/backgrounds/messagelogbg.png");
 
     Button *test_button = new(Button);
     test_button->pos.x1 = 400;
@@ -530,9 +531,9 @@ TestUI::TestUI() {
         tm->pos.x2 = 1280;
         tm->pos.y2 = 720;
 
-        ALLEGRO_BITMAP *tile_grass = al_load_bitmap("tile_grass.png");
-        ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
-        ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
+        ALLEGRO_BITMAP *tile_grass = al_load_bitmap("media/tile/grass.png");
+        ALLEGRO_BITMAP *tile_tree = al_load_bitmap("media/tile/tree.png");
+        ALLEGRO_BITMAP *tile_city = al_load_bitmap("media/tile/city.png");
 
         tm->bitmaps.push_back(tile_grass);
         tm->bitmaps.push_back(tile_tree);
@@ -591,7 +592,7 @@ void allegro_init(void) {
 
 int main(void) {
     allegro_init();
-    
+
     ALLEGRO_DISPLAY *display = al_create_display(1280, 720);
     if(display == NULL)
         errorQuit("Failed to create display.");
@@ -646,7 +647,7 @@ int main(void) {
     while(1) {
         al_get_mouse_state(&mouse_state);
         al_get_keyboard_state(&keyboard_state);
-        
+
         mouse_x = mouse_state.x;
         mouse_y = mouse_state.y;
 
@@ -662,7 +663,7 @@ int main(void) {
             // mouse up event
             was_mouse_down = false;
         }
- 
+
         al_wait_for_event(event_queue, &ev);
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
@@ -681,7 +682,7 @@ int main(void) {
         else if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
             break;
         }
-        
+
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
             al_clear_to_color(color_grey);
