@@ -58,9 +58,6 @@ struct Rect {
     float y2;
 };
 
-// don't delete the UI's. Instead, allocate both and then switch between them.
-// by setting g_ui.
-
 struct Item {
     Rect pos;
     string name;
