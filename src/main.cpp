@@ -99,6 +99,10 @@ struct Widget {
     signal<void> onMouseUp;
     signal<void> onKeyDown;
 
+    virtual void mouseDown(void) = 0;
+    virtual void mouseUp(void) = 0;
+    virtual void keyDown(void) = 0;
+
     virtual ~Widget() { info("~Widget"); };
 
     virtual void draw(void) = 0;
@@ -130,6 +134,10 @@ struct GridSystem : public Widget {
             delete grid;
     }
 
+    void mouseDown(void) { }
+    void mouseUp(void) { }
+    void keyDown(void) { }
+
     void gsMouseDownEvent(void);
     void gsMouseUpEvent(void);
     void draw(void);
@@ -153,11 +161,36 @@ struct TileMap : public Widget {
 
     ~TileMap(void);
 
+    void handleKeyDown(void);
+
+    void mouseDown(void) { }
+    void mouseUp(void) { }
+    void keyDown(void) { handleKeyDown(); }
+
     // must be called after the bitmaps vector is filled
     void generate(void);
     void draw(void);
-    void tmKeyDownEvent(void);
 };
+
+void TileMap::handleKeyDown(void) {
+    if(g.key == ALLEGRO_KEY_DOWN)
+        if(view_y < 150)
+            view_y++;
+    if(g.key == ALLEGRO_KEY_UP)
+        if(view_y > 0)
+            view_y--;
+    if(g.key == ALLEGRO_KEY_LEFT)
+        if(view_x > 0)
+            view_x--;
+    if(g.key == ALLEGRO_KEY_RIGHT)
+        if(view_x < 150)
+            view_x++;
+
+    char buf[35];
+    snprintf(buf, sizeof(buf),
+             "Tile map view: x = %d, y = %d", view_x, view_y);
+    g.AddMessage(buf);
+}
 
 TileMap::~TileMap(void) {
     info("~TileMap");
@@ -195,6 +228,7 @@ void UI::mouseDownEvent(void) {
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
+            widget->mouseDown();
             widget->onMouseDown.emit();
         }
     }
@@ -206,6 +240,7 @@ void UI::mouseUpEvent(void) {
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
+            widget->mouseUp();
             widget->onMouseUp.emit();
         }
     }
@@ -217,6 +252,7 @@ void UI::keyDownEvent(void) {
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
+            widget->keyDown();
             widget->onKeyDown.emit();
         }
     }
@@ -234,6 +270,10 @@ struct Button : public Widget {
 
     ~Button();
 
+    void mouseDown(void) { press(); }
+    void mouseUp(void) { }
+    void keyDown(void) { }
+
     void press(void);
     void draw(void);
     void update(void);
@@ -245,6 +285,10 @@ struct MessageLog : public Widget {
     vector<string> lines;
 
     ~MessageLog();
+
+    void mouseDown(void) { }
+    void mouseUp(void) { }
+    void keyDown(void) { }
 
     void draw(void);
 };
@@ -317,21 +361,6 @@ void TileMap::draw(void) {
         int dst_y = off_y - 60;
         al_draw_bitmap(bitmaps[tiles[i].bitmap_index], dst_x, dst_y, 0);
     }
-}
-
-void TileMap::tmKeyDownEvent(void) {
-    if(g.key == ALLEGRO_KEY_DOWN)
-        if(view_y < 150)
-            view_y++;
-    if(g.key == ALLEGRO_KEY_UP)
-        if(view_y > 0)
-            view_y--;
-    if(g.key == ALLEGRO_KEY_LEFT)
-        if(view_x > 0)
-            view_x--;
-    if(g.key == ALLEGRO_KEY_RIGHT)
-        if(view_x < 150)
-            view_x++;
 }
 
 void GridSystem::draw(void) {
@@ -442,6 +471,10 @@ void switch_ui(void) {
     }
 }
 
+void test_signal(void) {
+    g.AddMessage("Boink!");
+}
+
 void init_buttons(void) {
     // left
     ALLEGRO_BITMAP *button_mainmap_up = al_load_bitmap("media/buttons/mainmap_up.png");
@@ -480,7 +513,7 @@ void init_buttons(void) {
     g.button_MainMap->up = button_mainmap_up;
     g.button_MainMap->down = button_mainmap_down;
     g.button_MainMap->pressed = false;
-    g.button_MainMap->onMouseDown.connect(mem_fun(g.button_MainMap, &Button::press));
+    g.button_MainMap->onMouseDown.connect(ptr_fun(test_signal));
 
     g.button_MiniMap->pos.x1 = 0;
     g.button_MiniMap->pos.y1 = 540;
@@ -489,7 +522,6 @@ void init_buttons(void) {
     g.button_MiniMap->up = button_minimap_up;
     g.button_MiniMap->down = button_minimap_down;
     g.button_MiniMap->pressed = false;
-    g.button_MiniMap->onMouseDown.connect(mem_fun(g.button_MiniMap, &Button::press));
 
     g.button_Skills->pos.x1 = 0;
     g.button_Skills->pos.y1 = 600;
@@ -498,7 +530,6 @@ void init_buttons(void) {
     g.button_Skills->up = button_skills_up;
     g.button_Skills->down = button_skills_down;
     g.button_Skills->pressed = false;
-    g.button_Skills->onMouseDown.connect(mem_fun(g.button_Skills, &Button::press));
 
     g.button_Crafting->pos.x1 = 0;
     g.button_Crafting->pos.y1 = 660;
@@ -507,7 +538,6 @@ void init_buttons(void) {
     g.button_Crafting->up = button_crafting_up;
     g.button_Crafting->down = button_crafting_down;
     g.button_Crafting->pressed = false;
-    g.button_Crafting->onMouseDown.connect(mem_fun(g.button_Crafting, &Button::press));
 
     // right
     g.button_Items->pos.x1 = 1180;
@@ -517,7 +547,6 @@ void init_buttons(void) {
     g.button_Items->up = button_items_up;
     g.button_Items->down = button_items_down;
     g.button_Items->pressed = false;
-    g.button_Items->onMouseDown.connect(mem_fun(g.button_Items, &Button::press));
 
     g.button_Condition->pos.x1 = 1180;
     g.button_Condition->pos.y1 = 340;
@@ -526,7 +555,6 @@ void init_buttons(void) {
     g.button_Condition->up = button_condition_up;
     g.button_Condition->down = button_condition_down;
     g.button_Condition->pressed = false;
-    g.button_Condition->onMouseDown.connect(mem_fun(g.button_Condition, &Button::press));
 
     g.button_Camp->pos.x1 = 1180;
     g.button_Camp->pos.y1 = 400;
@@ -535,7 +563,6 @@ void init_buttons(void) {
     g.button_Camp->up = button_camp_up;
     g.button_Camp->down = button_camp_down;
     g.button_Camp->pressed = false;
-    g.button_Camp->onMouseDown.connect(mem_fun(g.button_Camp, &Button::press));
 
     g.button_Vehicle->pos.x1 = 1180;
     g.button_Vehicle->pos.y1 = 460;
@@ -544,7 +571,6 @@ void init_buttons(void) {
     g.button_Vehicle->up = button_vehicle_up;
     g.button_Vehicle->down = button_vehicle_down;
     g.button_Vehicle->pressed = false;
-    g.button_Vehicle->onMouseDown.connect(mem_fun(g.button_Vehicle, &Button::press));
 }
 
 void init_messagelog(void) {
@@ -581,7 +607,7 @@ void init_tilemap(void) {
     g.map->bitmaps.push_back(tile_city);
 
     g.map->generate();
-    g.map->onKeyDown.connect(mem_fun(g.map, &TileMap::tmKeyDownEvent));
+    //g.map->onKeyDown.connect(mem_fun(g.map, &TileMap::tmKeyDownEvent));
 }
 
 MiniMapUI::MiniMapUI(void) {
