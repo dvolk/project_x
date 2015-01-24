@@ -347,7 +347,7 @@ void Grid::draw(void) {
         al_draw_line(x, pos.y1, x, pos.y2, color_grey3, 1);
     for (int y = pos.y1; y <= pos.y2; y = y + 10)
         al_draw_line(pos.x1, y, pos.x2, y, color_grey3, 1);
-    
+
     for (auto& i : items)
         i->draw();
 }
@@ -370,7 +370,7 @@ void Item::draw(void) {
                                  mouse_y - hold_off_y + pos.y2 * 10,
                                  col);
     }
-        
+
 }
 
 Item *Grid::get_item(int x, int y) {
@@ -530,9 +530,9 @@ TestUI::TestUI() {
         tm->pos.x2 = 1280;
         tm->pos.y2 = 720;
 
-        ALLEGRO_BITMAP *tile_grass = al_load_bitmap("tile_grass.png");
-        ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
-        ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
+        ALLEGRO_BITMAP *tile_grass = al_load_bitmap("media/tile/grass.png");
+        ALLEGRO_BITMAP *tile_tree = al_load_bitmap("media/tile/tree.png");
+        ALLEGRO_BITMAP *tile_city = al_load_bitmap("media/tile/city.png");
 
         tm->bitmaps.push_back(tile_grass);
         tm->bitmaps.push_back(tile_tree);
@@ -591,7 +591,7 @@ void allegro_init(void) {
 
 int main(void) {
     allegro_init();
-    
+
     ALLEGRO_DISPLAY *display = al_create_display(1280, 720);
     if(display == NULL)
         errorQuit("Failed to create display.");
@@ -646,7 +646,7 @@ int main(void) {
     while(1) {
         al_get_mouse_state(&mouse_state);
         al_get_keyboard_state(&keyboard_state);
-        
+
         mouse_x = mouse_state.x;
         mouse_y = mouse_state.y;
 
@@ -662,7 +662,7 @@ int main(void) {
             // mouse up event
             was_mouse_down = false;
         }
- 
+
         al_wait_for_event(event_queue, &ev);
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
@@ -681,7 +681,7 @@ int main(void) {
         else if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
             break;
         }
-        
+
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
             al_clear_to_color(color_grey);
