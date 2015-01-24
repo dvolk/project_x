@@ -23,9 +23,9 @@ $(PCH): %.h.gch: %.h
 	$(MV) $@.tmp $@
 
 all: $(OBJS)
-ifneq (,$(STRIP))
-	$(STRIP) ../project_x
-endif
+#ifneq (,$(STRIP))
+#	$(STRIP) ../project_x
+#endif
 	$(CXX) $(CXXFLAGS) -o ../project_x $(OBJS) $(LIBS)
 
 clean:
