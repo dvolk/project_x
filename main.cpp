@@ -39,12 +39,27 @@ ALLEGRO_FONT *font;
 MessageLog *g_log;
 UI *g_ui;
 
+UI *MainUI;
+UI *LootUI;
+
+void errorQuit(string str) {
+    cout << "Error: " << str << endl;
+    exit(1);
+}
+
+void info(string str) {
+    cout << "Info: " << str << endl;
+}
+
 struct Rect {
     float x1;
     float y1;
     float x2;
     float y2;
 };
+
+// don't delete the UI's. Instead, allocate both and then switch between them.
+// by setting g_ui.
 
 struct Item {
     Rect pos;
@@ -59,24 +74,35 @@ struct Widget {
     signal<void> onMouseUp;
     signal<void> onKeyDown;
 
+    virtual ~Widget() { info("~Widget"); };
+
     virtual void draw(void) = 0;
     virtual void update() { };
 };
 
 struct Grid {
     Rect pos;
-    vector<Item> items;
+    vector<Item *> items;
+
+    ~Grid() {
+        info("~Grid()");
+        //items.clear();
+    }
 
     void draw(void);
     Item *get_item(int x, int y); // get item at screen position
 };
 
 struct GridSystem : public Widget {
-    vector<Grid> grids;
+    vector<Grid *> grids;
     Item *held;
 
-    GridSystem(void) { held = NULL; }
-    ~GridSystem(void) { grids.clear(); }
+    GridSystem(void) { }
+    ~GridSystem(void) {
+        info("~GridSystem()");
+
+        //grids.clear();
+    }
 
     void gsMouseDownEvent(void);
     void gsMouseUpEvent(void);
@@ -108,8 +134,11 @@ struct TileMap : public Widget {
 };
 
 TileMap::~TileMap(void) {
-    for(auto bitmap : bitmaps)
-        free(bitmap);
+    info("~TileMap");
+    for(auto& bitmap : bitmaps)
+        al_destroy_bitmap(bitmap);
+    //bitmaps.clear();
+    //tiles.clear();
 }
 
 struct UI {
@@ -124,12 +153,12 @@ struct UI {
 };
 
 void UI::update(void) {
-    for(auto widget : widgets)
+    for(auto& widget : widgets)
         widget->update();
 }
 
 void UI::mouseDownEvent(void) {
-    for(auto widget : widgets) {
+    for(auto& widget : widgets) {
         if(widget->pos.x1 <= mouse_x &&
            widget->pos.y1 <= mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= mouse_x &&
@@ -140,7 +169,7 @@ void UI::mouseDownEvent(void) {
 }
 
 void UI::mouseUpEvent(void) {
-    for(auto widget : widgets) {
+    for(auto& widget : widgets) {
         if(widget->pos.x1 <= mouse_x &&
            widget->pos.y1 <= mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= mouse_x &&
@@ -151,7 +180,7 @@ void UI::mouseUpEvent(void) {
 }
 
 void UI::keyDownEvent(void) {
-    for(auto widget : widgets) {
+    for(auto& widget : widgets) {
         if(widget->pos.x1 <= mouse_x &&
            widget->pos.y1 <= mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= mouse_x &&
@@ -161,7 +190,7 @@ void UI::keyDownEvent(void) {
     }
 }
 void UI::draw(void) {
-    for(auto widget : widgets) {
+    for(auto& widget : widgets) {
         widget->draw();
     }
 }
@@ -199,13 +228,16 @@ void Button::press(void) {
 }
 
 Button::~Button(void) {
-    free(up);
-    free(down);
+    info("~Button");
+    al_destroy_bitmap(up);
+    al_destroy_bitmap(down);
 }
 
 MessageLog::~MessageLog(void) {
-    free(background);
-    free(font);
+    info("~MessageLog");
+    al_destroy_bitmap(background);
+    //free(font);
+    //lines.clear();
 }
 
 void MessageLog::draw(void) {
@@ -271,15 +303,15 @@ void TileMap::tmKeyDownEvent(void) {
 }
 
 void GridSystem::draw(void) {
-    for (auto g : grids)
-        g.draw();
+    for (auto& g : grids)
+        g->draw();
 
     if(held != NULL)
         held->draw();
 }
 
 void GridSystem::gsMouseDownEvent() {
-    Item *i = grids[0].get_item(mouse_x, mouse_y);
+    Item *i = grids[0]->get_item(mouse_x, mouse_y);
     if(i != NULL) {
         held = i;
         hold_off_x =
@@ -294,15 +326,15 @@ void GridSystem::gsMouseUpEvent() {
     if(held != NULL) {
         // mouse is holding an item
         int drop_x =
-            ((mouse_x - hold_off_x) - grids[0].pos.x1) / 10;
+            ((mouse_x - hold_off_x) - grids[0]->pos.x1) / 10;
         int drop_y =
-            ((mouse_y - hold_off_y) - grids[0].pos.y1) / 10;
+            ((mouse_y - hold_off_y) - grids[0]->pos.y1) / 10;
 
-        held->parent = &grids[0];
+        held->parent = grids[0];
         held->pos.x1 = drop_x;
         held->pos.y1 = drop_y;
-        grids[0].items.push_back(*held);
-        delete held;
+        grids[0]->items.push_back(held);
+        //delete held;
         held = NULL;
         g_log->lines.push_back("You moved the block! Congratulations!");
     }
@@ -316,8 +348,8 @@ void Grid::draw(void) {
     for (int y = pos.y1; y <= pos.y2; y = y + 10)
         al_draw_line(pos.x1, y, pos.x2, y, color_grey3, 1);
     
-    for (auto i : items)
-        i.draw();
+    for (auto& i : items)
+        i->draw();
 }
 
 void Item::draw(void) {
@@ -343,15 +375,15 @@ void Item::draw(void) {
 
 Item *Grid::get_item(int x, int y) {
     int c = 0;
-    for (auto i : items) {
-        if(i.parent->pos.x1 + i.pos.x1 * 10 <= x &&
-           i.parent->pos.y1 + i.pos.y1 * 10 <= y &&
-           i.parent->pos.x1 + (i.pos.x1 + i.pos.x2) * 10 >= x &&
-           i.parent->pos.y1 + (i.pos.y1 + i.pos.y2) * 10 >= y) {
+    for (auto& i : items) {
+        if(i->parent->pos.x1 + i->pos.x1 * 10 <= x &&
+           i->parent->pos.y1 + i->pos.y1 * 10 <= y &&
+           i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * 10 >= x &&
+           i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * 10 >= y) {
 
             // humm
             Item *a = new(Item);
-            *a = items[c];
+            *a = *items[c];
             items.erase(items.begin() + c);
             return a;
         }
@@ -370,18 +402,12 @@ struct TestUI2 : public UI {
     ~TestUI2();
 };
 
-
-
 void switch_ui(bool p) {
     cout << p << endl;
-    if(p) {
-        TestUI *ui = new(TestUI);
-        delete g_ui;
-        g_ui = ui;
+    if(!p) {
+        g_ui = LootUI;
     } else {
-        TestUI2 *ui = new(TestUI2);
-        delete g_ui;
-        g_ui = ui;
+        g_ui = MainUI;
     }
 }
 
@@ -402,44 +428,47 @@ TestUI2::TestUI2(void) {
 }
 
 TestUI2::~TestUI2() {
-    widgets.clear();
+    info("~TestUI2()");
+    for(auto& widget : widgets)
+        delete widget;
+    //widgets.clear();
 }
 
 TestGridSystem::TestGridSystem() {
-    Grid g1;
-    g1.pos.x1 = 10;
-    g1.pos.y1 = 10;
-    g1.pos.x2 = 200;
-    g1.pos.y2 = 300;
-    Grid g2;
-    g2.pos.x1 = 250;
-    g2.pos.y1 = 10;
-    g2.pos.x2 = 450;
-    g2.pos.y2 = 200;
-    Item i1;
-    i1.pos.x1 = 3;
-    i1.pos.y1 = 3;
-    i1.pos.x2 = 7;
-    i1.pos.y2 = 1;
-    i1.name = "item 1";
-    Item i2;
-    i2.pos.x1 = 3;
-    i2.pos.y1 = 10;
-    i2.pos.x2 = 4;
-    i2.pos.y2 = 4;
-    i2.name = "item 2";
+    Grid *g1 = new(Grid);
+    g1->pos.x1 = 10;
+    g1->pos.y1 = 10;
+    g1->pos.x2 = 200;
+    g1->pos.y2 = 300;
+    Grid *g2 = new(Grid);
+    g2->pos.x1 = 250;
+    g2->pos.y1 = 10;
+    g2->pos.x2 = 450;
+    g2->pos.y2 = 200;
+    Item *i1 = new(Item);
+    i1->pos.x1 = 3;
+    i1->pos.y1 = 3;
+    i1->pos.x2 = 7;
+    i1->pos.y2 = 1;
+    i1->name = "item 1";
+    Item *i2 = new(Item);
+    i2->pos.x1 = 3;
+    i2->pos.y1 = 10;
+    i2->pos.x2 = 4;
+    i2->pos.y2 = 4;
+    i2->name = "item 2";
 
-    g1.items.push_back(i1);
-    g1.items.push_back(i2);
+    g1->items.push_back(i1);
+    g1->items.push_back(i2);
     grids.push_back(g1);
     grids.push_back(g2);
 
     // REALLY set item parents
     int i = 0;
-    for(auto grid : grids) {
+    for(auto& grid : grids) {
         int j = 0;
-        for(auto item : grid.items) {
-            grids[i].items[j].parent = &grids[i];
+        for(auto& item : grid->items) {
+            grids[i]->items[j]->parent = grids[i];
             j++;
         }
         i++;
@@ -449,10 +478,13 @@ TestGridSystem::TestGridSystem() {
     pos.y1 = 0;
     pos.x2 = 1280;
     pos.y2 = 720;
+
+    held = NULL;
 }
 
 TestGridSystem::~TestGridSystem() {
-    //
+    info("~TestGridSystem()");
+    //grids.clear();
 }
 
 TestUI::TestUI() {
@@ -485,6 +517,7 @@ TestUI::TestUI() {
         tgs->onMouseUp.connect(mem_fun(tgs, &TestGridSystem::gsMouseUpEvent));
         tgs->onMouseDown.connect(mem_fun(tgs, &TestGridSystem::gsMouseDownEvent));
     }
+
     g_log = log;
 
     TileMap *tm = new(TileMap);
@@ -501,9 +534,7 @@ TestUI::TestUI() {
         ALLEGRO_BITMAP *tile_tree = al_load_bitmap("tile_tree.png");
         ALLEGRO_BITMAP *tile_city = al_load_bitmap("tile_city.png");
 
-        for(int i = 0; i < 5; i++)
-            tm->bitmaps.push_back(tile_grass);
-
+        tm->bitmaps.push_back(tile_grass);
         tm->bitmaps.push_back(tile_tree);
         tm->bitmaps.push_back(tile_city);
 
@@ -518,67 +549,72 @@ TestUI::TestUI() {
 }
 
 TestUI::~TestUI(void) {
-    widgets.clear();
+    info("~TestUI()");
+    for(auto& widget : widgets)
+        delete widget;
+    //widgets.clear();
 }
 
 void allegro_init(void) {
     int ret = 0;
 
     al_init(); // no return value
+    info("Probably initialized core allegro library.");
 
     ret = al_init_primitives_addon();
-    if(ret == false) {
-        cout << "failed to initialize allegro addon: primitives" << endl;
-        exit(1);
-    }
+    if(ret == false)
+        errorQuit("Failed to initialize allegro addon: primitives.");
+    else
+        info("Initialized allegro addon: primitives.");
 
     ret = al_init_image_addon();
-    if(ret == false) {
-        cout << "failed to initialize allegro addon: image" << endl;
-        exit(1);
-    }
+    if(ret == false)
+        errorQuit("Failed to initialize allegro addon: image.");
+    else
+        info("Initialized allegro addon: image.");
 
     al_init_font_addon(); // no return value
+    info("Probably initialized allegro addon: font.");
 
     ret = al_install_keyboard();
-    if(ret == false) {
-        cout << "failed to initialize keyboard" << endl;
-        exit(1);
-    }
+    if(ret == false)
+        errorQuit("Failed to initialize keyboard.");
+    else
+        info("Initialized keyboard.");
 
     ret = al_install_mouse();
-    if(ret == false) {
-        cout << "failed to initialize mouse" << endl;
-        exit(1);
-    }
+    if(ret == false)
+        errorQuit("Failed to initialize mouse.");
+    else
+        info("Initialized mouse.");
 }
 
 int main(void) {
     allegro_init();
     
     ALLEGRO_DISPLAY *display = al_create_display(1280, 720);
-    if(display == NULL) {
-        cout << "failed to create display" << endl;
-        exit(1);
-    }
+    if(display == NULL)
+        errorQuit("Failed to create display.");
+    else
+        info("Created display.");
 
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
-    if(event_queue == NULL) {
-        cout << "failed to create event queue" << endl;
-        exit(1);
-    }
+    if(event_queue == NULL)
+        errorQuit("Failed to create event queue.");
+    else
+        info("Created event queue.");
 
     ALLEGRO_TIMER *timer = al_create_timer(1.0 / 60);
-    if(timer == NULL) {
-        cout << "failed to create timer" << endl;
-        exit(1);
-    }
+    if(timer == NULL)
+        errorQuit("Error: failed to create timer.");
+    else
+        info("Created timer.");
 
     font = al_create_builtin_font();
-    if(font == NULL) {
-        cout << "failed to load builtin font" << endl;
-        exit(1);
-    }
+    if(font == NULL)
+        errorQuit("failed to load builtin font.");
+    else
+        info("Loaded builtin font.");
 
     ALLEGRO_EVENT ev;
     ALLEGRO_MOUSE_STATE mouse_state;
@@ -600,8 +636,11 @@ int main(void) {
     bool was_mouse_down = false;
 
     {
-        TestUI *ui = new(TestUI);
+        UI *ui = new(TestUI);
+        MainUI = ui;
         g_ui = ui;
+        ui = new(TestUI2);
+        LootUI = ui;
     }
 
     while(1) {
@@ -656,5 +695,7 @@ int main(void) {
 
     // don't really need to deallocate if we're quitting...
     al_destroy_display(display);
+    delete g_ui;
+
     return 0;
 }
