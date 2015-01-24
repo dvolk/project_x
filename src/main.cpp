@@ -22,6 +22,7 @@ struct UI;
 struct Widget;
 struct Button;
 struct GridSystem;
+struct TileMap;
 
 void errorQuit(string str) {
     cout << "Error: " << str << endl;
@@ -37,15 +38,33 @@ struct Game {
     ALLEGRO_DISPLAY *display;
     ALLEGRO_FONT *font;
 
+    ALLEGRO_COLOR color_white;
     ALLEGRO_COLOR color_black;
     ALLEGRO_COLOR color_grey;
     ALLEGRO_COLOR color_grey2;
     ALLEGRO_COLOR color_grey3;
 
+    Button *button_MainMap;
+    Button *button_MiniMap;
+    Button *button_Skills;
+    Button *button_Crafting;
+    Button *button_Items;
+    Button *button_Condition;
+    Button *button_Camp;
+    Button *button_Vehicle;
+
+    TileMap *map;
+
     UI *ui; // current UI
 
-    UI *MainUI;
-    UI *LootUI;
+    UI *ui_MainMap;
+    UI *ui_MiniMap;
+    UI *ui_Skills;
+    UI *ui_Crafting;
+    UI *ui_Items;
+    UI *ui_Conditions;
+    UI *ui_Camp;
+    UI *ui_Vehicle;
 
     MessageLog *log;
 
@@ -262,7 +281,7 @@ void MessageLog::draw(void) {
     int lines_n = lines.size();
     int start = max(0, lines_n - 23);
     for(int i = start; i < lines_n; i++) {
-        al_draw_text(font, g.color_black, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
+        al_draw_text(font, g.color_grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
         off_y = off_y + 8;
     }
 }
@@ -405,41 +424,170 @@ Item *Grid::get_item(int x, int y) {
     return NULL;
 }
 
-struct TestUI : public UI {
-    TestUI();
-    ~TestUI();
+struct MainMapUI : public UI {
+    MainMapUI();
+    ~MainMapUI();
 };
 
-struct TestUI2 : public UI {
-    TestUI2();
-    ~TestUI2();
+struct MiniMapUI : public UI {
+    MiniMapUI();
+    ~MiniMapUI();
 };
 
 void switch_ui(void) {
-    if(g.ui == g.MainUI) {
-        g.ui = g.LootUI;
+    if(g.ui == g.ui_MainMap) {
+        g.ui = g.ui_MiniMap;
     } else {
-        g.ui = g.MainUI;
+        g.ui = g.ui_MainMap;
     }
 }
 
-TestUI2::TestUI2(void) {
-    ALLEGRO_BITMAP *button_up = al_load_bitmap("media/buttons/button_up.png");
-    ALLEGRO_BITMAP *button_down = al_load_bitmap("media/buttons/button_down.png");
-    Button *test_button = new(Button);
-    test_button->pos.x1 = 400;
-    test_button->pos.y1 = 400;
-    test_button->pos.x2 = 100;
-    test_button->pos.y2 = 100;
-    test_button->up = button_up;
-    test_button->down = button_down;
-    test_button->pressed = false;
-    test_button->onMouseDown.connect(mem_fun(test_button, &Button::press));
+void init_buttons(void) {
+    // left
+    ALLEGRO_BITMAP *button_mainmap_up = al_load_bitmap("media/buttons/mainmap_up.png");
+    ALLEGRO_BITMAP *button_mainmap_down = al_load_bitmap("media/buttons/mainmap_down.png");
+    ALLEGRO_BITMAP *button_minimap_up = al_load_bitmap("media/buttons/minimap_up.png");
+    ALLEGRO_BITMAP *button_minimap_down = al_load_bitmap("media/buttons/minimap_down.png");
+    ALLEGRO_BITMAP *button_skills_up = al_load_bitmap("media/buttons/skills_up.png");
+    ALLEGRO_BITMAP *button_skills_down = al_load_bitmap("media/buttons/skills_down.png");
+    ALLEGRO_BITMAP *button_crafting_up = al_load_bitmap("media/buttons/crafting_up.png");
+    ALLEGRO_BITMAP *button_crafting_down = al_load_bitmap("media/buttons/crafting_down.png");
 
-    widgets.push_back(test_button);
+    // right
+    ALLEGRO_BITMAP *button_items_up = al_load_bitmap("media/buttons/items_up.png");
+    ALLEGRO_BITMAP *button_items_down = al_load_bitmap("media/buttons/items_down.png");
+    ALLEGRO_BITMAP *button_condition_up = al_load_bitmap("media/buttons/condition_up.png");
+    ALLEGRO_BITMAP *button_condition_down = al_load_bitmap("media/buttons/condition_down.png");
+    ALLEGRO_BITMAP *button_camp_up = al_load_bitmap("media/buttons/camp_up.png");
+    ALLEGRO_BITMAP *button_camp_down = al_load_bitmap("media/buttons/camp_down.png");
+    ALLEGRO_BITMAP *button_vehicle_up = al_load_bitmap("media/buttons/vehicle_up.png");
+    ALLEGRO_BITMAP *button_vehicle_down = al_load_bitmap("media/buttons/vehicle_down.png");
+
+    g.button_MainMap   = new(Button);
+    g.button_MiniMap   = new(Button);
+    g.button_Skills    = new(Button);
+    g.button_Crafting  = new(Button);
+    g.button_Items     = new(Button);
+    g.button_Condition = new(Button);
+    g.button_Camp      = new(Button);
+    g.button_Vehicle   = new(Button);
+
+    // left
+    g.button_MainMap->pos.x1 = 0;
+    g.button_MainMap->pos.y1 = 480;
+    g.button_MainMap->pos.x2 = 100;
+    g.button_MainMap->pos.y2 = 60;
+    g.button_MainMap->up = button_mainmap_up;
+    g.button_MainMap->down = button_mainmap_down;
+    g.button_MainMap->pressed = false;
+    g.button_MainMap->onMouseDown.connect(mem_fun(g.button_MainMap, &Button::press));
+
+    g.button_MiniMap->pos.x1 = 0;
+    g.button_MiniMap->pos.y1 = 540;
+    g.button_MiniMap->pos.x2 = 100;
+    g.button_MiniMap->pos.y2 = 60;
+    g.button_MiniMap->up = button_minimap_up;
+    g.button_MiniMap->down = button_minimap_down;
+    g.button_MiniMap->pressed = false;
+    g.button_MiniMap->onMouseDown.connect(mem_fun(g.button_MiniMap, &Button::press));
+
+    g.button_Skills->pos.x1 = 0;
+    g.button_Skills->pos.y1 = 600;
+    g.button_Skills->pos.x2 = 100;
+    g.button_Skills->pos.y2 = 60;
+    g.button_Skills->up = button_skills_up;
+    g.button_Skills->down = button_skills_down;
+    g.button_Skills->pressed = false;
+    g.button_Skills->onMouseDown.connect(mem_fun(g.button_Skills, &Button::press));
+
+    g.button_Crafting->pos.x1 = 0;
+    g.button_Crafting->pos.y1 = 660;
+    g.button_Crafting->pos.x2 = 100;
+    g.button_Crafting->pos.y2 = 60;
+    g.button_Crafting->up = button_crafting_up;
+    g.button_Crafting->down = button_crafting_down;
+    g.button_Crafting->pressed = false;
+    g.button_Crafting->onMouseDown.connect(mem_fun(g.button_Crafting, &Button::press));
+
+    // right
+    g.button_Items->pos.x1 = 1180;
+    g.button_Items->pos.y1 = 280;
+    g.button_Items->pos.x2 = 100;
+    g.button_Items->pos.y2 = 60;
+    g.button_Items->up = button_items_up;
+    g.button_Items->down = button_items_down;
+    g.button_Items->pressed = false;
+    g.button_Items->onMouseDown.connect(mem_fun(g.button_Items, &Button::press));
+
+    g.button_Condition->pos.x1 = 1180;
+    g.button_Condition->pos.y1 = 340;
+    g.button_Condition->pos.x2 = 100;
+    g.button_Condition->pos.y2 = 60;
+    g.button_Condition->up = button_condition_up;
+    g.button_Condition->down = button_condition_down;
+    g.button_Condition->pressed = false;
+    g.button_Condition->onMouseDown.connect(mem_fun(g.button_Condition, &Button::press));
+
+    g.button_Camp->pos.x1 = 1180;
+    g.button_Camp->pos.y1 = 400;
+    g.button_Camp->pos.x2 = 100;
+    g.button_Camp->pos.y2 = 60;
+    g.button_Camp->up = button_camp_up;
+    g.button_Camp->down = button_camp_down;
+    g.button_Camp->pressed = false;
+    g.button_Camp->onMouseDown.connect(mem_fun(g.button_Camp, &Button::press));
+
+    g.button_Vehicle->pos.x1 = 1180;
+    g.button_Vehicle->pos.y1 = 460;
+    g.button_Vehicle->pos.x2 = 100;
+    g.button_Vehicle->pos.y2 = 60;
+    g.button_Vehicle->up = button_vehicle_up;
+    g.button_Vehicle->down = button_vehicle_down;
+    g.button_Vehicle->pressed = false;
+    g.button_Vehicle->onMouseDown.connect(mem_fun(g.button_Vehicle, &Button::press));
 }
 
-TestUI2::~TestUI2() {
+void init_messagelog(void) {
+    ALLEGRO_BITMAP *messagelogbg = al_load_bitmap("media/backgrounds/messagelogbg.png");
+
+    g.log = new(MessageLog);
+    g.log->pos.x1 = 100;
+    g.log->pos.y1 = 520;
+    g.log->pos.x2 = 1080;
+    g.log->pos.y2 = 200;
+    g.log->background = messagelogbg;
+    g.log->font = g.font;
+    g.log->lines.push_back("Player is dying.");
+    g.log->lines.push_back("Player is dead. Blegrgrgrvddgd...");
+}
+
+void init_tilemap(void) {
+    g.map = new(TileMap);
+
+    g.map->cols = 18;
+    g.map->view_x = 4;
+    g.map->view_y = 4;
+    g.map->pos.x1 = 0;
+    g.map->pos.y1 = 0;
+    g.map->pos.x2 = 1280;
+    g.map->pos.y2 = 720;
+
+    ALLEGRO_BITMAP *tile_grass = al_load_bitmap("media/tile/grass.png");
+    ALLEGRO_BITMAP *tile_tree = al_load_bitmap("media/tile/tree.png");
+    ALLEGRO_BITMAP *tile_city = al_load_bitmap("media/tile/city.png");
+
+    g.map->bitmaps.push_back(tile_grass);
+    g.map->bitmaps.push_back(tile_tree);
+    g.map->bitmaps.push_back(tile_city);
+
+    g.map->generate();
+    g.map->onKeyDown.connect(mem_fun(g.map, &TileMap::tmKeyDownEvent));
+}
+
+MiniMapUI::MiniMapUI(void) {
+}
+
+MiniMapUI::~MiniMapUI(void) {
     info("~TestUI2()");
 }
 
@@ -496,68 +644,27 @@ TestGridSystem::~TestGridSystem() {
     //grids.clear();
 }
 
-TestUI::TestUI() {
-    ALLEGRO_BITMAP *button_up = al_load_bitmap("media/buttons/button_up.png");
-    ALLEGRO_BITMAP *button_down = al_load_bitmap("media/buttons/button_down.png");
-    ALLEGRO_BITMAP *messagelogbg = al_load_bitmap("media/backgrounds/messagelogbg.png");
-
-    Button *test_button = new(Button);
-    test_button->pos.x1 = 400;
-    test_button->pos.y1 = 400;
-    test_button->pos.x2 = 100;
-    test_button->pos.y2 = 100;
-    test_button->up = button_up;
-    test_button->down = button_down;
-    test_button->pressed = false;
-    test_button->onMouseDown.connect(mem_fun(test_button, &Button::press));
-
-    MessageLog *log = new(MessageLog);
-    log->pos.x1 = 100;
-    log->pos.y1 = 520;
-    log->pos.x2 = 1080;
-    log->pos.y2 = 200;
-    log->background = messagelogbg;
-    log->font = g.font;
-    log->lines.push_back("Player is dying.");
-    log->lines.push_back("Player is dead. Blegrgrgrvddgd...");
+MainMapUI::MainMapUI() {
+    widgets.push_back(g.map);
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
 
     TestGridSystem *tgs = new(TestGridSystem);
     {
         tgs->onMouseUp.connect(mem_fun(tgs, &TestGridSystem::gsMouseUpEvent));
         tgs->onMouseDown.connect(mem_fun(tgs, &TestGridSystem::gsMouseDownEvent));
     }
-
-    g.log = log;
-
-    TileMap *tm = new(TileMap);
-    {
-        tm->cols = 18;
-        tm->view_x = 4;
-        tm->view_y = 4;
-        tm->pos.x1 = 0;
-        tm->pos.y1 = 0;
-        tm->pos.x2 = 1280;
-        tm->pos.y2 = 720;
-
-        ALLEGRO_BITMAP *tile_grass = al_load_bitmap("media/tile/grass.png");
-        ALLEGRO_BITMAP *tile_tree = al_load_bitmap("media/tile/tree.png");
-        ALLEGRO_BITMAP *tile_city = al_load_bitmap("media/tile/city.png");
-
-        tm->bitmaps.push_back(tile_grass);
-        tm->bitmaps.push_back(tile_tree);
-        tm->bitmaps.push_back(tile_city);
-
-        tm->generate();
-        tm->onKeyDown.connect(mem_fun(tm, &TileMap::tmKeyDownEvent));
-    }
-
-    widgets.push_back(tm);
-    widgets.push_back(log);
-    widgets.push_back(test_button);
     widgets.push_back(tgs);
 }
 
-TestUI::~TestUI(void) {
+MainMapUI::~MainMapUI(void) {
     info("~TestUI()");
 }
 
@@ -637,16 +744,18 @@ int main(void) {
     g.color_grey2 = al_map_rgb(200, 200, 200);
     g.color_grey3 = al_map_rgb(240, 240, 240);
     g.color_black = al_map_rgb(0, 0, 0);
+    g.color_white = al_map_rgb(255, 255, 255);
 
     bool redraw = true;
     bool was_mouse_down = false;
 
+    init_buttons();
+    init_messagelog();
+    init_tilemap();
+
     {
-        UI *ui = new(TestUI);
-        g.MainUI = ui;
-        g.ui = ui;
-        ui = new(TestUI2);
-        g.LootUI = ui;
+        g.ui_MainMap = new(MainMapUI);
+        g.ui = g.ui_MainMap;
     }
 
     while(1) {
