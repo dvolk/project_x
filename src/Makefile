@@ -1,4 +1,4 @@
-override CXXFLAGS+= -Wall -pedantic --std=c++11 -funsigned-char
+override CXXFLAGS+= -g -Wall -pedantic --std=c++11 -funsigned-char
 
 INCLUDES= `pkg-config --cflags sigc++-2.0`
 LIBS= `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_color-5.0 allegro_image-5.0 allegro_font-5.0 sigc++-2.0`
