@@ -1,0 +1,19 @@
+# executable
+/project_x
+
+# compiled objects
+*.o
+*.gch
+
+# temporary files
+*.swp
+
+# backups
+*~
+*.bak
+
+# diffs and patches
+*.orig
+*.rej
+*.diff
+*.patch
