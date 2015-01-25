@@ -23,6 +23,7 @@ struct Widget;
 struct Button;
 struct GridSystem;
 struct TileMap;
+struct Character;
 
 void errorQuit(string str) {
     cout << "Error: " << str << endl;
@@ -54,6 +55,7 @@ struct Game {
     Button *button_Vehicle;
 
     TileMap *map;
+    vector<Character *> characters;
 
     UI *ui; // current UI
 
@@ -109,6 +111,25 @@ struct Widget {
     virtual void update() { };
 };
 
+struct Character : public Widget {
+    int n; // position by offset
+
+    ALLEGRO_BITMAP *sprite;
+
+    ~Character(void) {
+        info("~Character");
+        al_destroy_bitmap(sprite);
+    }
+
+    void mouseDown(void) {
+        g.AddMessage("That tickles!");
+    }
+    void mouseUp(void) { }
+    void keyDown(void) { }
+
+    void draw(void);
+};
+
 struct Grid {
     Rect pos;
     vector<Item *> items;
@@ -134,8 +155,8 @@ struct GridSystem : public Widget {
             delete grid;
     }
 
-    void mouseDown(void) { }
-    void mouseUp(void) { }
+    void mouseDown(void) { gsMouseDownEvent(); }
+    void mouseUp(void) { gsMouseUpEvent(); }
     void keyDown(void) { }
 
     void gsMouseDownEvent(void);
@@ -153,7 +174,8 @@ struct Tile {
 };
 
 struct TileMap : public Widget {
-    int cols;
+    int cols; // display dimensions
+    int rows; // display dimensions
     int view_x;
     int view_y;
     vector<Tile> tiles;
@@ -170,20 +192,91 @@ struct TileMap : public Widget {
     // must be called after the bitmaps vector is filled
     void generate(void);
     void draw(void);
+    void drawTopHalfOfTileAt(int x, int y);
 };
 
+/*
+ 6 1 2
+  \|/
+   0
+  /|\
+ 5 4 3
+ */
+int dir_transform(int n, int dir) {
+    if(n % 2 == 0) {
+        // even
+        switch(dir) {
+        case 0:
+            return n;
+        case 1:
+            return n - 150;
+        case 2:
+            return n - 150 + 1;
+        case 3:
+            return n + 1;
+        case 4:
+            return n + 150;
+        case 5:
+            return n - 1;
+        case 6:
+            return n - 150 - 1;
+        }
+    } else {
+        // odd
+        switch(dir) {
+        case 0:
+            return n;
+        case 1:
+            return n - 150;
+        case 2:
+            return n + 1;
+        case 3:
+            return n + 150 + 1;
+        case 4:
+            return n + 150;
+        case 5:
+            return n + 150 - 1;
+        case 6:
+            return n - 1;
+        }
+    }
+    return n;
+}
+void Character::draw(void) {
+    int ch_x = n % 150;
+    int ch_y = floor(n / 150);
+
+    int r_x = ch_x - g.map->view_x;
+    int r_y = ch_y - g.map->view_y;
+
+    int off_x = 80 * r_x;
+    int off_y = n % 2  == 0 ? 0 : 20;
+    off_y += 40 * r_y;
+
+    al_draw_bitmap(sprite, off_x+25, off_y, 0);
+
+    g.map->drawTopHalfOfTileAt(ch_x, ch_y + 1);
+
+    // since we're already here, set the character's
+    // widget position too.
+    pos.x1 = off_x + 25;
+    pos.y1 = off_y;
+    pos.x2 = 50;
+    pos.y2 = 60;
+}
+
 void TileMap::handleKeyDown(void) {
-    if(g.key == ALLEGRO_KEY_DOWN)
-        if(view_y < 150)
-            view_y++;
     if(g.key == ALLEGRO_KEY_UP)
         if(view_y > 0)
             view_y--;
     if(g.key == ALLEGRO_KEY_LEFT)
         if(view_x > 0)
             view_x--;
+    if(g.key == ALLEGRO_KEY_DOWN)
+        if(view_y < 150 - rows)
+            view_y++;
     if(g.key == ALLEGRO_KEY_RIGHT)
-        if(view_x < 150)
+        if(view_x < 150 - cols)
             view_x++;
 
     char buf[35];
@@ -347,20 +440,42 @@ void TileMap::generate(void) {
         t.bitmap_index = rand() % up_to;
         tiles[i] = t;
     }
+    Tile t;
+    t.bitmap_index = 2;
+    tiles[10*150+60] = t;
+    tiles[10*150+61] = t;
+    tiles[11*150+61] = t;
 }
 
 void TileMap::draw(void) {
-    int start = cols * view_y + view_x;
-    int rows = 20;
-    for(int i = start; i < start + cols * rows; i++) {
-        int idx = i - start;
-        int off_x = idx % cols * 80;
-        int off_y = (idx + view_x) % 2  == 0 ? 0 : 20;
-        off_y = off_y + (40 * floor(idx / cols));
-        int dst_x = off_x - 80;
-        int dst_y = off_y - 60;
-        al_draw_bitmap(bitmaps[tiles[i].bitmap_index], dst_x, dst_y, 0);
+    // draw the hex grid
+    int start = 150 * view_y + view_x;
+    int i = 0;
+    for(int y = 0; y < rows; y++) {
+        for(int x = 0; x < cols; x++) {
+            int t = start + (150 * y) + x;
+            int off_x = (i % cols) * 80;
+            int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
+            off_y = off_y + (40 * floor(i / cols));
+
+            al_draw_bitmap(bitmaps[tiles[t].bitmap_index], off_x, off_y, 0);
+            i++;
+        }
     }
+}
+
+void TileMap::drawTopHalfOfTileAt(int x, int y) {
+    int n = 150 * y + x;
+
+    int r_x = x - g.map->view_x;
+    int r_y = y - g.map->view_y;
+
+    int off_x = 80 * r_x;
+    int off_y = n % 2  == 0 ? 0 : 20;
+    off_y += 40 * r_y;
+
+    al_draw_bitmap_region(bitmaps[tiles[n].bitmap_index],
+                          0, 0, 100, 40, off_x, off_y, 0);
 }
 
 void GridSystem::draw(void) {
@@ -471,8 +586,11 @@ void switch_ui(void) {
     }
 }
 
-void test_signal(void) {
-    g.AddMessage("Boink!");
+void button_MainMap_press(void) {
+    for(auto& character : g.characters) {
+        character->n = dir_transform(character->n, rand() % 6);
+    }
+    g.AddMessage("Turn ended!");
 }
 
 void init_buttons(void) {
@@ -513,7 +631,7 @@ void init_buttons(void) {
     g.button_MainMap->up = button_mainmap_up;
     g.button_MainMap->down = button_mainmap_down;
     g.button_MainMap->pressed = false;
-    g.button_MainMap->onMouseDown.connect(ptr_fun(test_signal));
+    g.button_MainMap->onMouseDown.connect(ptr_fun(button_MainMap_press));
 
     g.button_MiniMap->pos.x1 = 0;
     g.button_MiniMap->pos.y1 = 540;
@@ -591,6 +709,7 @@ void init_tilemap(void) {
     g.map = new(TileMap);
 
     g.map->cols = 18;
+    g.map->rows = 20;
     g.map->view_x = 4;
     g.map->view_y = 4;
     g.map->pos.x1 = 0;
@@ -607,7 +726,6 @@ void init_tilemap(void) {
     g.map->bitmaps.push_back(tile_city);
 
     g.map->generate();
-    //g.map->onKeyDown.connect(mem_fun(g.map, &TileMap::tmKeyDownEvent));
 }
 
 MiniMapUI::MiniMapUI(void) {
@@ -671,7 +789,26 @@ TestGridSystem::~TestGridSystem() {
 }
 
 MainMapUI::MainMapUI() {
+    ALLEGRO_BITMAP *ch_sprite = al_load_bitmap("media/characters/test_character.png");
+    Character *c = new(Character);
+    c->n = 10 * 150 + 10;
+    c->sprite = ch_sprite;
+    Character *c1 = new(Character);
+    c1->n = 10 * 150 + 11;
+    c1->sprite = ch_sprite;
+    Character *c2 = new(Character);
+    c2->n = 10 * 150 + 12;
+    c2->sprite = ch_sprite;
+
     widgets.push_back(g.map);
+
+    g.characters.push_back(c);
+    widgets.push_back(c);
+    g.characters.push_back(c1);
+    widgets.push_back(c1);
+    g.characters.push_back(c2);
+    widgets.push_back(c2);
+
     widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
     widgets.push_back(g.button_MiniMap);
@@ -683,15 +820,12 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Vehicle);
 
     TestGridSystem *tgs = new(TestGridSystem);
-    {
-        tgs->onMouseUp.connect(mem_fun(tgs, &TestGridSystem::gsMouseUpEvent));
-        tgs->onMouseDown.connect(mem_fun(tgs, &TestGridSystem::gsMouseDownEvent));
-    }
+
     widgets.push_back(tgs);
 }
 
 MainMapUI::~MainMapUI(void) {
-    info("~TestUI()");
+    info("~MainMapUI()");
 }
 
 void allegro_init(void) {
