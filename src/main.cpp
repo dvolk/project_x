@@ -115,10 +115,17 @@ struct Character : public Widget {
     int n; // position by offset
 
     ALLEGRO_BITMAP *sprite;
+    vector<int> currently_seeing;
+
+    void update_visibility(void);
+
+    Character(void) {
+        currently_seeing.reserve(50);
+    }
 
     ~Character(void) {
         info("~Character");
-        al_destroy_bitmap(sprite);
+        //al_destroy_bitmap(sprite);
     }
 
     void mouseDown(void) {
@@ -129,6 +136,8 @@ struct Character : public Widget {
 
     void draw(void);
 };
+
+int dir_transform(int n, int dir);
 
 struct Grid {
     Rect pos;
@@ -170,7 +179,8 @@ struct TestGridSystem : public GridSystem {
 };
 
 struct Tile {
-    int16_t bitmap_index;
+    int8_t bitmap_index;
+    int8_t visible;
 };
 
 struct TileMap : public Widget {
@@ -194,6 +204,18 @@ struct TileMap : public Widget {
     void draw(void);
     void drawTopHalfOfTileAt(int x, int y);
 };
+
+void Character::update_visibility(void) {
+    currently_seeing.clear();
+    for(int dir = 0; dir <= 6; dir++) {
+        int n2 = dir_transform(n, dir);
+        for(int dir2 = 0; dir2 <= 6; dir2++) {
+            int n3 = dir_transform(n2, dir2);
+            g.map->tiles[n3].visible = true;
+            currently_seeing.push_back(n3);
+        }
+    }
+}
 
 /*
  6 1 2
@@ -438,6 +460,7 @@ void TileMap::generate(void) {
     for(int i = 0; i < 150*150; i++) {
         Tile t;
         t.bitmap_index = rand() % up_to;
+        t.visible = false;
         tiles[i] = t;
     }
     Tile t;
@@ -454,11 +477,32 @@ void TileMap::draw(void) {
     for(int y = 0; y < rows; y++) {
         for(int x = 0; x < cols; x++) {
             int t = start + (150 * y) + x;
-            int off_x = (i % cols) * 80;
-            int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
-            off_y = off_y + (40 * floor(i / cols));
+            if(tiles[t].visible == true) {
+                // can any character currently see the tile?
+                int currently_seeing = 0;
+                for(auto& c : g.characters) {
+                    for(auto& cs : c->currently_seeing) {
+                        if(t == cs) {
+                            currently_seeing = 1;
+                            goto draw;
+                        }
+                    }
+                }
+            draw:
 
-            al_draw_bitmap(bitmaps[tiles[t].bitmap_index], off_x, off_y, 0);
+                int off_x = (i % cols) * 80;
+                int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
+                off_y = off_y + (40 * floor(i / cols));
+
+                if(currently_seeing != 0) {
+                    // if so, draw the tile at full brightness
+                    al_draw_bitmap(bitmaps[tiles[t].bitmap_index], off_x, off_y, 0);
+                }
+                else {
+                    // otherwise draw it 50% tinted
+                    al_draw_tinted_bitmap(bitmaps[tiles[t].bitmap_index], al_map_rgba_f(0.5, 0.5, 0.5, 1.0), off_x, off_y, 0);
+                }
+            }
             i++;
         }
     }
@@ -589,6 +633,15 @@ void switch_ui(void) {
 void button_MainMap_press(void) {
     for(auto& character : g.characters) {
         character->n = dir_transform(character->n, rand() % 6);
+        character->update_visibility();
+        /*
+        for(int dir = 0; dir <= 6; dir++) {
+            int n2 = dir_transform(character->n, dir);
+            for(int dir2 = 0; dir2 <= 6; dir2++) {
+                g.map->tiles[dir_transform(n2, dir2)].visible = true;
+            }
+        }
+        */
     }
     g.AddMessage("Turn ended!");
 }
@@ -768,7 +821,7 @@ TestGridSystem::TestGridSystem() {
     int i = 0;
     for(auto& grid : grids) {
         int j = 0;
-        for(auto& item : grid->items) {
+        for(__attribute__ ((unused)) auto& item : grid->items) {
             grids[i]->items[j]->parent = grids[i];
             j++;
         }
@@ -809,7 +862,10 @@ MainMapUI::MainMapUI() {
     g.characters.push_back(c2);
     widgets.push_back(c2);
 
-    widgets.push_back(g.log);
+    for(auto& c : g.characters)
+        c->update_visibility();
+
+    //    widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
     widgets.push_back(g.button_MiniMap);
     widgets.push_back(g.button_Skills);
@@ -819,9 +875,8 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
 
-    TestGridSystem *tgs = new(TestGridSystem);
-
-    widgets.push_back(tgs);
+    // TestGridSystem *tgs = new(TestGridSystem);
+    // widgets.push_back(tgs);
 }
 
 MainMapUI::~MainMapUI(void) {
@@ -959,7 +1014,7 @@ int main(void) {
 
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
-            al_clear_to_color(g.color_grey);
+            al_clear_to_color(g.color_black);
 
             { // drawing goes here
                 g.ui->draw();
