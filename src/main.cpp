@@ -570,14 +570,12 @@ void TileMap::draw(void) {
             int t = start + (150 * y) + x;
             if(tiles[t].visible == true) {
             // if(true) {
-                // can any character currently see the tile?
+                // can the player currently see the tile?
                 int currently_seeing = 0;
-                for(auto& c : g.characters) {
-                    for(auto& cs : c->currently_seeing) {
-                        if(t == cs) {
-                            currently_seeing = 1;
-                            goto draw;
-                        }
+                for(auto& cs : g.player->currently_seeing) {
+                    if(t == cs) {
+                        currently_seeing = 1;
+                        goto draw;
                     }
                 }
 
@@ -602,8 +600,22 @@ void TileMap::draw(void) {
             i++;
         }
     }
+
+    // characters are drawn as part of the map
+    // the player is always visible
+    g.player->draw();
+    for(auto& character : g.characters) {
+        for(auto& cs : g.player->currently_seeing) {
+            if(character->n == cs) {
+                character->draw();
+                break;
+            }
+        }
+    }
 }
 
+// redraws the top half of a tile (the part that overlaps with the
+// tile above it). Used for occluding character sprites on the map
 void TileMap::drawTopHalfOfTileAt(int x, int y) {
     int n = 150 * y + x;
 
@@ -1054,31 +1066,26 @@ TestGridSystem::~TestGridSystem() {
     //grids.clear();
 }
 
-MainMapUI::MainMapUI() {
+// creates the player and npcs
+// must be called after init_tilemap();
+void init_characters(void) {
     ALLEGRO_BITMAP *ch_sprite = al_load_bitmap("media/characters/test_character.png");
-    Character *c = new(Character);
-    c->n = 10 * 150 + 10;
-    c->sprite = ch_sprite;
-    Character *c1 = new(Character);
-    c1->n = 10 * 150 + 11;
-    c1->sprite = ch_sprite;
-    Character *c2 = new(Character);
-    c2->n = 10 * 150 + 12;
-    c2->sprite = ch_sprite;
-    g.player = c;
 
+    for(int i = 0; i < 10; i++) {
+        Character *c = new(Character);
+        c->n = (rand() % 30) * 150 + (rand() % 30);
+        c->sprite = ch_sprite;
+        g.characters.push_back(c);
+    }
+
+    g.player = new(Character);
+    g.player->n = 12 * 150 + 12;
+    g.player->sprite = ch_sprite;
+    g.player->update_visibility();
+}
+
+MainMapUI::MainMapUI() {
     widgets.push_back(g.map);
-
-    g.characters.push_back(c);
-    widgets.push_back(c);
-    g.characters.push_back(c1);
-    widgets.push_back(c1);
-    g.characters.push_back(c2);
-    widgets.push_back(c2);
-
-    for(auto& c : g.characters)
-        c->update_visibility();
-
     widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
     widgets.push_back(g.button_MiniMap);
@@ -1173,12 +1180,10 @@ int main(void) {
     g.color_white = al_map_rgb(255, 255, 255);
     g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
 
-    bool redraw = true;
-    bool was_mouse_down = false;
-
+    init_tilemap();
+    init_characters();
     init_buttons();
     init_messagelog();
-    init_tilemap();
     init_minimap();
 
     {
@@ -1188,6 +1193,9 @@ int main(void) {
 
         g.ui = g.ui_MainMap;
     }
+
+    bool redraw = true;
+    bool was_mouse_down = false;
 
     while(1) {
         al_get_mouse_state(&mouse_state);
