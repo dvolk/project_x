@@ -24,6 +24,7 @@ struct Button;
 struct GridSystem;
 struct TileMap;
 struct Character;
+struct MiniMap;
 
 void errorQuit(string str) {
     cout << "Error: " << str << endl;
@@ -44,6 +45,7 @@ struct Game {
     ALLEGRO_COLOR color_grey;
     ALLEGRO_COLOR color_grey2;
     ALLEGRO_COLOR color_grey3;
+    ALLEGRO_COLOR color_tile_tint;
 
     Button *button_MainMap;
     Button *button_MiniMap;
@@ -55,7 +57,9 @@ struct Game {
     Button *button_Vehicle;
 
     TileMap *map;
+    MiniMap *minimap;
     vector<Character *> characters;
+    Character *player;
 
     UI *ui; // current UI
 
@@ -92,6 +96,7 @@ struct Item {
     Rect pos;
     string name;
     Grid *parent;
+    Grid *old_parent;
     void draw(void);
 };
 
@@ -195,7 +200,7 @@ struct TileMap : public Widget {
 
     void handleKeyDown(void);
 
-    void mouseDown(void) { }
+    void mouseDown(void);
     void mouseUp(void) { }
     void keyDown(void) { handleKeyDown(); }
 
@@ -203,7 +208,96 @@ struct TileMap : public Widget {
     void generate(void);
     void draw(void);
     void drawTopHalfOfTileAt(int x, int y);
+    void mouseToTileXY(int &x, int &y);
+    int mouseToTileN(void);
 };
+
+struct MiniMap : public Widget {
+    MiniMap();
+    ~MiniMap();
+
+    ALLEGRO_BITMAP *buf;
+
+    void mouseDown(void) { }
+    void mouseUp(void) { }
+    void keyDown(void) { }
+
+    void draw(void);
+    void update(void) { }
+    void recreate(void);
+};
+
+MiniMap::MiniMap() {
+    buf = al_create_bitmap(152, 152);
+}
+
+MiniMap::~MiniMap() {
+    al_destroy_bitmap(buf);
+    info("~MiniMap()");
+}
+
+void MiniMap::recreate() {
+    // crashes when setting target bitmap
+    /*
+    al_set_target_bitmap(buf);
+    al_clear_to_color(g.color_grey);
+
+    al_draw_rectangle(0, 0, 152, 152, g.color_white, 1);
+    for(int y = 0; y < 150; y++) {
+        for(int x = 0; x < 150; x++) {
+            int t_i = g.map->tiles[150 * y + x].bitmap_index;
+            ALLEGRO_COLOR c = al_map_rgb(t_i * 50, t_i * 50, t_i * 50);
+            al_put_pixel(x + 1, y + 1, c);
+        }
+    }
+    al_set_target_backbuffer(g.display);
+    */
+}
+
+void MiniMap::draw(void) {
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2 + 2, pos.y2 + 2, g.color_white);
+    al_draw_text(g.font, g.color_black, pos.x1 + 8, pos.y1 + 8, 0, "no minimap for you");
+}
+
+void TileMap::mouseToTileXY(int &x, int &y) {
+    x = view_x + floor(g.mouse_x / 80);
+    int off_y = x % 2 == 0 ? 0 : 20;
+    y = view_y + floor((g.mouse_y - 40 - off_y) / 40);
+}
+
+int TileMap::mouseToTileN(void) {
+    int x, y;
+    mouseToTileXY(x, y);
+    return 150 * y + x;
+}
+
+// check if the clicked tile is next to the player
+// if so, move them there.
+void TileMap::mouseDown(void) {
+    int clicked_n = mouseToTileN();
+    int player_n = g.player->n;
+
+    if(clicked_n == player_n)
+        return;
+
+    int clicked_nearby = -1;
+    for(int dir = 1; dir <= 6; dir++) {
+        if(dir_transform(player_n, dir) == clicked_n) {
+            clicked_nearby = clicked_n;
+        }
+    }
+
+    if(clicked_nearby == -1)
+        return;
+    else {
+        g.player->n = clicked_nearby;
+        g.player->update_visibility();
+    }
+
+    char buf[35];
+    snprintf(buf, sizeof(buf), "clicked in direction dir=%d", clicked_nearby);
+    g.AddMessage(buf);
+}
 
 void Character::update_visibility(void) {
     currently_seeing.clear();
@@ -277,7 +371,9 @@ void Character::draw(void) {
 
     al_draw_bitmap(sprite, off_x+25, off_y, 0);
 
-    g.map->drawTopHalfOfTileAt(ch_x, ch_y + 1);
+    if(g.map->tiles[150 * (ch_y + 1) + ch_x].visible == true) {
+        g.map->drawTopHalfOfTileAt(ch_x, ch_y + 1);
+    }
 
     // since we're already here, set the character's
     // widget position too.
@@ -414,8 +510,8 @@ void Game::AddMessage(string str) {
 }
 
 void Button::press(void) {
-    pressed = !pressed;
-    g.AddMessage("pressed button");
+    //    pressed = !pressed;
+    //    g.AddMessage("pressed button");
 }
 
 Button::~Button(void) {
@@ -463,11 +559,6 @@ void TileMap::generate(void) {
         t.visible = false;
         tiles[i] = t;
     }
-    Tile t;
-    t.bitmap_index = 2;
-    tiles[10*150+60] = t;
-    tiles[10*150+61] = t;
-    tiles[11*150+61] = t;
 }
 
 void TileMap::draw(void) {
@@ -478,6 +569,7 @@ void TileMap::draw(void) {
         for(int x = 0; x < cols; x++) {
             int t = start + (150 * y) + x;
             if(tiles[t].visible == true) {
+            // if(true) {
                 // can any character currently see the tile?
                 int currently_seeing = 0;
                 for(auto& c : g.characters) {
@@ -488,6 +580,7 @@ void TileMap::draw(void) {
                         }
                     }
                 }
+
             draw:
 
                 int off_x = (i % cols) * 80;
@@ -496,11 +589,14 @@ void TileMap::draw(void) {
 
                 if(currently_seeing != 0) {
                     // if so, draw the tile at full brightness
-                    al_draw_bitmap(bitmaps[tiles[t].bitmap_index], off_x, off_y, 0);
+                    al_draw_bitmap(bitmaps[tiles[t].bitmap_index],
+                                   off_x, off_y, 0);
                 }
                 else {
                     // otherwise draw it 50% tinted
-                    al_draw_tinted_bitmap(bitmaps[tiles[t].bitmap_index], al_map_rgba_f(0.5, 0.5, 0.5, 1.0), off_x, off_y, 0);
+                    al_draw_tinted_bitmap(bitmaps[tiles[t].bitmap_index]
+                                          , g.color_tile_tint
+                                          , off_x, off_y, 0);
                 }
             }
             i++;
@@ -531,33 +627,105 @@ void GridSystem::draw(void) {
 }
 
 void GridSystem::gsMouseDownEvent() {
-    Item *i = grids[0]->get_item(g.mouse_x, g.mouse_y);
-    if(i != NULL) {
-        held = i;
-        g.hold_off_x =
-            g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
-        g.hold_off_y =
-            g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
-        held->parent = NULL;
+    // does any grid contain an item at that position?
+    Item *i = NULL;
+    for(auto& grid : grids) {
+        i = grid->get_item(g.mouse_x, g.mouse_y);
+        if(i != NULL)
+            goto got_it;
     }
+    // no
+    return;
+
+ got_it:
+    held = i;
+    g.hold_off_x =
+        g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
+    g.hold_off_y =
+        g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
+    held->old_parent = held->parent;
+    held->parent = NULL;
+}
+
+bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
+                   int b_x, int b_y, int b_width, int b_height) {
+    return
+        !(b_x >= a_x + a_width
+          || b_x + b_width <= a_x
+          || b_y >= a_y + a_height
+          || b_y + b_height <= a_y);
 }
 
 void GridSystem::gsMouseUpEvent() {
-    if(held != NULL) {
-        // mouse is holding an item
-        int drop_x =
-            ((g.mouse_x - g.hold_off_x) - grids[0]->pos.x1) / 10;
-        int drop_y =
-            ((g.mouse_y - g.hold_off_y) - grids[0]->pos.y1) / 10;
+    // are we holding an item?
+    if(held == NULL)
+        return;
 
-        held->parent = grids[0];
-        held->pos.x1 = drop_x;
-        held->pos.y1 = drop_y;
-        grids[0]->items.push_back(held);
-        //delete held;
-        held = NULL;
-        g.AddMessage("You moved the block! Congratulations!");
+    // find a grid to drop it on
+    int i = 0;
+    for(auto& grid : grids) {
+        // proposed position to drop it into relative to the
+        // grid currently being examined
+        int drop_x =
+            ((g.mouse_x - g.hold_off_x) - grid->pos.x1) / 10;
+        int drop_y =
+            ((g.mouse_y - g.hold_off_y) - grid->pos.y1) / 10;
+
+        // bounds check on grid
+        if(g.mouse_x - g.hold_off_x >= grid->pos.x1 &&
+           g.mouse_y - g.hold_off_y >= grid->pos.y1 &&
+           g.mouse_x - g.hold_off_x + 10 * held->pos.x2
+           <= grid->pos.x2 + 8 &&
+           g.mouse_y - g.hold_off_y + 10 * held->pos.y2
+           <= grid->pos.y2 + 8) {
+            // this is the grid we want
+
+            // bounds check items in grid
+            for(auto& item : grid->items) {
+                if(rectIntersect(item->pos.x1 * 10,
+                                 item->pos.y1 * 10,
+                                 item->pos.x2 * 10,
+                                 item->pos.y2 * 10,
+                                 drop_x * 10,
+                                 drop_y * 10,
+                                 held->pos.x2 * 10,
+                                 held->pos.y2 * 10)) {
+                    // there's an item there already:
+                    // abort completely
+                    goto blocked;
+                }
+            }
+
+            // we've found the grid and there's nothing blocking
+            // the placement there, so drop it
+            held->parent = grid;
+            held->old_parent = NULL;
+            held->pos.x1 = drop_x;
+            held->pos.y1 = drop_y;
+            grid->items.push_back(held);
+
+            held = NULL;
+
+            char b[40];
+            snprintf(b, sizeof(b), "Moved onto grid %d", i);
+            g.AddMessage(b);
+
+            // the item is placed. we're done
+            return;
+        }
+        i++;
     }
+
+ blocked:
+    // couldn't place it anywhere. send it back to where
+    // it was before we picked it up
+    held->parent = held->old_parent;
+    held->old_parent->items.push_back(held);
+    held = NULL;
+
+    char b[40];
+    snprintf(b, sizeof(b), "Blocked on grid %d", i);
+    g.AddMessage(b);
 }
 
 void Grid::draw(void) {
@@ -590,7 +758,6 @@ void Item::draw(void) {
                                  g.mouse_y - g.hold_off_y + pos.y2 * 10,
                                  col);
     }
-
 }
 
 Item *Grid::get_item(int x, int y) {
@@ -622,28 +789,50 @@ struct MiniMapUI : public UI {
     ~MiniMapUI();
 };
 
-void switch_ui(void) {
-    if(g.ui == g.ui_MainMap) {
-        g.ui = g.ui_MiniMap;
-    } else {
-        g.ui = g.ui_MainMap;
-    }
+struct ItemsUI : public UI {
+    ItemsUI();
+    ~ItemsUI();
+};
+
+ItemsUI::ItemsUI() {
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+
+    TestGridSystem *tgs = new(TestGridSystem);
+    widgets.push_back(tgs);
+}
+
+ItemsUI::~ItemsUI() {
+    info("~ItemsUI");
 }
 
 void button_MainMap_press(void) {
-    for(auto& character : g.characters) {
-        character->n = dir_transform(character->n, rand() % 6);
-        character->update_visibility();
-        /*
-        for(int dir = 0; dir <= 6; dir++) {
-            int n2 = dir_transform(character->n, dir);
-            for(int dir2 = 0; dir2 <= 6; dir2++) {
-                g.map->tiles[dir_transform(n2, dir2)].visible = true;
-            }
-        }
-        */
+    if(g.ui != g.ui_MainMap) {
+        g.ui = g.ui_MainMap;
+        g.AddMessage("Switched to main map.");
     }
-    g.AddMessage("Turn ended!");
+}
+
+void button_Items_press(void) {
+    if(g.ui != g.ui_Items) {
+        g.ui = g.ui_Items;
+        g.AddMessage("Switched to inventory.");
+    }
+}
+
+void button_MiniMap_press(void) {
+    if(g.ui != g.ui_MiniMap) {
+        g.minimap->recreate();
+        g.ui = g.ui_MiniMap;
+        g.AddMessage("Switched to mini map");
+    }
 }
 
 void init_buttons(void) {
@@ -693,6 +882,7 @@ void init_buttons(void) {
     g.button_MiniMap->up = button_minimap_up;
     g.button_MiniMap->down = button_minimap_down;
     g.button_MiniMap->pressed = false;
+    g.button_MiniMap->onMouseDown.connect(ptr_fun(button_MiniMap_press));
 
     g.button_Skills->pos.x1 = 0;
     g.button_Skills->pos.y1 = 600;
@@ -718,6 +908,7 @@ void init_buttons(void) {
     g.button_Items->up = button_items_up;
     g.button_Items->down = button_items_down;
     g.button_Items->pressed = false;
+    g.button_Items->onMouseDown.connect(ptr_fun(button_Items_press));
 
     g.button_Condition->pos.x1 = 1180;
     g.button_Condition->pos.y1 = 340;
@@ -754,8 +945,6 @@ void init_messagelog(void) {
     g.log->pos.y2 = 200;
     g.log->background = messagelogbg;
     g.log->font = g.font;
-    g.log->lines.push_back("Player is dying.");
-    g.log->lines.push_back("Player is dead. Blegrgrgrvddgd...");
 }
 
 void init_tilemap(void) {
@@ -781,7 +970,25 @@ void init_tilemap(void) {
     g.map->generate();
 }
 
+void init_minimap(void) {
+    g.minimap = new(MiniMap);
+    g.minimap->pos.x1 = 490;
+    g.minimap->pos.y1 = 210;
+    g.minimap->pos.x2 = g.minimap->pos.x1 + 300;
+    g.minimap->pos.y2 = g.minimap->pos.y1 + 300;
+}
+
 MiniMapUI::MiniMapUI(void) {
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.minimap);
 }
 
 MiniMapUI::~MiniMapUI(void) {
@@ -793,17 +1000,22 @@ TestGridSystem::TestGridSystem() {
     g1->pos.x1 = 10;
     g1->pos.y1 = 10;
     g1->pos.x2 = 200;
-    g1->pos.y2 = 300;
+    g1->pos.y2 = 400;
     Grid *g2 = new(Grid);
     g2->pos.x1 = 250;
     g2->pos.y1 = 10;
     g2->pos.x2 = 450;
     g2->pos.y2 = 200;
+    Grid *g3 = new(Grid);
+    g3->pos.x1 = 800;
+    g3->pos.y1 = 10;
+    g3->pos.x2 = 1150;
+    g3->pos.y2 = 400;
     Item *i1 = new(Item);
     i1->pos.x1 = 3;
     i1->pos.y1 = 3;
-    i1->pos.x2 = 7;
-    i1->pos.y2 = 1;
+    i1->pos.x2 = 4;
+    i1->pos.y2 = 4;
     i1->name = "item 1";
     Item *i2 = new(Item);
     i2->pos.x1 = 3;
@@ -811,22 +1023,23 @@ TestGridSystem::TestGridSystem() {
     i2->pos.x2 = 4;
     i2->pos.y2 = 4;
     i2->name = "item 2";
+    Item *i3 = new(Item);
+    i3->pos.x1 = 10;
+    i3->pos.y1 = 10;
+    i3->pos.x2 = 1;
+    i3->pos.y2 = 4;
+    i3->name = "item 3";
 
     g1->items.push_back(i1);
-    g1->items.push_back(i2);
+    g2->items.push_back(i2);
+    g1->items.push_back(i3);
     grids.push_back(g1);
     grids.push_back(g2);
+    grids.push_back(g3);
 
-    // REALLY set item parents
-    int i = 0;
-    for(auto& grid : grids) {
-        int j = 0;
-        for(__attribute__ ((unused)) auto& item : grid->items) {
-            grids[i]->items[j]->parent = grids[i];
-            j++;
-        }
-        i++;
-    }
+    for(auto& grid : grids)
+        for(auto& item : grid->items)
+            item->parent = grid;
 
     pos.x1 = 0;
     pos.y1 = 0;
@@ -852,6 +1065,7 @@ MainMapUI::MainMapUI() {
     Character *c2 = new(Character);
     c2->n = 10 * 150 + 12;
     c2->sprite = ch_sprite;
+    g.player = c;
 
     widgets.push_back(g.map);
 
@@ -865,7 +1079,7 @@ MainMapUI::MainMapUI() {
     for(auto& c : g.characters)
         c->update_visibility();
 
-    //    widgets.push_back(g.log);
+    widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
     widgets.push_back(g.button_MiniMap);
     widgets.push_back(g.button_Skills);
@@ -874,9 +1088,6 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Condition);
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
-
-    // TestGridSystem *tgs = new(TestGridSystem);
-    // widgets.push_back(tgs);
 }
 
 MainMapUI::~MainMapUI(void) {
@@ -960,6 +1171,7 @@ int main(void) {
     g.color_grey3 = al_map_rgb(240, 240, 240);
     g.color_black = al_map_rgb(0, 0, 0);
     g.color_white = al_map_rgb(255, 255, 255);
+    g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
 
     bool redraw = true;
     bool was_mouse_down = false;
@@ -967,9 +1179,13 @@ int main(void) {
     init_buttons();
     init_messagelog();
     init_tilemap();
+    init_minimap();
 
     {
         g.ui_MainMap = new(MainMapUI);
+        g.ui_MiniMap = new(MiniMapUI);
+        g.ui_Items   = new(ItemsUI);
+
         g.ui = g.ui_MainMap;
     }
 
@@ -1022,10 +1238,5 @@ int main(void) {
             al_flip_display();
         }
     }
-
-    // don't really need to deallocate if we're quitting...
-    al_destroy_display(display);
-    delete g.ui;
-
     return 0;
 }
