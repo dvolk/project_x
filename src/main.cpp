@@ -13,6 +13,10 @@
 
 #include <sigc++/sigc++.h>
 
+#include "util.h"
+
+#define DEBUG_VISIBILITY true
+
 using namespace std;
 using namespace sigc;
 
@@ -25,15 +29,6 @@ struct GridSystem;
 struct TileMap;
 struct Character;
 struct MiniMap;
-
-void errorQuit(string str) {
-    cout << "Error: " << str << endl;
-    exit(1);
-}
-
-void info(string str) {
-    cout << "Info: " << str << endl;
-}
 
 // global state
 struct Game {
@@ -371,7 +366,8 @@ void Character::draw(void) {
 
     al_draw_bitmap(sprite, off_x+25, off_y, 0);
 
-    if(g.map->tiles[150 * (ch_y + 1) + ch_x].visible == true) {
+    if(DEBUG_VISIBILITY ||
+       g.map->tiles[150 * (ch_y + 1) + ch_x].visible == true) {
         g.map->drawTopHalfOfTileAt(ch_x, ch_y + 1);
     }
 
@@ -568,7 +564,7 @@ void TileMap::draw(void) {
     for(int y = 0; y < rows; y++) {
         for(int x = 0; x < cols; x++) {
             int t = start + (150 * y) + x;
-            if(tiles[t].visible == true) {
+            if(DEBUG_VISIBILITY || tiles[t].visible == true) {
             // if(true) {
                 // can the player currently see the tile?
                 int currently_seeing = 0;
@@ -606,7 +602,7 @@ void TileMap::draw(void) {
     g.player->draw();
     for(auto& character : g.characters) {
         for(auto& cs : g.player->currently_seeing) {
-            if(character->n == cs) {
+            if(DEBUG_VISIBILITY || character->n == cs) {
                 character->draw();
                 break;
             }
