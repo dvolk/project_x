@@ -15,7 +15,7 @@
 
 #include "util.h"
 
-#define DEBUG_VISIBILITY true
+#define DEBUG_VISIBILITY false
 
 using namespace std;
 using namespace sigc;
@@ -29,6 +29,9 @@ struct GridSystem;
 struct TileMap;
 struct Character;
 struct MiniMap;
+struct MainMapUI;
+struct MiniMapUI;
+struct ItemsUI;
 
 // global state
 struct Game {
@@ -55,14 +58,17 @@ struct Game {
     MiniMap *minimap;
     vector<Character *> characters;
     Character *player;
+    Grid *player_inventory;
+
+    vector<ALLEGRO_BITMAP *> bitmaps;
 
     UI *ui; // current UI
 
-    UI *ui_MainMap;
-    UI *ui_MiniMap;
+    MainMapUI *ui_MainMap;
+    MiniMapUI *ui_MiniMap;
     UI *ui_Skills;
     UI *ui_Crafting;
-    UI *ui_Items;
+    ItemsUI *ui_Items;
     UI *ui_Conditions;
     UI *ui_Camp;
     UI *ui_Vehicle;
@@ -88,12 +94,34 @@ struct Rect {
 };
 
 struct Item {
+    Item();
+    Item(int x1, int y1, int x2, int y2, ALLEGRO_BITMAP *sprite);
+
     Rect pos;
     string name;
     Grid *parent;
     Grid *old_parent;
+    ALLEGRO_BITMAP *sprite;
     void draw(void);
 };
+
+Item::Item() {
+    pos.x1 = 1;
+    pos.y1 = 1;
+    pos.x2 = 1;
+    pos.y2 = 1;
+    name = "";
+    sprite = NULL;
+}
+
+Item::Item(int x1, int y1, int x2, int y2, ALLEGRO_BITMAP *img) {
+    pos.x1 = x1;
+    pos.y1 = y1;
+    pos.x2 = x2;
+    pos.y2 = y2;
+    name = "";
+    sprite = img;
+}
 
 struct Widget {
     Rect pos;
@@ -119,7 +147,9 @@ struct Character : public Widget {
 
     void update_visibility(void);
 
-    Character(void) {
+    Character(int n, ALLEGRO_BITMAP *sprite) {
+        this->n = n;
+        this->sprite = sprite;
         currently_seeing.reserve(50);
     }
 
@@ -160,8 +190,8 @@ struct GridSystem : public Widget {
     GridSystem(void) { }
     ~GridSystem(void) {
         info("~GridSystem()");
-        for(auto& grid : grids)
-            delete grid;
+        // for(auto& grid : grids)
+        //     delete grid;
     }
 
     void mouseDown(void) { gsMouseDownEvent(); }
@@ -178,9 +208,21 @@ struct TestGridSystem : public GridSystem {
     ~TestGridSystem();
 };
 
+struct TileInfo {
+    int bitmap_index;
+    ALLEGRO_COLOR minimap_color;
+};
+
 struct Tile {
-    int8_t bitmap_index;
+    int8_t info_index;
     int8_t visible;
+    Grid *ground_items;
+
+    Tile() {
+        ground_items = NULL;
+        info_index = 0;
+        visible = 0;
+    }
 };
 
 struct TileMap : public Widget {
@@ -189,6 +231,7 @@ struct TileMap : public Widget {
     int view_x;
     int view_y;
     vector<Tile> tiles;
+    vector<TileInfo> tile_info;
     vector<ALLEGRO_BITMAP *>bitmaps;
 
     ~TileMap(void);
@@ -223,7 +266,7 @@ struct MiniMap : public Widget {
 };
 
 MiniMap::MiniMap() {
-    buf = al_create_bitmap(152, 152);
+    buf = al_create_bitmap(304, 304);
 }
 
 MiniMap::~MiniMap() {
@@ -232,26 +275,46 @@ MiniMap::~MiniMap() {
 }
 
 void MiniMap::recreate() {
-    // crashes when setting target bitmap
-    /*
     al_set_target_bitmap(buf);
-    al_clear_to_color(g.color_grey);
 
-    al_draw_rectangle(0, 0, 152, 152, g.color_white, 1);
+    al_clear_to_color(g.color_black);
+    al_draw_rectangle(1, 1, 303, 303, g.color_white, 2);
+
+    // draw the minimap
     for(int y = 0; y < 150; y++) {
+        int y150 = 150 * y;
         for(int x = 0; x < 150; x++) {
-            int t_i = g.map->tiles[150 * y + x].bitmap_index;
-            ALLEGRO_COLOR c = al_map_rgb(t_i * 50, t_i * 50, t_i * 50);
-            al_put_pixel(x + 1, y + 1, c);
+            Tile t = g.map->tiles[y150 + x];
+            if(t.visible) {
+                ALLEGRO_COLOR col = g.map->tile_info[t.info_index].minimap_color;
+                // four pixels per hex cell
+                al_put_pixel(x * 2 + 2, y * 2 + 2, col);
+                al_put_pixel(x * 2 + 3, y * 2 + 2, col);
+                al_put_pixel(x * 2 + 2, y * 2 + 3, col);
+                al_put_pixel(x * 2 + 3, y * 2 + 3, col);
+            }
         }
     }
+
+    ALLEGRO_COLOR red = al_map_rgb(255, 0, 0);
+
+    // draw player location lines
+    int p_x = g.player->n % 150;
+    int p_y = g.player->n / 150;
+    al_draw_line(p_x * 2 + 2, 2, p_x * 2 + 2, 302, red, 2);
+    al_draw_line(2, p_y * 2 + 2, 302, p_y * 2 + 2, red, 2);
+
+    // draw mainmap view rectangle
+    al_draw_rectangle(g.map->view_x * 2 + 2,
+                      g.map->view_y * 2 + 2,
+                      (g.map->view_x + 20) * 2 + 2,
+                      (g.map->view_y + 18) * 2 + 2, red, 2);
+
     al_set_target_backbuffer(g.display);
-    */
 }
 
 void MiniMap::draw(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2 + 2, pos.y2 + 2, g.color_white);
-    al_draw_text(g.font, g.color_black, pos.x1 + 8, pos.y1 + 8, 0, "no minimap for you");
+    al_draw_bitmap(buf, 490, 150, 0);
 }
 
 void TileMap::mouseToTileXY(int &x, int &y) {
@@ -401,8 +464,8 @@ void TileMap::handleKeyDown(void) {
 
 TileMap::~TileMap(void) {
     info("~TileMap");
-    for(auto& bitmap : bitmaps)
-        al_destroy_bitmap(bitmap);
+    // for(auto& bitmap : bitmaps)
+    //    al_destroy_bitmap(bitmap);
     //bitmaps.clear();
     //tiles.clear();
 }
@@ -512,15 +575,10 @@ void Button::press(void) {
 
 Button::~Button(void) {
     info("~Button");
-    al_destroy_bitmap(up);
-    al_destroy_bitmap(down);
 }
 
 MessageLog::~MessageLog(void) {
     info("~MessageLog");
-    al_destroy_bitmap(background);
-    //free(font);
-    //lines.clear();
 }
 
 void MessageLog::draw(void) {
@@ -551,7 +609,7 @@ void TileMap::generate(void) {
     int up_to = bitmaps.size();
     for(int i = 0; i < 150*150; i++) {
         Tile t;
-        t.bitmap_index = rand() % up_to;
+        t.info_index = rand() % up_to;
         t.visible = false;
         tiles[i] = t;
     }
@@ -583,12 +641,13 @@ void TileMap::draw(void) {
 
                 if(currently_seeing != 0) {
                     // if so, draw the tile at full brightness
-                    al_draw_bitmap(bitmaps[tiles[t].bitmap_index],
+                    al_draw_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
                                    off_x, off_y, 0);
                 }
                 else {
                     // otherwise draw it 50% tinted
-                    al_draw_tinted_bitmap(bitmaps[tiles[t].bitmap_index]
+
+                    al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index]
                                           , g.color_tile_tint
                                           , off_x, off_y, 0);
                 }
@@ -622,7 +681,7 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
     int off_y = n % 2  == 0 ? 0 : 20;
     off_y += 40 * r_y;
 
-    al_draw_bitmap_region(bitmaps[tiles[n].bitmap_index],
+    al_draw_bitmap_region(bitmaps[tile_info[tiles[n].info_index].bitmap_index],
                           0, 0, 100, 40, off_x, off_y, 0);
 }
 
@@ -749,22 +808,32 @@ void Grid::draw(void) {
 }
 
 void Item::draw(void) {
-    ALLEGRO_COLOR col = al_map_rgb(100, 0, 100);
-
     if(parent != NULL) {
         // we're on a grid
-        al_draw_filled_rectangle(parent->pos.x1 + pos.x1 * 10,
-                                 parent->pos.y1 + pos.y1 * 10,
-                                 parent->pos.x1 + (pos.x1 + pos.x2) * 10,
-                                 parent->pos.y1 + (pos.y1 + pos.y2) * 10,
-                                 col);
+        int x1 = parent->pos.x1 + pos.x1 * 10;
+        int y1 = parent->pos.y1 + pos.y1 * 10;
+        int x2 = parent->pos.x1 + (pos.x1 + pos.x2) * 10;
+        int y2 = parent->pos.y1 + (pos.y1 + pos.y2) * 10;
+
+        if(sprite == NULL) {
+            al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
+            al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
+        }
+        else
+            al_draw_bitmap(sprite, x1, y1, 0);
     } else {
         // we're held by the mouse
-        al_draw_filled_rectangle(g.mouse_x - g.hold_off_x,
-                                 g.mouse_y - g.hold_off_y,
-                                 g.mouse_x - g.hold_off_x + pos.x2 * 10,
-                                 g.mouse_y - g.hold_off_y + pos.y2 * 10,
-                                 col);
+        int x1 = g.mouse_x - g.hold_off_x;
+        int y1 = g.mouse_y - g.hold_off_y;
+        int x2 = g.mouse_x - g.hold_off_x + pos.x2 * 10;
+        int y2 = g.mouse_y - g.hold_off_y + pos.y2 * 10;
+
+        if(sprite == NULL) {
+            al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
+            al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
+        }
+        else
+            al_draw_bitmap(sprite, x1, y1, 0);
     }
 }
 
@@ -798,6 +867,8 @@ struct MiniMapUI : public UI {
 };
 
 struct ItemsUI : public UI {
+    GridSystem *gridsystem;
+
     ItemsUI();
     ~ItemsUI();
 };
@@ -812,9 +883,7 @@ ItemsUI::ItemsUI() {
     widgets.push_back(g.button_Condition);
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
-
-    TestGridSystem *tgs = new(TestGridSystem);
-    widgets.push_back(tgs);
+    gridsystem = NULL;
 }
 
 ItemsUI::~ItemsUI() {
@@ -828,9 +897,21 @@ void button_MainMap_press(void) {
     }
 }
 
+void create_inventory_gridsystem(GridSystem *gs);
+
 void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
         g.ui = g.ui_Items;
+        GridSystem *gs = g.ui_Items->gridsystem;
+        if(gs != NULL) {
+            g.ui_Items->gridsystem->grids.clear();
+        } else {
+            gs = new(GridSystem);
+            g.ui_Items->widgets.push_back(gs);
+        }
+
+        create_inventory_gridsystem(gs);
+        g.ui_Items->gridsystem = gs;
         g.AddMessage("Switched to inventory.");
     }
 }
@@ -839,31 +920,85 @@ void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
         g.minimap->recreate();
         g.ui = g.ui_MiniMap;
-        g.AddMessage("Switched to mini map");
+        g.AddMessage("Switched to mini map.");
     }
 }
 
+void create_inventory_gridsystem(GridSystem *gs) {
+    // add player inventory
+    gs->grids.push_back(g.player_inventory);
+
+    // get ground inventory at player position
+    Grid *ground = g.map->tiles[g.player->n].ground_items;
+
+    // create it if it doesn't exist
+    if(ground == NULL) {
+        ground = new(Grid);
+        ground->pos.x1 = 10;
+        ground->pos.y1 = 10;
+        ground->pos.x2 = 210;
+        ground->pos.y2 = 310;
+        Item *crowbar = new Item(3, 3, 14, 2, g.bitmaps[20]);
+        ground->items.push_back(crowbar);
+    }
+
+    gs->grids.push_back(ground);
+    g.map->tiles[g.player->n].ground_items = ground;
+
+    for(auto& grid : gs->grids)
+        for(auto& item : grid->items)
+            item->parent = grid;
+
+    gs->pos.x1 = 0;
+    gs->pos.y1 = 0;
+    gs->pos.x2 = 1280;
+    gs->pos.y2 = 720;
+
+    gs->held = NULL;
+}
+
+void load_bitmaps(void) {
+    vector<string> filenames;
+    /* 00 */ filenames.push_back("media/buttons/mainmap_up.png");
+    /* 01 */ filenames.push_back("media/buttons/mainmap_down.png");
+    /* 02 */ filenames.push_back("media/buttons/minimap_up.png");
+    /* 03 */ filenames.push_back("media/buttons/minimap_down.png");
+    /* 04 */ filenames.push_back("media/buttons/skills_up.png");
+    /* 05 */ filenames.push_back("media/buttons/skills_down.png");
+    /* 06 */ filenames.push_back("media/buttons/crafting_up.png");
+    /* 07 */ filenames.push_back("media/buttons/crafting_down.png");
+    /* 08 */ filenames.push_back("media/buttons/items_up.png");
+    /* 09 */ filenames.push_back("media/buttons/items_down.png");
+    /* 10 */ filenames.push_back("media/buttons/condition_up.png");
+    /* 11 */ filenames.push_back("media/buttons/condition_down.png");
+    /* 12 */ filenames.push_back("media/buttons/camp_up.png");
+    /* 13 */ filenames.push_back("media/buttons/camp_down.png");
+    /* 14 */ filenames.push_back("media/buttons/vehicle_up.png");
+    /* 15 */ filenames.push_back("media/buttons/vehicle_down.png");
+    /* 16 */ filenames.push_back("media/backgrounds/messagelogbg.png");
+    /* 17 */ filenames.push_back("media/tile/grass.png");
+    /* 18 */ filenames.push_back("media/tile/tree.png");
+    /* 19 */ filenames.push_back("media/tile/city.png");
+    /* 20 */ filenames.push_back("media/items/crowbar.png");
+    /* 21 */ filenames.push_back("media/characters/test_character.png");
+    /* 22 */ filenames.push_back("media/items/first_aid_kit.png");
+
+    for(auto& filename : filenames) {
+        ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
+        if(bitmap)
+            info("Loaded file: " + filename);
+        else
+            errorQuit("Failed to load file: " + filename);
+        g.bitmaps.push_back(bitmap);
+    }
+}
+
+void unload_bitmaps(void) {
+    for(auto& bitmap : g.bitmaps)
+        al_destroy_bitmap(bitmap);
+}
+
 void init_buttons(void) {
-    // left
-    ALLEGRO_BITMAP *button_mainmap_up = al_load_bitmap("media/buttons/mainmap_up.png");
-    ALLEGRO_BITMAP *button_mainmap_down = al_load_bitmap("media/buttons/mainmap_down.png");
-    ALLEGRO_BITMAP *button_minimap_up = al_load_bitmap("media/buttons/minimap_up.png");
-    ALLEGRO_BITMAP *button_minimap_down = al_load_bitmap("media/buttons/minimap_down.png");
-    ALLEGRO_BITMAP *button_skills_up = al_load_bitmap("media/buttons/skills_up.png");
-    ALLEGRO_BITMAP *button_skills_down = al_load_bitmap("media/buttons/skills_down.png");
-    ALLEGRO_BITMAP *button_crafting_up = al_load_bitmap("media/buttons/crafting_up.png");
-    ALLEGRO_BITMAP *button_crafting_down = al_load_bitmap("media/buttons/crafting_down.png");
-
-    // right
-    ALLEGRO_BITMAP *button_items_up = al_load_bitmap("media/buttons/items_up.png");
-    ALLEGRO_BITMAP *button_items_down = al_load_bitmap("media/buttons/items_down.png");
-    ALLEGRO_BITMAP *button_condition_up = al_load_bitmap("media/buttons/condition_up.png");
-    ALLEGRO_BITMAP *button_condition_down = al_load_bitmap("media/buttons/condition_down.png");
-    ALLEGRO_BITMAP *button_camp_up = al_load_bitmap("media/buttons/camp_up.png");
-    ALLEGRO_BITMAP *button_camp_down = al_load_bitmap("media/buttons/camp_down.png");
-    ALLEGRO_BITMAP *button_vehicle_up = al_load_bitmap("media/buttons/vehicle_up.png");
-    ALLEGRO_BITMAP *button_vehicle_down = al_load_bitmap("media/buttons/vehicle_down.png");
-
     g.button_MainMap   = new(Button);
     g.button_MiniMap   = new(Button);
     g.button_Skills    = new(Button);
@@ -878,8 +1013,8 @@ void init_buttons(void) {
     g.button_MainMap->pos.y1 = 480;
     g.button_MainMap->pos.x2 = 100;
     g.button_MainMap->pos.y2 = 60;
-    g.button_MainMap->up = button_mainmap_up;
-    g.button_MainMap->down = button_mainmap_down;
+    g.button_MainMap->up = g.bitmaps[0];
+    g.button_MainMap->down = g.bitmaps[1];
     g.button_MainMap->pressed = false;
     g.button_MainMap->onMouseDown.connect(ptr_fun(button_MainMap_press));
 
@@ -887,8 +1022,8 @@ void init_buttons(void) {
     g.button_MiniMap->pos.y1 = 540;
     g.button_MiniMap->pos.x2 = 100;
     g.button_MiniMap->pos.y2 = 60;
-    g.button_MiniMap->up = button_minimap_up;
-    g.button_MiniMap->down = button_minimap_down;
+    g.button_MiniMap->up = g.bitmaps[2];
+    g.button_MiniMap->down = g.bitmaps[3];
     g.button_MiniMap->pressed = false;
     g.button_MiniMap->onMouseDown.connect(ptr_fun(button_MiniMap_press));
 
@@ -896,16 +1031,16 @@ void init_buttons(void) {
     g.button_Skills->pos.y1 = 600;
     g.button_Skills->pos.x2 = 100;
     g.button_Skills->pos.y2 = 60;
-    g.button_Skills->up = button_skills_up;
-    g.button_Skills->down = button_skills_down;
+    g.button_Skills->up = g.bitmaps[4];
+    g.button_Skills->down = g.bitmaps[5];
     g.button_Skills->pressed = false;
 
     g.button_Crafting->pos.x1 = 0;
     g.button_Crafting->pos.y1 = 660;
     g.button_Crafting->pos.x2 = 100;
     g.button_Crafting->pos.y2 = 60;
-    g.button_Crafting->up = button_crafting_up;
-    g.button_Crafting->down = button_crafting_down;
+    g.button_Crafting->up = g.bitmaps[6];
+    g.button_Crafting->down = g.bitmaps[7];
     g.button_Crafting->pressed = false;
 
     // right
@@ -913,8 +1048,8 @@ void init_buttons(void) {
     g.button_Items->pos.y1 = 280;
     g.button_Items->pos.x2 = 100;
     g.button_Items->pos.y2 = 60;
-    g.button_Items->up = button_items_up;
-    g.button_Items->down = button_items_down;
+    g.button_Items->up = g.bitmaps[8];
+    g.button_Items->down = g.bitmaps[9];
     g.button_Items->pressed = false;
     g.button_Items->onMouseDown.connect(ptr_fun(button_Items_press));
 
@@ -922,36 +1057,34 @@ void init_buttons(void) {
     g.button_Condition->pos.y1 = 340;
     g.button_Condition->pos.x2 = 100;
     g.button_Condition->pos.y2 = 60;
-    g.button_Condition->up = button_condition_up;
-    g.button_Condition->down = button_condition_down;
+    g.button_Condition->up = g.bitmaps[10];
+    g.button_Condition->down = g.bitmaps[11];
     g.button_Condition->pressed = false;
 
     g.button_Camp->pos.x1 = 1180;
     g.button_Camp->pos.y1 = 400;
     g.button_Camp->pos.x2 = 100;
     g.button_Camp->pos.y2 = 60;
-    g.button_Camp->up = button_camp_up;
-    g.button_Camp->down = button_camp_down;
+    g.button_Camp->up = g.bitmaps[12];
+    g.button_Camp->down = g.bitmaps[13];
     g.button_Camp->pressed = false;
 
     g.button_Vehicle->pos.x1 = 1180;
     g.button_Vehicle->pos.y1 = 460;
     g.button_Vehicle->pos.x2 = 100;
     g.button_Vehicle->pos.y2 = 60;
-    g.button_Vehicle->up = button_vehicle_up;
-    g.button_Vehicle->down = button_vehicle_down;
+    g.button_Vehicle->up = g.bitmaps[14];
+    g.button_Vehicle->down = g.bitmaps[15];
     g.button_Vehicle->pressed = false;
 }
 
 void init_messagelog(void) {
-    ALLEGRO_BITMAP *messagelogbg = al_load_bitmap("media/backgrounds/messagelogbg.png");
-
     g.log = new(MessageLog);
     g.log->pos.x1 = 100;
     g.log->pos.y1 = 520;
     g.log->pos.x2 = 1080;
     g.log->pos.y2 = 200;
-    g.log->background = messagelogbg;
+    g.log->background = g.bitmaps[16];
     g.log->font = g.font;
 }
 
@@ -967,13 +1100,20 @@ void init_tilemap(void) {
     g.map->pos.x2 = 1280;
     g.map->pos.y2 = 720;
 
-    ALLEGRO_BITMAP *tile_grass = al_load_bitmap("media/tile/grass.png");
-    ALLEGRO_BITMAP *tile_tree = al_load_bitmap("media/tile/tree.png");
-    ALLEGRO_BITMAP *tile_city = al_load_bitmap("media/tile/city.png");
+    TileInfo i;
+    i.minimap_color = al_map_rgb(0, 255, 0);
+    i.bitmap_index = 0;
+    g.map->tile_info.push_back(i);
+    i.minimap_color = al_map_rgb(0, 150, 0);
+    i.bitmap_index = 1;
+    g.map->tile_info.push_back(i);
+    i.minimap_color = al_map_rgb(255, 255, 255);
+    i.bitmap_index = 2;
+    g.map->tile_info.push_back(i);
 
-    g.map->bitmaps.push_back(tile_grass);
-    g.map->bitmaps.push_back(tile_tree);
-    g.map->bitmaps.push_back(tile_city);
+    g.map->bitmaps.push_back(g.bitmaps[17]);
+    g.map->bitmaps.push_back(g.bitmaps[18]);
+    g.map->bitmaps.push_back(g.bitmaps[19]);
 
     g.map->generate();
 }
@@ -1003,60 +1143,6 @@ MiniMapUI::~MiniMapUI(void) {
     info("~TestUI2()");
 }
 
-TestGridSystem::TestGridSystem() {
-    Grid *g1 = new(Grid);
-    g1->pos.x1 = 10;
-    g1->pos.y1 = 10;
-    g1->pos.x2 = 200;
-    g1->pos.y2 = 400;
-    Grid *g2 = new(Grid);
-    g2->pos.x1 = 250;
-    g2->pos.y1 = 10;
-    g2->pos.x2 = 450;
-    g2->pos.y2 = 200;
-    Grid *g3 = new(Grid);
-    g3->pos.x1 = 800;
-    g3->pos.y1 = 10;
-    g3->pos.x2 = 1150;
-    g3->pos.y2 = 400;
-    Item *i1 = new(Item);
-    i1->pos.x1 = 3;
-    i1->pos.y1 = 3;
-    i1->pos.x2 = 4;
-    i1->pos.y2 = 4;
-    i1->name = "item 1";
-    Item *i2 = new(Item);
-    i2->pos.x1 = 3;
-    i2->pos.y1 = 10;
-    i2->pos.x2 = 4;
-    i2->pos.y2 = 4;
-    i2->name = "item 2";
-    Item *i3 = new(Item);
-    i3->pos.x1 = 10;
-    i3->pos.y1 = 10;
-    i3->pos.x2 = 1;
-    i3->pos.y2 = 4;
-    i3->name = "item 3";
-
-    g1->items.push_back(i1);
-    g2->items.push_back(i2);
-    g1->items.push_back(i3);
-    grids.push_back(g1);
-    grids.push_back(g2);
-    grids.push_back(g3);
-
-    for(auto& grid : grids)
-        for(auto& item : grid->items)
-            item->parent = grid;
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
-
-    held = NULL;
-}
-
 TestGridSystem::~TestGridSystem() {
     info("~TestGridSystem()");
     //grids.clear();
@@ -1065,18 +1151,27 @@ TestGridSystem::~TestGridSystem() {
 // creates the player and npcs
 // must be called after init_tilemap();
 void init_characters(void) {
-    ALLEGRO_BITMAP *ch_sprite = al_load_bitmap("media/characters/test_character.png");
-
     for(int i = 0; i < 10; i++) {
-        Character *c = new(Character);
-        c->n = (rand() % 30) * 150 + (rand() % 30);
-        c->sprite = ch_sprite;
+        int n = (rand() % 30) * 150 + (rand() % 30);
+        Character *c = new Character(n, g.bitmaps[21]);
         g.characters.push_back(c);
     }
 
-    g.player = new(Character);
-    g.player->n = 12 * 150 + 12;
-    g.player->sprite = ch_sprite;
+    int n = 12 * 150 + 12;
+    g.player = new Character(n, g.bitmaps[21]);
+
+    // player's inventory
+    Grid *inventory = new(Grid);
+    inventory->pos.x1 = 300;
+    inventory->pos.y1 = 10;
+    inventory->pos.x2 = 510;
+    inventory->pos.y2 = 310;
+
+    // add starting items
+    Item *first_aid_kit = new Item(3, 3, 6, 6, g.bitmaps[22]);
+    inventory->items.push_back(first_aid_kit);
+
+    g.player_inventory = inventory;
     g.player->update_visibility();
 }
 
@@ -1134,8 +1229,8 @@ void allegro_init(void) {
 int main(void) {
     allegro_init();
 
-    ALLEGRO_DISPLAY *display = al_create_display(1280, 720);
-    if(display == NULL)
+    g.display = al_create_display(1280, 720);
+    if(g.display == NULL)
         errorQuit("Failed to create display.");
     else
         info("Created display.");
@@ -1163,19 +1258,20 @@ int main(void) {
     ALLEGRO_KEYBOARD_STATE keyboard_state;
 
     al_start_timer(timer);
-    al_set_target_backbuffer(display);
+    al_set_target_backbuffer(g.display);
 
-    al_register_event_source(event_queue, al_get_display_event_source(display));
+    al_register_event_source(event_queue, al_get_display_event_source(g.display));
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
     g.color_grey = al_color_name("grey");
     g.color_grey2 = al_map_rgb(200, 200, 200);
-    g.color_grey3 = al_map_rgb(240, 240, 240);
+    g.color_grey3 = al_map_rgb(220, 220, 220);
     g.color_black = al_map_rgb(0, 0, 0);
     g.color_white = al_map_rgb(255, 255, 255);
     g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
 
+    load_bitmaps();
     init_tilemap();
     init_characters();
     init_buttons();
@@ -1187,12 +1283,14 @@ int main(void) {
         g.ui_MiniMap = new(MiniMapUI);
         g.ui_Items   = new(ItemsUI);
 
+        // start on the main map
         g.ui = g.ui_MainMap;
     }
 
     bool redraw = true;
     bool was_mouse_down = false;
 
+    // main loop
     while(1) {
         al_get_mouse_state(&mouse_state);
         al_get_keyboard_state(&keyboard_state);
@@ -1242,5 +1340,20 @@ int main(void) {
             al_flip_display();
         }
     }
+
+    unload_bitmaps();
+
+    /*
+      we can't do this since the UI's share widgets
+      delete g.ui_MainMap;
+      delete g.ui_MiniMap;
+      delete g.ui_Items;
+    */
+
+    /*
+      allegro is automatically unloaded
+      al_uninstall_system();
+    */
+
     return 0;
 }
