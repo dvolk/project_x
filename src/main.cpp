@@ -155,7 +155,6 @@ struct Character : public Widget {
 
     ~Character(void) {
         info("~Character");
-        //al_destroy_bitmap(sprite);
     }
 
     void mouseDown(void) {
@@ -190,8 +189,6 @@ struct GridSystem : public Widget {
     GridSystem(void) { }
     ~GridSystem(void) {
         info("~GridSystem()");
-        // for(auto& grid : grids)
-        //     delete grid;
     }
 
     void mouseDown(void) { gsMouseDownEvent(); }
@@ -201,11 +198,6 @@ struct GridSystem : public Widget {
     void gsMouseDownEvent(void);
     void gsMouseUpEvent(void);
     void draw(void);
-};
-
-struct TestGridSystem : public GridSystem {
-    TestGridSystem();
-    ~TestGridSystem();
 };
 
 struct TileInfo {
@@ -776,7 +768,6 @@ void GridSystem::gsMouseUpEvent() {
             char b[40];
             snprintf(b, sizeof(b), "Moved onto grid %d", i);
             g.AddMessage(b);
-
             // the item is placed. we're done
             return;
         }
@@ -845,9 +836,7 @@ Item *Grid::get_item(int x, int y) {
            i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * 10 >= x &&
            i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * 10 >= y) {
 
-            // humm
-            Item *a = new(Item);
-            *a = *items[c];
+            Item *a = items[c];
             items.erase(items.begin() + c);
             return a;
         }
@@ -1141,11 +1130,6 @@ MiniMapUI::MiniMapUI(void) {
 
 MiniMapUI::~MiniMapUI(void) {
     info("~TestUI2()");
-}
-
-TestGridSystem::~TestGridSystem() {
-    info("~TestGridSystem()");
-    //grids.clear();
 }
 
 // creates the player and npcs
