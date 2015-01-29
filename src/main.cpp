@@ -9,14 +9,13 @@
 #include <vector>
 #include <set>
 #include <iostream>
-#include <memory>
 #include <cmath>
 
 #include <sigc++/sigc++.h>
 
 #include "util.h"
 
-#define DEBUG_VISIBILITY false
+#define DEBUG_VISIBILITY true
 
 using namespace std;
 using namespace sigc;
@@ -34,6 +33,7 @@ struct MainMapUI;
 struct MiniMapUI;
 struct ItemsUI;
 struct HardpointInfo;
+struct ItemInfo;
 
 // global state
 struct Game {
@@ -50,6 +50,7 @@ struct Game {
     ALLEGRO_COLOR color_grey2;
     ALLEGRO_COLOR color_grey3;
     ALLEGRO_COLOR color_tile_tint;
+    ALLEGRO_COLOR color_active_tile_tint;
     ALLEGRO_COLOR color_bg;
 
     Button *button_MainMap;
@@ -63,11 +64,21 @@ struct Game {
 
     TileMap *map;
     MiniMap *minimap;
-    vector<Character *> characters;
-    Character *player;
+    vector<ItemInfo> item_info;
 
+    HardpointInfo *right_hand_hold;
+    HardpointInfo *left_hand_hold;
     HardpointInfo *right_hand;
     HardpointInfo *left_hand;
+    HardpointInfo *back;
+    HardpointInfo *head;
+    HardpointInfo *neck;
+    HardpointInfo *right_shoulder;
+    HardpointInfo *left_shoulder;
+    HardpointInfo *torso;
+    HardpointInfo *legs;
+    HardpointInfo *right_foot;
+    HardpointInfo *left_foot;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -105,44 +116,66 @@ struct Rect {
     float y2;
 };
 
-enum ItemKind {
-    Container,
-    TorsoClothing,
-    Weapon,
-    // etc
+struct ItemInfo {
+    string name;
+    int maxStack;
+    int weight; // [g]
+    ALLEGRO_BITMAP *sprite;
 };
+
+void init_iteminfo(void) {
+    ItemInfo tmp;
+    tmp.name = "";
+    tmp.maxStack = 1;
+    tmp.sprite = NULL;
+    g.item_info.push_back(tmp);
+    tmp.name = "Backpack";
+    tmp.maxStack = 1;
+    tmp.weight = 1000;
+    tmp.sprite = g.bitmaps[24];
+    g.item_info.push_back(tmp);
+    tmp.name = "First aid kit";
+    tmp.maxStack = 1;
+    tmp.weight = 750;
+    tmp.sprite = g.bitmaps[22];
+    g.item_info.push_back(tmp);
+    tmp.name = "Crowbar";
+    tmp.maxStack = 1;
+    tmp.weight = 2500;
+    tmp.sprite = g.bitmaps[20];
+    g.item_info.push_back(tmp);
+}
 
 struct Item {
     Rect pos;
-    string name;
+    int info_index;
     Grid *parent;
     Grid *old_parent;
     Grid *storage;
-    ALLEGRO_BITMAP *sprite;
-    ItemKind kind;
 
-    Item(int x1, int y1, int x2, int y2, ALLEGRO_BITMAP *sprite, ItemKind k);
-    ~Item() {
-        // Item doesn't own anything
-        info("~Item()");
-    }
+    Item(int x1, int y1, int x2, int y2, int info_index);
+    ~Item();
+
+    void resetHardpointPos(void);
 
     void draw(void);
 };
 
-Item::Item(int x1, int y1, int x2, int y2, ALLEGRO_BITMAP *img, ItemKind k) {
-    kind = k;
+Item::Item(int x1, int y1, int x2, int y2, int info_index) {
     pos.x1 = x1;
     pos.y1 = y1;
     pos.x2 = x2;
     pos.y2 = y2;
-    name = "";
-    sprite = img;
+    parent = NULL;
+    old_parent = NULL;
     storage = NULL;
+    this->info_index = info_index;
 }
 
 struct Widget {
     Rect pos;
+    bool visible;
+
     signal<void> onMouseDown;
     signal<void> onMouseUp;
     signal<void> onKeyDown;
@@ -150,8 +183,10 @@ struct Widget {
     virtual void mouseDown(void) = 0;
     virtual void mouseUp(void) = 0;
     virtual void keyDown(void) = 0;
+    virtual void hoverOver(void) { };
 
     Widget() {
+        visible = true;
         g.all_widgets.insert(this);
     }
 
@@ -163,19 +198,79 @@ struct Widget {
     virtual void update() { };
 };
 
+struct MessageLog : public Widget {
+    ALLEGRO_BITMAP *background;
+    ALLEGRO_FONT *font;
+    vector<string> lines;
+
+    MessageLog() { }
+    ~MessageLog();
+
+    void mouseDown(void) { }
+    void mouseUp(void) { }
+    void keyDown(void) { }
+
+    void draw(void);
+};
+
 struct HardpointInfo {
     ALLEGRO_BITMAP *sprite;
-    bool singleItem;
+    int maxItems;
 };
 
 void init_hardpointinfo(void) {
+    g.right_hand_hold = new HardpointInfo;
+    g.left_hand_hold = new HardpointInfo;
     g.right_hand = new HardpointInfo;
-    g.right_hand->singleItem = true;
-    g.right_hand->sprite = g.bitmaps[22];
-
     g.left_hand = new HardpointInfo;
-    g.left_hand->singleItem = true;
-    g.left_hand->sprite = g.bitmaps[22];
+    g.back = new HardpointInfo;
+    g.head = new HardpointInfo;
+    g.neck = new HardpointInfo;
+    g.right_shoulder = new HardpointInfo;
+    g.left_shoulder = new HardpointInfo;
+    g.torso = new HardpointInfo;
+    g.legs = new HardpointInfo;
+    g.right_foot = new HardpointInfo;
+    g.left_foot = new HardpointInfo;
+
+    g.right_hand_hold->maxItems = 1;
+    g.right_hand_hold->sprite = NULL;
+
+    g.left_hand_hold->maxItems = 1;
+    g.left_hand_hold->sprite = NULL;
+
+    g.right_hand->maxItems = 1;
+    g.right_hand->sprite = NULL;
+
+    g.left_hand->maxItems = 1;
+    g.left_hand->sprite = NULL;
+
+    g.back->maxItems = 1;
+    g.back->sprite = NULL;
+
+    g.head->maxItems = 1;
+    g.head->sprite = NULL;
+
+    g.neck->maxItems = 1;
+    g.neck->sprite = NULL;
+
+    g.right_shoulder->maxItems = 1;
+    g.right_shoulder->sprite = NULL;
+
+    g.left_shoulder->maxItems = 1;
+    g.left_shoulder->sprite = NULL;
+
+    g.torso->maxItems = 3;
+    g.torso->sprite = NULL;
+
+    g.legs->maxItems = 3;
+    g.legs->sprite = NULL;
+
+    g.right_foot->maxItems = 1;
+    g.right_foot->sprite = NULL;
+
+    g.left_foot->maxItems = 1;
+    g.left_foot->sprite = NULL;
 }
 
 struct Grid {
@@ -212,6 +307,8 @@ struct Grid {
     }
 
     void draw(void);
+    void drawAt(int x, int y);
+
     void resetPos(void) {
         pos.x2 = pos.x1 + grid_size_x * grid_px_x;
         pos.y2 = pos.y1 + grid_size_y * grid_px_y;
@@ -219,11 +316,38 @@ struct Grid {
     Item *get_item(int x, int y); // get item at screen position
 };
 
-struct Character : public Widget {
+Item::~Item() {
+    delete storage;
+    info("~Item()");
+}
+
+void Item::resetHardpointPos(void) {
+    if(parent != NULL) {
+        storage->pos.x1 = parent->pos.x1 + pos.x2 * 10 + 10;
+        storage->pos.y1 = parent->pos.y1;
+        storage->resetPos();
+    } else {
+        info("WARNING: no item parent");
+    }
+}
+
+struct Character {
+    Rect pos;
     int n; // position by offset
-    Grid *inventory;
+    Grid *right_hand_hold;
+    Grid *left_hand_hold;
     Grid *right_hand;
     Grid *left_hand;
+    Grid *back;
+    Grid *head;
+    Grid *neck;
+    Grid *right_shoulder;
+    Grid *left_shoulder;
+    Grid *torso;
+    Grid *legs;
+    Grid *right_foot;
+    Grid *left_foot;
+    vector<Grid *> hardpoints;
 
     ALLEGRO_BITMAP *sprite;
     vector<int> currently_seeing;
@@ -233,22 +357,52 @@ struct Character : public Widget {
     Character(int n, ALLEGRO_BITMAP *sprite);
 
     ~Character() {
-        delete inventory;
+        for(auto& hardpoint : hardpoints) {
+            delete hardpoint;
+            hardpoint = NULL;
+        }
         info("~Character()");
     };
 
-    void mouseDown(void) {
-        g.AddMessage("That tickles!");
-    }
-    void mouseUp(void) { }
-    void keyDown(void) { }
-
     void draw(void);
+
+    void setupHardpoints(GridSystem *gs);
 };
 
 Character::Character(int n, ALLEGRO_BITMAP *sprite) {
     this->n = n;
     this->sprite = sprite;
+
+    int off_x = 350;
+    int off_y = 100;
+    neck = new Grid (off_x, off_y - 50, 4, 4, g.neck);
+    head = new Grid (off_x, off_y, 4, 4, g.head);
+    right_shoulder = new Grid (off_x - 50, off_y, 4, 4, g.right_shoulder);
+    left_shoulder = new Grid (off_x + 50, off_y, 4, 4, g.left_shoulder);
+    torso = new Grid (off_x - 15, off_y + 50, 7, 8, g.torso);
+    right_hand = new Grid (off_x - 65, off_y + 100, 4, 4, g.right_hand_hold);
+    left_hand = new Grid (off_x + 65, off_y + 100, 4, 4, g.left_hand_hold);
+    legs = new Grid (off_x - 15, off_y + 140, 7, 10, g.legs);
+    right_foot = new Grid (off_x - 25, off_y + 250, 4, 4, g.right_foot);
+    left_foot = new Grid (off_x + 25, off_y + 250, 4, 4, g.left_foot);
+    right_hand_hold = new Grid (530, 175, 4, 4, g.right_hand_hold);
+    left_hand_hold = new Grid (530, 300, 4, 4, g.left_hand_hold);
+    back = new Grid(530, 50, 4, 4, g.back);
+
+    hardpoints.push_back(right_hand_hold);
+    hardpoints.push_back(left_hand_hold);
+    hardpoints.push_back(right_hand);
+    hardpoints.push_back(left_hand);
+    hardpoints.push_back(back);
+    hardpoints.push_back(head);
+    hardpoints.push_back(neck);
+    hardpoints.push_back(right_shoulder);
+    hardpoints.push_back(left_shoulder);
+    hardpoints.push_back(torso);
+    hardpoints.push_back(legs);
+    hardpoints.push_back(right_foot);
+    hardpoints.push_back(left_foot);
+
     currently_seeing.reserve(50);
 }
 
@@ -267,11 +421,40 @@ struct GridSystem : public Widget {
     void mouseDown(void) { gsMouseDownEvent(); }
     void mouseUp(void) { gsMouseUpEvent(); }
     void keyDown(void) { }
+    void hoverOver(void);
 
     void gsMouseDownEvent(void);
     void gsMouseUpEvent(void);
     void draw(void);
+    void drawItemTooltip(void);
+
+    void addStorageGrid(void);
+    void countTotalItems(void) {
+        int n = 0;
+        for(auto& grid : grids)
+            for(__attribute__ ((unused)) auto& item : grid->items)
+                n++;
+        cout << n << endl;
+    }
 };
+
+void GridSystem::hoverOver(void) {
+}
+
+// sets the hardpoint's item's parents
+// and the item's storage grid positions
+void Character::setupHardpoints(GridSystem *gs) {
+    // add the grids at the appropriate places
+    for(auto &hardpoint : hardpoints) {
+        for(auto& item : hardpoint->items) {
+            if(item->storage != NULL) {
+                item->parent = hardpoint;
+                item->resetHardpointPos();
+                gs->grids.push_back(item->storage);
+            }
+        }
+    }
+}
 
 struct TileInfo {
     int bitmap_index;
@@ -318,15 +501,19 @@ struct TileMap : public Widget {
     int hex_step_x;
     int hex_step_y;
 
+    int max_t;
+    int start;
+    int mouse_n;
+
+    vector<Character *> characters;
+    Character *player;
+
     vector<Tile> tiles;
     vector<TileInfo> tile_info;
     vector<ALLEGRO_BITMAP *>bitmaps;
 
-    TileMap(int sx, int sy);
-    ~TileMap() {
-        // tilemap doesn't own anything
-        info("~TileMap()");
-    }
+    TileMap(int sx, int sy, int cols, int rows);
+    ~TileMap();
 
     void handleKeyDown(void);
 
@@ -337,13 +524,35 @@ struct TileMap : public Widget {
     // must be called after the bitmaps vector is filled
     void generate(void);
     void draw(void);
+    void drawTile(int i, int x, int y);
     void drawTopHalfOfTileAt(int x, int y);
     void mouseToTileXY(int &x, int &y);
     int mouseToTileN(void);
     void focusOnPlayer(void);
+    Character *characterAt(int n);
 };
 
-TileMap::TileMap(int sx, int sy) {
+Character *TileMap::characterAt(int n) {
+    if(player->n == n)
+        return player;
+    for(auto& character : characters)
+        if(character->n == n)
+            return character;
+    return NULL;
+}
+
+TileMap::~TileMap() {
+    // tilemap owns characters
+    delete player;
+    player = NULL;
+    for(auto& character : characters) {
+        delete character;
+        character = NULL;
+    }
+    info("~TileMap()");
+}
+
+TileMap::TileMap(int sx, int sy, int c, int r) {
     if(sx % 2 != 0) {
         info("WARNING: TileMap dimensions must be even.");
         sx += 1;
@@ -352,6 +561,9 @@ TileMap::TileMap(int sx, int sy) {
         info("WARNING: TileMap dimensions must be even.");
         sy += 1;
     }
+
+    cols = min(sx, c);
+    rows = min(sy, r);
 
     size_x = sx;
     size_y = sy;
@@ -369,15 +581,25 @@ TileMap::TileMap(int sx, int sy) {
         r_off_x = (g.display_x - (size_x + 0.5) * hex_step_x) / 2;
     if(size_y * hex_step_y < g.display_y)
         r_off_y = (g.display_y - size_y * hex_step_y) / 3;
+
+    pos.x1 = r_off_x;
+    pos.y1 = r_off_y;
+    pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x);
+    pos.y2 = min(g.display_y, (int)pos.y1 + (size_y + 1) * hex_step_y);
+
+    max_t = size_x * size_y;
+
+    cout << "Tilemap rendering dimensions: "
+         << pos.x1 << " " << pos.y1 << " " << pos.x2 << " " << pos.y2 << endl;
 }
 
 void TileMap::focusOnPlayer(void) {
-    int p_x = g.player->n % size_x;
-    int p_y = g.player->n / size_x;
+    int p_x = player->n % size_x;
+    int p_y = player->n / size_x;
     view_x = max(0, p_x - cols/2 + 1);
     view_y = max(0, p_y - rows/2 + 2);
-    view_x = max(0, min(view_x, g.map->size_x - cols));
-    view_y = max(0, min(view_y, g.map->size_y - rows));
+    view_x = max(0, min(view_x, size_x - cols));
+    view_y = max(0, min(view_y, size_y - rows));
 }
 
 struct MiniMap : public Widget {
@@ -437,8 +659,8 @@ void MiniMap::recreate() {
     // if the tilemap dimensions are larger than the screen
     if(g.map->r_off_x == 0 || g.map->r_off_y == 0) {
         // draw player location lines
-        int p_x = g.player->n % g.map->size_x;
-        int p_y = g.player->n / g.map->size_x;
+        int p_x = g.map->player->n % g.map->size_x;
+        int p_y = g.map->player->n / g.map->size_x;
         al_draw_line(p_x * 2 + 2, 2, p_x * 2 + 2, size_y - 2, red, 2);
         al_draw_line(2, p_y * 2 + 2, size_x, p_y * 2 + 2, red, 2);
 
@@ -465,6 +687,12 @@ void TileMap::mouseToTileXY(int &x, int &y) {
 }
 
 int TileMap::mouseToTileN(void) {
+    if(g.mouse_x < pos.x1 ||
+       g.mouse_y < pos.y1 + 40 ||
+       g.mouse_x > pos.x2 - 81 ||
+       g.mouse_y > pos.y2 - 1) {
+        return -1;
+    }
     int x, y;
     mouseToTileXY(x, y);
     return size_x * y + x;
@@ -474,9 +702,10 @@ int TileMap::mouseToTileN(void) {
 // if so, move them there.
 void TileMap::mouseDown(void) {
     int clicked_n = mouseToTileN();
-    int player_n = g.player->n;
+    int player_n = player->n;
 
-    if(clicked_n == player_n)
+    if(clicked_n == player_n ||
+       clicked_n == -1)
         return;
 
     int clicked_nearby = -1;
@@ -489,12 +718,14 @@ void TileMap::mouseDown(void) {
     if(clicked_nearby == -1)
         return;
     else {
-        g.player->n = clicked_nearby;
-        g.player->update_visibility();
+        g.AddMessage("player moved");
+        player->n = clicked_nearby;
+        player->update_visibility();
     }
 
-    char buf[35];
-    snprintf(buf, sizeof(buf), "clicked in direction dir=%d", clicked_nearby);
+    char buf[100];
+    snprintf(buf, sizeof(buf), "clicked in direction dir=%d %d %d %f %f %f %f",
+             clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
     g.AddMessage(buf);
 }
 
@@ -617,19 +848,16 @@ int dir_transform(int n, int dir) {
 }
 
 void Character::draw(void) {
+    assert(sprite != NULL);
+
     int ch_x = n % g.map->size_x;
     int ch_y = n / g.map->size_x;
 
     // is it on the screen?
-    if(ch_y >= g.map->view_y + g.map->rows
-       || ch_x >= g.map->view_x + g.map->cols
-       || ch_y < g.map->view_y
-       || ch_x < g.map->view_x) {
-        return;
-    }
-
-    if(sprite == NULL) {
-        info("WARNING: character doesn't have a sprite.");
+    if(ch_y >= g.map->view_y + g.map->rows ||
+       ch_x >= g.map->view_x + g.map->cols ||
+       ch_y < g.map->view_y ||
+       ch_x < g.map->view_x) {
         return;
     }
 
@@ -672,6 +900,12 @@ void TileMap::handleKeyDown(void) {
             view_x++;
     if(g.key == ALLEGRO_KEY_C)
         g.map->focusOnPlayer();
+    if(g.key == ALLEGRO_KEY_M) {
+        if(g.log->visible)
+            g.log->visible = false;
+        else
+            g.log->visible = true;
+    }
 
     char buf[35];
     snprintf(buf, sizeof(buf),
@@ -693,9 +927,12 @@ struct UI {
     void mouseDownEvent(void);
     void mouseUpEvent(void);
     void keyDownEvent(void);
+    void hoverOverEvent(void);
 
     void update(void);
     void draw(void);
+
+    void toggleMessageLog(void);
 };
 
 void UI::update(void) {
@@ -711,6 +948,7 @@ void UI::mouseDownEvent(void) {
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->mouseDown();
             widget->onMouseDown.emit();
+            break;
         }
     }
 }
@@ -723,6 +961,7 @@ void UI::mouseUpEvent(void) {
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->mouseUp();
             widget->onMouseUp.emit();
+            break;
         }
     }
 }
@@ -735,12 +974,27 @@ void UI::keyDownEvent(void) {
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->keyDown();
             widget->onKeyDown.emit();
+            break;
         }
     }
 }
+
+void UI::hoverOverEvent(void) {
+    for(auto& widget : widgets) {
+        if(widget->pos.x1 <= g.mouse_x &&
+           widget->pos.y1 <= g.mouse_y &&
+           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
+           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
+            widget->hoverOver();
+            break;
+        }
+    }
+}
+
 void UI::draw(void) {
     for(auto& widget : widgets) {
-        widget->draw();
+        if(widget->visible)
+            widget->draw();
     }
 }
 
@@ -759,24 +1013,13 @@ struct Button : public Widget {
     void mouseDown(void) { press(); }
     void mouseUp(void) { }
     void keyDown(void) { }
+    void hoverOver(void) {
+        cout << "button!" << endl;
+    }
 
     void press(void);
     void draw(void);
     void update(void);
-};
-
-struct MessageLog : public Widget {
-    ALLEGRO_BITMAP *background;
-    ALLEGRO_FONT *font;
-    vector<string> lines;
-
-    ~MessageLog();
-
-    void mouseDown(void) { }
-    void mouseUp(void) { }
-    void keyDown(void) { }
-
-    void draw(void);
 };
 
 void Game::AddMessage(string str) {
@@ -832,76 +1075,78 @@ void TileMap::generate(void) {
     info("Finished generating map");
 }
 
+void TileMap::drawTile(int i, int x, int y) {
+    int t = start + (size_x * y) + x;
+
+    if(DEBUG_VISIBILITY || tiles[t].visible == true) {
+        // can the player currently see the tile?
+        int currently_seeing = 0;
+        for(auto& cs : player->currently_seeing) {
+            if(t == cs) {
+                currently_seeing = 1;
+                goto draw;
+            }
+        }
+    draw:
+        int off_x = (i % cols) * 80;
+        int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
+        off_y = off_y + (40 * floor(i / cols));
+
+        if(currently_seeing != 0) {
+            // draw the tile at full brightness
+            al_draw_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
+                           r_off_x + off_x,
+                           r_off_y + off_y,
+                           0);
+        }
+        else {
+            // otherwise draw it 50% tinted
+            al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
+                                  g.color_tile_tint,
+                                  r_off_x + off_x,
+                                  r_off_y + off_y, 0);
+        }
+        if(t == mouse_n) {
+            // mark active tile
+            al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
+                                  g.color_active_tile_tint,
+                                  r_off_x + off_x,
+                                  r_off_y + off_y, 0);
+        }
+
+    }
+}
+
 void TileMap::draw(void) {
+    start = size_x * view_y + view_x;
+    mouse_n = mouseToTileN();
+
     // draw the hex grid
-    int start = size_x * view_y + view_x;
-    int max_t = size_x * size_y;
-
-    // the map might be smaller than the requested view size
-    int r_cols = min(size_x, cols);
-    int r_rows = min(size_y, rows);
-
     int i = 0;
-    for(int y = 0; y < r_rows; y++) {
-        for(int x = 0; x < r_cols; x++) {
-            int t = start + (size_x * y) + x;
-
-            if(t < 0 || t > max_t) {
-                info("WARNING: tried to view tile that is out of bounds");
-                t = 0;
-            }
-
-            if(DEBUG_VISIBILITY || tiles[t].visible == true) {
-                // can the player currently see the tile?
-                int currently_seeing = 0;
-                for(auto& cs : g.player->currently_seeing) {
-                    if(t == cs) {
-                        currently_seeing = 1;
-                        goto draw;
-                    }
-                }
-
-            draw:
-
-                int off_x = (i % r_cols) * 80;
-                int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
-                off_y = off_y + (40 * floor(i / r_cols));
-
-                if(currently_seeing != 0) {
-                    // if so, draw the tile at full brightness
-                    al_draw_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
-                                   r_off_x + off_x,
-                                   r_off_y + off_y,
-                                   0);
-                }
-                else {
-                    // otherwise draw it 50% tinted
-
-                    al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
-                                          g.color_tile_tint,
-                                          r_off_x + off_x,
-                                          r_off_y + off_y, 0);
-                }
-            }
+    for(int y = 0; y < rows; y++) {
+        for(int x = 0; x < cols; x++) {
+            drawTile(i, x, y);
             i++;
         }
     }
 
     // characters are drawn as part of the map
     // the player is always visible
-    if(g.player == NULL)
+    if(player == NULL)
         info("WARNING: no player");
     else
-        g.player->draw();
+        player->draw();
 
-    for(auto& character : g.characters) {
-        for(auto& cs : g.player->currently_seeing) {
+    for(auto& character : g.map->characters) {
+        for(auto& cs : player->currently_seeing) {
             if(DEBUG_VISIBILITY || character->n == cs) {
                 character->draw();
                 break;
             }
         }
     }
+    //al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_white, 1);
+    al_draw_rectangle(pos.x1, pos.y1 + 40, pos.x2 - 81, pos.y2 - 1, g.color_white, 1);
 }
 
 // redraws the top half of a tile (the part that overlaps with the
@@ -919,22 +1164,60 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
     int off_y = n % 2  == 0 ? 0 : 20;
     off_y += 40 * r_y;
 
-    al_draw_bitmap_region(bitmaps[tile_info[tiles[n].info_index].bitmap_index],
-                          0, 0,
-                          100, 40,
-                          r_off_x + off_x,
-                          r_off_y + off_y,
-                          0);
-    // TODO: check if there's a character on that tile and
-    // redraw the top half of the sprite
+    if(mouse_n == n) {
+        al_draw_tinted_bitmap(bitmaps[tile_info[tiles[n].info_index].bitmap_index],
+                                     g.color_active_tile_tint,
+                                     r_off_x + off_x,
+                                     r_off_y + off_y, 0);
+    } else {
+        al_draw_bitmap_region(bitmaps[tile_info[tiles[n].info_index].bitmap_index],
+                              0, 0, 100, 40,
+                              r_off_x + off_x,
+                              r_off_y + off_y, 0);
+
+    }
+    // check if there's a character on that tile
+    Character *interloper = characterAt(n);
+    if(interloper != NULL)
+        interloper->draw();
+}
+
+void GridSystem::drawItemTooltip(void) {
+    // draw item tooltips
+    // this should probably work some other way
+    for(auto& grid : grids) {
+        for(auto& item : grid->items) {
+            if(item->parent->pos.x1 + item->pos.x1 * 10 <= g.mouse_x &&
+               item->parent->pos.y1 + item->pos.y1 * 10 <= g.mouse_y &&
+               item->parent->pos.x1 + (item->pos.x1 + item->pos.x2) * 10 >= g.mouse_x &&
+               item->parent->pos.y1 + (item->pos.y1 + item->pos.y2) * 10 >= g.mouse_y) {
+                al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
+                                         g.mouse_x + 150, g.mouse_y + 48, g.color_black);
+                al_draw_text(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 8,
+                             0, g.item_info[item->info_index].name.c_str());
+                al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
+                              0, "%d g", g.item_info[item->info_index].weight);
+                // if the item has a grid, draw it under the text
+                if(item->storage != NULL &&
+                   held == NULL &&
+                   item->parent->hpinfo == NULL)
+                    // ^^ unless it's on a hardpoint
+                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + 48);
+            }
+        }
+    }
 }
 
 void GridSystem::draw(void) {
-    for (auto& g : grids)
+    for (auto& g : grids) {
         g->draw();
+    }
 
     if(held != NULL)
         held->draw();
+    else {
+        drawItemTooltip();
+    }
 }
 
 void GridSystem::gsMouseDownEvent() {
@@ -981,6 +1264,18 @@ bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
           || b_x + b_width <= a_x
           || b_y >= a_y + a_height
           || b_y + b_height <= a_y);
+}
+
+// adds the storage grid of the held item (if there is one)
+// to the grid system
+void GridSystem::addStorageGrid(void) {
+    if(held != NULL &&
+       held->storage != NULL &&
+       held->parent->hpinfo != NULL) {
+        // ^^ we only want to add it if it's on a hardpoint
+        held->resetHardpointPos();
+        grids.push_back(held->storage);
+    }
 }
 
 void GridSystem::gsMouseUpEvent() {
@@ -1032,18 +1327,15 @@ void GridSystem::gsMouseUpEvent() {
                                      held->pos.x2 * 10,
                                      held->pos.y2 * 10)) {
                         // there's an item there already:
-                        // abort completely
+                        // abort
                         goto blocked;
                     }
                 }
             } // or a hardpoint?
-            else if(grid->hpinfo->singleItem) {
-                int s = grid->items.size();
-                // some hardpoints only accept one item
-                if(s >= 1)
-                    goto blocked;
+            else if(grid->hpinfo->maxItems <= (int)grid->items.size()) {
+                // too many items on the hardpoint
+                goto blocked;
             }
-                
             // we've found the grid and there's nothing blocking
             // the placement there, so drop it
             held->parent = grid;
@@ -1052,21 +1344,12 @@ void GridSystem::gsMouseUpEvent() {
             held->pos.y1 = drop_y;
             grid->items.push_back(held);
 
-            // does the item have its own grid?
-            if(held->storage != NULL &&
-               grid->hpinfo != NULL) {
-                // ^^ we only want to display it if it's on a hardpoint
-                held->storage->pos.x1 = grid->pos.x2 + 20;
-                held->storage->pos.y1 = grid->pos.y1;
-                held->storage->resetPos();
-                    
-                grids.push_back(held->storage);
-            }
+            addStorageGrid();
 
             held = NULL;
 
             char b[40];
-            snprintf(b, sizeof(b), "Moved onto grid %d %d %d", i, drop_x, drop_y);
+            snprintf(b, sizeof(b), "Moved onto grid %d", i);
             g.AddMessage(b);
             // the item is placed. we're done
             return;
@@ -1079,6 +1362,9 @@ void GridSystem::gsMouseUpEvent() {
     // it was before we picked it up
     held->parent = held->old_parent;
     held->old_parent->items.push_back(held);
+
+    addStorageGrid();
+
     held = NULL;
 
     char b[40];
@@ -1098,7 +1384,26 @@ void Grid::draw(void) {
         i->draw();
 }
 
+void Grid::drawAt(int x, int y) {
+    // well...
+    int old_x1 = pos.x1;
+    int old_y1 = pos.y1;
+    int old_x2 = pos.x2;
+    int old_y2 = pos.y2;
+    pos.x1 = x;
+    pos.y1 = y;
+    pos.x2 = x + grid_size_x * grid_px_x;
+    pos.y2 = y + grid_size_y * grid_px_y;
+    draw();
+    pos.x1 = old_x1;
+    pos.y1 = old_y1;
+    pos.x2 = old_x2;
+    pos.y2 = old_y2;
+}
+
 void Item::draw(void) {
+    ALLEGRO_BITMAP *sprite = g.item_info[info_index].sprite;
+
     if(parent != NULL) {
         // we're on a grid
         int x1 = parent->pos.x1 + pos.x1 * 10;
@@ -1173,28 +1478,40 @@ struct InventoryGridSystem : public GridSystem {
     void init(void);
     void draw(void) {
         al_draw_text(g.font, g.color_white, 80, 35, 0, "Ground:");
-        al_draw_text(g.font, g.color_white, 760, 35, 0, "Inventory:");
+        al_draw_text(g.font, g.color_white, 350, 35, 0, "You:");
         GridSystem::draw();
     }
 };
 
 void InventoryGridSystem::init(void) {
     // add player inventory
-    grids.push_back(g.player->inventory);
-    grids.push_back(g.player->right_hand);
-    grids.push_back(g.player->left_hand);
+    grids.push_back(g.map->player->right_hand_hold);
+    grids.push_back(g.map->player->left_hand_hold);
+    grids.push_back(g.map->player->right_hand);
+    grids.push_back(g.map->player->left_hand);
+    grids.push_back(g.map->player->back);
+    grids.push_back(g.map->player->head);
+    grids.push_back(g.map->player->neck);
+    grids.push_back(g.map->player->right_shoulder);
+    grids.push_back(g.map->player->left_shoulder);
+    grids.push_back(g.map->player->torso);
+    grids.push_back(g.map->player->legs);
+    grids.push_back(g.map->player->right_foot);
+    grids.push_back(g.map->player->left_foot);
+
     // get ground inventory at player position
-    Grid *ground = g.map->tiles[g.player->n].ground_items;
+    Grid *ground = g.map->tiles[g.map->player->n].ground_items;
+    g.map->player->setupHardpoints(this);
 
     // create it if it doesn't exist
     if(ground == NULL) {
         ground = new Grid (20, 50, 20, 30, NULL);
-        Item *crowbar = new Item(3, 3, 14, 2, g.bitmaps[20], Weapon);
+        Item *crowbar = new Item(3, 3, 14, 2, 3);
         ground->items.push_back(crowbar);
     }
 
     grids.push_back(ground);
-    g.map->tiles[g.player->n].ground_items = ground;
+    g.map->tiles[g.map->player->n].ground_items = ground;
 
     for(auto& grid : grids)
         for(auto& item : grid->items)
@@ -1263,6 +1580,7 @@ void button_Items_press(void) {
         g.ui = g.ui_Items;
         g.color_bg = g.color_grey;
         g.AddMessage("Switched to inventory.");
+        gs->countTotalItems();
     }
     main_buttons_update();
 }
@@ -1303,6 +1621,7 @@ void load_bitmaps(void) {
     /* 21 */ filenames.push_back("media/characters/test_character.png");
     /* 22 */ filenames.push_back("media/items/first_aid_kit.png");
     /* 23 */ filenames.push_back("media/tile/lake.png");
+    /* 24 */ filenames.push_back("media/items/backpack.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -1411,16 +1730,7 @@ void init_messagelog(void) {
 }
 
 void init_tilemap(void) {
-    g.map = new TileMap (6, 6);
-
-    g.map->cols = 16;
-    g.map->rows = 16;
-    g.map->view_x = 4;
-    g.map->view_y = 4;
-    g.map->pos.x1 = 0;
-    g.map->pos.y1 = 0;
-    g.map->pos.x2 = 1280;
-    g.map->pos.y2 = 720;
+    g.map = new TileMap (6, 6, 16, 16);
 
     TileInfo i;
     i.minimap_color = al_map_rgb(0, 255, 0);
@@ -1477,37 +1787,36 @@ void init_characters(void) {
         int my = g.map->size_y;
         int n = (rand() % my) * mx + (rand() % mx);
 
-        // create an inventory
-        Grid *inventory = new Grid (700, 50, 20, 30, NULL);
+        Character *c = new Character(n, g.bitmaps[21]);
 
         // add starting items
-        Item *first_aid_kit1 = new Item(3, 3, 6, 6, g.bitmaps[22], Container);
-        Grid *first_aid_kit_grid1 = new Grid(0, 0, 8, 8, NULL);
-        Item *first_aid_kit2 = new Item(7, 3, 6, 6, g.bitmaps[22], Container);
-        Grid *first_aid_kit_grid2 = new Grid(0, 0, 8, 8, NULL);
-        first_aid_kit1->storage = first_aid_kit_grid1;
-        first_aid_kit2->storage = first_aid_kit_grid2;
-        inventory->items.push_back(first_aid_kit1);
-        inventory->items.push_back(first_aid_kit2);
+        Item *backpack = new Item(0, 0, 7, 7, 1);
+        Grid *backpack_grid = new Grid(0, 0, 10, 10, NULL);
+        backpack->storage = backpack_grid;
 
-        Character *c = new Character(n, g.bitmaps[21]);
-        c->right_hand = new Grid (400, 200, 5, 5, g.right_hand);
-        c->left_hand = new Grid (400, 320, 5, 5, g.left_hand);
-        c->inventory = inventory;
+        Item *first_aid_kit1 = new Item(0, 0, 6, 6, 2);
+        Grid *first_aid_kit_grid1 = new Grid(0, 0, 8, 8, NULL);
+        first_aid_kit1->storage = first_aid_kit_grid1;
+        backpack->storage->items.push_back(first_aid_kit1);
+        Item *first_aid_kit2 = new Item(0, 0, 6, 6, 2);
+        Grid *first_aid_kit_grid2 = new Grid(0, 0, 8, 8, NULL);
+        first_aid_kit2->storage = first_aid_kit_grid2;
+
+        c->back->items.push_back(backpack);
+        c->left_hand_hold->items.push_back(first_aid_kit2);
 
         // player is character 0
-        if(i == 0)
-            g.player = c;
+        if(i == 0) {
+            g.map->player = c;
+        }
         else // everyone else is an NPC
-            g.characters.push_back(c);
+            g.map->characters.push_back(c);
     }
-    g.player->update_visibility();
+    g.map->player->update_visibility();
     g.map->focusOnPlayer();
 }
 
 MainMapUI::MainMapUI() {
-    widgets.push_back(g.map);
-    widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
     widgets.push_back(g.button_MiniMap);
     widgets.push_back(g.button_Skills);
@@ -1516,6 +1825,8 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Condition);
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.map);
+    widgets.push_back(g.log);
 }
 
 MainMapUI::~MainMapUI(void) {
@@ -1602,9 +1913,11 @@ int main(void) {
     g.color_black = al_map_rgb(0, 0, 0);
     g.color_white = al_map_rgb(255, 255, 255);
     g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
+    g.color_active_tile_tint = al_map_rgba_f(1, 1, 1, 0.2);
     g.color_bg = g.color_black;
 
     load_bitmaps();
+    init_iteminfo();
     init_tilemap();
     init_hardpointinfo();
     init_characters();
@@ -1625,6 +1938,9 @@ int main(void) {
     bool redraw = true;
     bool was_mouse_down = false;
 
+    // counter;
+    int i = 0;
+
     // main loop
     while(1) {
         al_get_mouse_state(&mouse_state);
@@ -1644,6 +1960,10 @@ int main(void) {
             g.ui->mouseUpEvent();
             // mouse up event
             was_mouse_down = false;
+        } else {
+            // if(i % 10 == 0) {
+            //     g.ui->hoverOverEvent();
+            // }
         }
 
         al_wait_for_event(event_queue, &ev);
@@ -1674,6 +1994,7 @@ int main(void) {
             }
             al_flip_display();
         }
+        i++;
     }
 
     unload_bitmaps();
