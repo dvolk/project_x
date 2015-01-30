@@ -131,6 +131,9 @@ struct ItemInfo {
     int weight; // [g]
     bool isVehicle;
     float condition;
+    bool isContainer;
+    int container_size_x;
+    int container_size_y;
     ALLEGRO_BITMAP *sprite;
 };
 
@@ -140,13 +143,19 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.sprite = NULL;
     tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
     g.item_info.push_back(tmp);
 
     tmp.name = "Backpack";
     tmp.maxStack = 1;
     tmp.weight = 1000;
     tmp.sprite = g.bitmaps[24];
-    tmp.isVehicle = true;
+    tmp.isVehicle = false;
+    tmp.isContainer = true;
+    tmp.container_size_x = 8;
+    tmp.container_size_y = 8;
     g.item_info.push_back(tmp);
 
     tmp.name = "First aid kit";
@@ -154,6 +163,9 @@ void init_iteminfo(void) {
     tmp.weight = 750;
     tmp.sprite = g.bitmaps[22];
     tmp.isVehicle = false;
+    tmp.isContainer = true;
+    tmp.container_size_x = 5;
+    tmp.container_size_y = 5;
     g.item_info.push_back(tmp);
 
     tmp.name = "Crowbar";
@@ -161,6 +173,19 @@ void init_iteminfo(void) {
     tmp.weight = 2500;
     tmp.sprite = g.bitmaps[20];
     tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    g.item_info.push_back(tmp);
+
+    tmp.name = "Shopping trolley";
+    tmp.maxStack = 1;
+    tmp.weight = 5000;
+    tmp.sprite = g.bitmaps[26];
+    tmp.isVehicle = true;
+    tmp.isContainer = true;
+    tmp.container_size_x = 20;
+    tmp.container_size_y = 20;
     g.item_info.push_back(tmp);
 }
 
@@ -197,17 +222,6 @@ struct Item {
 
     bool isVehicle(void) { return g.item_info[info_index].isVehicle; }
 };
-
-Item::Item(int x1, int y1, int x2, int y2, int info_index) {
-    pos.x1 = x1;
-    pos.y1 = y1;
-    pos.x2 = x2;
-    pos.y2 = y2;
-    parent = NULL;
-    old_parent = NULL;
-    storage = NULL;
-    this->info_index = info_index;
-}
 
 struct Widget {
     Rect pos;
@@ -332,6 +346,23 @@ struct Grid {
     bool item_compatible(Item *i);
 };
 
+Item::Item(int x1, int y1, int x2, int y2, int info_index) {
+    pos.x1 = x1;
+    pos.y1 = y1;
+    pos.x2 = x2;
+    pos.y2 = y2;
+    parent = NULL;
+    old_parent = NULL;
+    storage = NULL;
+    this->info_index = info_index;
+    if(g.item_info[info_index].isContainer == true)
+        storage = new Grid(0,
+                           0,
+                           g.item_info[info_index].container_size_x,
+                           g.item_info[info_index].container_size_y,
+                           NULL);
+}
+
 void Grid::AddItem(Item *item) {
     item->parent = this;
     items.push_back(item);
@@ -405,6 +436,11 @@ bool Grid::item_compatible(Item *i) {
     // can only place vehicles in vehicle hardpoint
     if(hpinfo->vehiclepoint == true &&
        i->isVehicle() == false)
+        return false;
+
+    // can't place vehicle on non-vehicle hardpoints
+    if(i->isVehicle() == true &&
+       hpinfo->vehiclepoint == false)
         return false;
 
     // allow by default
@@ -536,7 +572,7 @@ struct Tile {
     }
 
     ~Tile() {
-        info("~Tile()");
+        // info("~Tile()");
         delete ground_items;
     }
 };
@@ -646,9 +682,12 @@ void GridSystem::AutoMoveAllItems(Grid *from, Grid *to) {
         AutoMoveItem(item, from, to);
 }
 
+Grid *ground_at_player(void);
+
 // moves items under mouse cursor to the ground, if possible
+// this is always for the player
 void GridSystem::MouseAutoMoveItemToGround() {
-    Grid *ground = g.map->tiles[g.map->player->n].ground_items;
+    Grid *ground = ground_at_player(); //g.map->tiles[g.map->player->n].ground_items;
 
     Item *item = NULL;
     Grid *from = NULL;
@@ -1770,7 +1809,9 @@ Grid *ground_at_player(void) {
     if(ground == NULL) {
         ground = new Grid (20, 50, 20, 30, NULL);
         Item *crowbar = new Item(3, 3, 14, 2, 3);
+        Item *shopping_trolley = new Item(0, 6, 16, 16, 4);
         ground->AddItem(crowbar);
+        ground->AddItem(shopping_trolley);
         // ground->items.push_back(crowbar);
         g.map->tiles[g.map->player->n].ground_items = ground;
     }
@@ -1912,6 +1953,7 @@ void load_bitmaps(void) {
     /* 23 */ filenames.push_back("media/tile/lake.png");
     /* 24 */ filenames.push_back("media/items/backpack.png");
     /* 25 */ filenames.push_back("media/buttons/end_turn_up.png");
+    /* 26 */ filenames.push_back("media/items/shopping_trolley.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -2092,17 +2134,17 @@ void init_characters(void) {
 
         // add starting items
         Item *backpack = new Item(0, 0, 7, 7, 1);
-        Grid *backpack_grid = new Grid(0, 0, 10, 10, NULL);
-        backpack->storage = backpack_grid;
+        // Grid *backpack_grid = new Grid(0, 0, 10, 10, NULL);
+        // backpack->storage = backpack_grid;
 
         Item *first_aid_kit1 = new Item(0, 0, 6, 6, 2);
-        Grid *first_aid_kit_grid1 = new Grid(0, 0, 8, 8, NULL);
-        first_aid_kit1->storage = first_aid_kit_grid1;
+        // Grid *first_aid_kit_grid1 = new Grid(0, 0, 8, 8, NULL);
+        // first_aid_kit1->storage = first_aid_kit_grid1;
         backpack->storage->AddItem(first_aid_kit1);
         // backpack->storage->items.push_back(first_aid_kit1);
         Item *first_aid_kit2 = new Item(0, 0, 6, 6, 2);
-        Grid *first_aid_kit_grid2 = new Grid(0, 0, 8, 8, NULL);
-        first_aid_kit2->storage = first_aid_kit_grid2;
+        // Grid *first_aid_kit_grid2 = new Grid(0, 0, 8, 8, NULL);
+        // first_aid_kit2->storage = first_aid_kit_grid2;
 
         c->back->AddItem(backpack);
         c->left_hand_hold->AddItem(first_aid_kit2);
