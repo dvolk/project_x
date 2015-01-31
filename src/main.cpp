@@ -6,10 +6,12 @@
 
 #include <stdint.h>
 
+#include <unordered_map>
 #include <vector>
 #include <set>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 #include <sigc++/sigc++.h>
 
@@ -139,6 +141,7 @@ struct ItemInfo {
 
 void init_iteminfo(void) {
     ItemInfo tmp;
+    /* 00 */
     tmp.name = "";
     tmp.maxStack = 1;
     tmp.sprite = NULL;
@@ -148,6 +151,7 @@ void init_iteminfo(void) {
     tmp.container_size_y = 0;
     g.item_info.push_back(tmp);
 
+    /* 01 */
     tmp.name = "Backpack";
     tmp.maxStack = 1;
     tmp.weight = 1000;
@@ -158,6 +162,7 @@ void init_iteminfo(void) {
     tmp.container_size_y = 8;
     g.item_info.push_back(tmp);
 
+    /* 02 */
     tmp.name = "First aid kit";
     tmp.maxStack = 1;
     tmp.weight = 750;
@@ -168,6 +173,7 @@ void init_iteminfo(void) {
     tmp.container_size_y = 5;
     g.item_info.push_back(tmp);
 
+    /* 03 */
     tmp.name = "Crowbar";
     tmp.maxStack = 1;
     tmp.weight = 2500;
@@ -178,6 +184,7 @@ void init_iteminfo(void) {
     tmp.container_size_y = 0;
     g.item_info.push_back(tmp);
 
+    /* 04 */
     tmp.name = "Shopping trolley";
     tmp.maxStack = 1;
     tmp.weight = 5000;
@@ -186,6 +193,17 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 20;
     tmp.container_size_y = 20;
+    g.item_info.push_back(tmp);
+
+    /* 05 */
+    tmp.name = "Pill Bottle";
+    tmp.maxStack = 1;
+    tmp.weight = 50;
+    tmp.sprite = g.bitmaps[27];
+    tmp.isVehicle = false;
+    tmp.isContainer = true;
+    tmp.container_size_x = 1;
+    tmp.container_size_y = 2;
     g.item_info.push_back(tmp);
 }
 
@@ -291,11 +309,43 @@ void init_hardpointinfo(void) {
     g.right_foot = new HardpointInfo;
     g.left_foot = new HardpointInfo;
     g.vehicle = new HardpointInfo;
-    g.vehicle = new HardpointInfo;
 
     g.torso->maxItems = 3;
     g.vehicle->vehiclepoint = true;
 }
+
+struct Button : public Widget {
+    bool pressed;
+    ALLEGRO_BITMAP *up;
+    ALLEGRO_BITMAP *down;
+
+    Button();
+    ~Button();
+
+    void mouseDown(void);
+    void mouseUp(void);
+    void keyDown(void);
+    void hoverOver(void);
+
+    void press(void);
+    void draw(void);
+    void update(void);
+};
+
+struct GridSortButton : public Widget {
+    ALLEGRO_BITMAP *up;
+    Grid *parent;
+
+    GridSortButton(Grid *parent);
+
+    void draw(void);
+
+    void reset(void);
+    void mouseDown(void);
+    void mouseUp(void) { }
+    void keyDown(void) { }
+    void hoverOver(void) { }
+};
 
 struct Grid {
     // "widget" dimensions
@@ -312,6 +362,8 @@ struct Grid {
     vector<Item *> items;
 
     HardpointInfo *hpinfo;
+    GridSortButton *gsb;
+    bool gsb_displayed;
 
     Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h) {
         hpinfo = h;
@@ -322,7 +374,10 @@ struct Grid {
         pos.x1 = w_pos_x;
         pos.y1 = w_pos_y;
         resetPos();
+        gsb = new GridSortButton (this);
+        gsb_displayed = false;
     }
+
     ~Grid() {
         info("~Grid()");
         // a grid owns its items
@@ -345,6 +400,36 @@ struct Grid {
 
     bool item_compatible(Item *i);
 };
+
+bool BiggerItemsFirst(Item *l, Item *r) {
+    return l->pos.x2 * l->pos.y2 > r->pos.x2 * r->pos.y2;
+}
+
+bool SmallerItemsFirst(Item *l, Item *r) {
+    return l->pos.x2 * l->pos.y2 < r->pos.x2 * r->pos.y2;
+}
+
+void sortGrid(Grid *to_sort, bool (*comp)(Item *l, Item *r)) {
+    int num_items = to_sort->items.size();
+
+    for(auto& item : to_sort->items) {
+        item->pos.x1 = -999;
+        item->pos.y1 = -999;
+    }
+
+    sort(to_sort->items.begin(), to_sort->items.end(), comp);
+
+    to_sort->items.reserve(2 * num_items);
+
+    for(auto& item : to_sort->items) {
+        to_sort->PlaceItemOnGrid(item);
+    }
+
+    to_sort->items.erase(to_sort->items.begin(),
+                         to_sort->items.begin() + num_items);
+
+    assert((int)to_sort->items.size() == num_items);
+}
 
 Item::Item(int x1, int y1, int x2, int y2, int info_index) {
     pos.x1 = x1;
@@ -386,6 +471,18 @@ bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
 
 // automatically find a place to place the item on
 void Grid::PlaceItemOnGrid(Item *to_place) {
+    if(hpinfo != NULL) {
+        // if we're on a hard point just check how many item there
+        // are there already
+        if((int)items.size() < hpinfo->maxItems) {
+            to_place->pos.x1 = 0;
+            to_place->pos.y1 = 0;
+            AddItem(to_place);
+            return;
+        }
+    }
+
+    // if it's a grid we try placing it on every grid square
     bool found = false;
     int drop_x = 0;
     int drop_y = 0;
@@ -420,10 +517,17 @@ void Grid::PlaceItemOnGrid(Item *to_place) {
     if(found == true) {
         to_place->pos.x1 = drop_x;
         to_place->pos.y1 = drop_y;
+
+        // clear the grid sort button if the new grid isn't a hardpoint
+        if(to_place->storage != NULL &&
+           this->hpinfo == NULL) {
+            to_place->storage->gsb_displayed = false;
+        }
         AddItem(to_place);
     }
     else {
         // couldn't place it
+        assert(to_place->parent != NULL);
         to_place->parent->AddItem(to_place);
     }
 }
@@ -457,6 +561,7 @@ void Item::resetHardpointPos(void) {
         storage->pos.x1 = parent->pos.x1 + pos.x2 * 10 + 10;
         storage->pos.y1 = parent->pos.y1;
         storage->resetPos();
+        storage->gsb->reset();
     } else {
         info("WARNING: no item parent");
     }
@@ -483,6 +588,10 @@ struct Character {
 
     ALLEGRO_BITMAP *sprite;
     vector<int> currently_seeing;
+    // 0 - sees only tile they're on
+    // 1 - sees immediate neighbours
+    // etc
+    int current_los_distance;
 
     void update_visibility(void);
 
@@ -497,6 +606,7 @@ struct Character {
     };
 
     void draw(void);
+    void drawOffset(int offset_x, int offset_y);
 
     void addInventoryHardpoints(GridSystem *gs);
     void addVehicleHardpoint(GridSystem *gs);
@@ -550,6 +660,7 @@ Character::Character(int n, ALLEGRO_BITMAP *sprite) {
     inventory_hardpoints.push_back(right_foot);
     inventory_hardpoints.push_back(left_foot);
 
+    current_los_distance = 3;
     currently_seeing.reserve(50);
 }
 
@@ -558,6 +669,7 @@ int dir_transform(int n, int dir);
 struct TileInfo {
     int bitmap_index;
     ALLEGRO_COLOR minimap_color;
+    bool blocks_los;
 };
 
 struct Tile {
@@ -566,13 +678,14 @@ struct Tile {
     Grid *ground_items;
 
     Tile() {
+        info("Tile()");
         ground_items = NULL;
         info_index = 0;
         visible = 0;
     }
 
     ~Tile() {
-        // info("~Tile()");
+        info("~Tile()");
         delete ground_items;
     }
 };
@@ -606,12 +719,15 @@ struct TileMap : public Widget {
     int start;
     int mouse_n;
 
+    // map from positions to characters
+    unordered_multimap<int, Character *> charsByPos;
+    
     vector<Character *> characters;
     Character *player;
 
     // array of size_x * size_y tiles, allocated in constructor
     // TODO: would a 2D array be better?
-    Tile *tiles;
+    vector <Tile> tiles;
 
     vector<TileInfo> tile_info;
     vector<ALLEGRO_BITMAP *>bitmaps;
@@ -636,10 +752,28 @@ struct TileMap : public Widget {
     void focusOnPlayer(void);
     Character *characterAt(int n);
     bool playerSees(int n);
+
+    void updateCharsByPos(void);
 };
+
+void TileMap::updateCharsByPos(void) {
+    charsByPos.clear();
+    charsByPos.emplace(player->n, player);
+
+    for(auto& npc : characters) {
+        charsByPos.emplace(npc->n, npc);
+    }
+}
+
+Button::Button() {
+    pressed = false;
+    up = NULL;
+    down = NULL;
+}
 
 struct GridSystem : public Widget {
     vector<Grid *> grids;
+
     Item *held;
 
     GridSystem(void) {
@@ -649,7 +783,18 @@ struct GridSystem : public Widget {
         delete held;
         info("~GridSystem()");
     }
-    virtual void reset(void) = 0;
+
+    // resets the visibility of the grid sort buttons
+    virtual void reset(void) {
+        for(auto& grid : grids) {
+            for(auto& item : grid->items) {
+                if(item->storage != NULL &&
+                   item->parent->hpinfo != NULL) {
+                    item->storage->gsb_displayed = true;
+                }
+            }
+        }
+    }
 
     void mouseDown(void) { gsMouseDownEvent(); }
     void mouseUp(void) { gsMouseUpEvent(); }
@@ -687,7 +832,7 @@ Grid *ground_at_player(void);
 // moves items under mouse cursor to the ground, if possible
 // this is always for the player
 void GridSystem::MouseAutoMoveItemToGround() {
-    Grid *ground = ground_at_player(); //g.map->tiles[g.map->player->n].ground_items;
+    Grid *ground = ground_at_player();
 
     Item *item = NULL;
     Grid *from = NULL;
@@ -720,15 +865,14 @@ void GridSystem::reparent(void) {
 
 // Debugging: display the number of grids and items
 void GridSystem::countTotalItems(void) {
-    int g = 0;
     int i = 0;
+    int g = 0;
     for(auto& grid : grids) {
         g++;
         for(__attribute__ ((unused)) auto& item : grid->items)
             i++;
     }
-    cout << "gridsystem grids: " << g
-         << " containing items: " << i << endl;
+    cout << "GridSystem: " << g << " grids " << i << " items." << endl;
 }
 
 void GridSystem::hoverOver(void) {
@@ -770,8 +914,6 @@ Character *TileMap::characterAt(int n) {
 }
 
 TileMap::~TileMap() {
-    delete[] tiles;
-    tiles = NULL;
     // tilemap owns characters
     delete player;
     player = NULL;
@@ -779,7 +921,9 @@ TileMap::~TileMap() {
         delete character;
         character = NULL;
     }
-    info("~TileMap()");
+    for(auto& tile : tiles) {
+        delete tile.ground_items;
+    }
 }
 
 TileMap::TileMap(int sx, int sy, int c, int r) {
@@ -797,8 +941,6 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
 
     size_x = sx;
     size_y = sy;
-
-    tiles = new Tile [size_x * size_y];
     
     hex_size_x = 100;
     hex_size_y = 80;
@@ -819,7 +961,7 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x);
     pos.y2 = min(g.display_y, (int)pos.y1 + (size_y + 1) * hex_step_y);
 
-    max_t = size_x * size_y;
+    max_t = size_x * size_y - 1;
 
     cout << "Tilemap rendering dimensions: "
          << pos.x1 << " " << pos.y1 << " " << pos.x2 << " " << pos.y2 << endl;
@@ -860,6 +1002,11 @@ MiniMap::MiniMap() {
 
     off_x = (g.display_x - size_x) / 2;
     off_y = (g.display_y - size_y) / 3;
+
+    pos.x1 = off_x;
+    pos.y1 = off_y;
+    pos.x2 = off_x + size_x;
+    pos.y2 = off_y + size_y;
 
     buf = al_create_bitmap(size_x, size_y);
 }
@@ -959,29 +1106,113 @@ void TileMap::mouseDown(void) {
     }
 
     char buf[100];
-    snprintf(buf, sizeof(buf), "clicked in direction dir=%d %d %d %f %f %f %f",
+    snprintf(buf, sizeof(buf), "clicked on n=%d %d %d %f %f %f %f",
              clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
     g.AddMessage(buf);
 }
 
+bool good_index(int n) {
+    return n >= 0 && n <= g.map->max_t;
+}
+
+bool tile_blocks_los(int n) {
+    return g.map->tile_info[g.map->tiles[n].info_index].blocks_los;
+}
+
+constexpr int lines2[12][2] =
+    { { 1, 1 },
+      { 2, 1 },
+      { 2, 2 },
+      { 2, 3 },
+      { 3, 3 },
+      { 3, 4 },
+      { 4, 4 },
+      { 4, 5 },
+      { 5, 5 },
+      { 5, 6 },
+      { 6, 6 },
+      { 6, 1 } };
+constexpr int lines3[18][3] =
+    { { 1, 1, 1 },
+      { 1, 2, 1 },
+      { 2, 1, 2 },
+      { 2, 2, 2 },
+      { 2, 3, 2 },
+      { 3, 2, 3 },
+      { 3, 3, 3 },
+      { 3, 4, 3 },
+      { 4, 3, 4 },
+      { 4, 4, 4 },
+      { 4, 5, 4 },
+      { 4, 5, 5 },
+      { 5, 5, 5 },
+      { 5, 6, 5 },
+      { 5, 6, 6 },
+      { 6, 6, 6 },
+      { 6, 1, 6 },
+      { 1, 6, 1 } };
+
+// updates which tiles the player is currently seeing and marks
+// those tiles as known to the player.
 void Character::update_visibility(void) {
     currently_seeing.clear();
-    int n_max = g.map->size_x * g.map->size_y;
+    currently_seeing.push_back(n);
+    g.map->tiles[n].visible = true;
 
-    for(int dir = 0; dir <= 6; dir++) {
-        int n2 = dir_transform(n, dir);
-        if(n2 != -1) {
-            for(int dir2 = 0; dir2 <= 6; dir2++) {
-                int n3 = dir_transform(n2, dir2);
-                if(n3 != -1) {
-                    // bounds check
-                    if(n3 >= 0 && n3 < n_max) {
-                        g.map->tiles[n3].visible = true;
-                        currently_seeing.push_back(n3);
-                    }
-                }
-            }
+    // manual raycasting
+    switch(current_los_distance) {
+    case 0:
+        return;
+    case 1:
+        for(int dir = 1; dir <= 6; dir++) {
+            int n2 = dir_transform(n, dir);
+            if(good_index(n2) == false)
+                continue;
+            currently_seeing.push_back(n2);
+            g.map->tiles[n2].visible = true;
         }
+        return;
+    case 2:
+        for(int cur_line = 0; cur_line <= 11; cur_line++) {
+            int n2 = dir_transform(n, lines2[cur_line][0]);
+            if(good_index(n2) == false)
+                continue;
+            currently_seeing.push_back(n2);
+            g.map->tiles[n2].visible = true;
+            if(tile_blocks_los(n2))
+                continue;
+            int n3 = dir_transform(n2, lines2[cur_line][1]);
+            if(good_index(n3) == false)
+                continue;
+            currently_seeing.push_back(n3);
+            g.map->tiles[n3].visible = true;
+        }
+        return;
+    default:
+    case 3:
+        for(int cur_line = 0; cur_line <= 17; cur_line++) {
+            int n2 = dir_transform(n, lines3[cur_line][0]);
+            if(good_index(n2) == false)
+                continue;
+            currently_seeing.push_back(n2);
+            g.map->tiles[n2].visible = true;
+            if(tile_blocks_los(n2))
+                continue;
+            int n3 = dir_transform(n2, lines3[cur_line][1]);
+            if(good_index(n3) == false)
+                continue;
+            currently_seeing.push_back(n3);
+            g.map->tiles[n3].visible = true;
+            if(tile_blocks_los(n3))
+                continue;
+            int n4 = dir_transform(n3, lines3[cur_line][2]);
+            if(good_index(n4) == false)
+                continue;
+            currently_seeing.push_back(n4);
+            g.map->tiles[n4].visible = true;
+        }
+        cout << "added " << (int)currently_seeing.size() << " tiles" << endl;
+        return;
     }
 }
 
@@ -1083,6 +1314,10 @@ int dir_transform(int n, int dir) {
 }
 
 void Character::draw(void) {
+    drawOffset(0, 0);
+}
+
+void Character::drawOffset(int offset_x, int offset_y) {
     assert(sprite != NULL);
 
     int ch_x = n % g.map->size_x;
@@ -1104,9 +1339,12 @@ void Character::draw(void) {
     off_y += 40 * r_y;
 
     al_draw_bitmap(sprite,
-                   g.map->r_off_x + off_x+25,
-                   g.map->r_off_y + off_y, 0);
+                   g.map->r_off_x + off_x + 25 + offset_x,
+                   g.map->r_off_y + off_y + offset_y, 0);
 
+    if(ch_y + 1 >= g.map->size_y)
+        return;
+    
     if(DEBUG_VISIBILITY ||
        g.map->tiles[g.map->size_x * (ch_y + 1) + ch_x].visible == true) {
         g.map->drawTopHalfOfTileAt(ch_x, ch_y + 1);
@@ -1172,6 +1410,7 @@ void UI::update(void) {
 
 void UI::mouseDownEvent(void) {
     for(auto& widget : widgets) {
+        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -1185,6 +1424,7 @@ void UI::mouseDownEvent(void) {
 
 void UI::mouseUpEvent(void) {
     for(auto& widget : widgets) {
+        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -1198,6 +1438,7 @@ void UI::mouseUpEvent(void) {
 
 void UI::keyDownEvent(void) {
     for(auto& widget : widgets) {
+        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -1211,6 +1452,7 @@ void UI::keyDownEvent(void) {
 
 void UI::hoverOverEvent(void) {
     for(auto& widget : widgets) {
+        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -1228,29 +1470,47 @@ void UI::draw(void) {
     }
 }
 
-struct Button : public Widget {
-    bool pressed;
-    ALLEGRO_BITMAP *up;
-    ALLEGRO_BITMAP *down;
+void Button::mouseUp(void) {
 
-    Button() {
-        pressed = false;
-        up = NULL;
-        down = NULL;
-    }
-    ~Button();
+}
 
-    void mouseDown(void) { press(); }
-    void mouseUp(void) { }
-    void keyDown(void) { }
-    void hoverOver(void) {
-        cout << "button!" << endl;
-    }
+void Button::keyDown(void) {
 
-    void press(void);
-    void draw(void);
-    void update(void);
-};
+}
+
+void Button::hoverOver(void) {
+    cout << "button!" << endl;
+}
+
+void Button::mouseDown(void) { press(); }
+
+GridSortButton::GridSortButton(Grid *parent) {
+    assert(parent);
+    this->parent = parent;
+    reset();
+    this->up = g.bitmaps[28];
+}
+
+void GridSortButton::reset(void) {
+    this->pos.x1 = parent->pos.x2;
+    this->pos.y1 = parent->pos.y1;
+    this->pos.x2 = this->pos.x1 + 20;
+    this->pos.y2 = this->pos.y1 + 20;
+}
+
+void GridSortButton::mouseDown(void) {
+    if(g.mouse_button == 1)
+        sortGrid(parent, BiggerItemsFirst);
+    else if(g.mouse_button == 2)
+        sortGrid(parent, SmallerItemsFirst);
+}
+
+void GridSortButton::draw(void) {
+    if(up != NULL)
+        al_draw_bitmap(up, pos.x1, pos.y1, 0);
+    else
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_black);
+}
 
 void Game::AddMessage(string str) {
     if(log != NULL)
@@ -1295,14 +1555,15 @@ void Button::update() {
 }
 
 void TileMap::generate(void) {
+    tiles.reserve(size_x * size_y);
     int up_to = bitmaps.size();
-    Tile t;
-    for(int i = 0; i < size_x * size_y; i++) {
-        t.info_index = rand() % up_to;
-        t.visible = false;
-        tiles[i] = t;
+    for(int i = 0; i <= max_t; i++) {
+        tiles[i].info_index = rand() % up_to;
+        tiles[i].visible = false;
+        tiles[i].ground_items = NULL;
     }
     info("Finished generating map");
+    cout << (int)tiles.size() << endl;
 }
 
 bool TileMap::playerSees(int n) {
@@ -1363,34 +1624,44 @@ void TileMap::draw(void) {
     }
 
     // characters are drawn as part of the map
-    // the player is always visible
-    if(player == NULL)
-        info("WARNING: no player");
-    else
-        player->draw();
-
-    for(auto& character : g.map->characters) {
-        for(auto& cs : player->currently_seeing) {
-            if(DEBUG_VISIBILITY || character->n == cs) {
-                character->draw();
-                break;
+    updateCharsByPos();
+    int j = 0;
+    for(auto& see_n : player->currently_seeing) {
+        int num_there = charsByPos.count(see_n);
+        if(num_there > 0) {
+            auto pos = charsByPos.equal_range(see_n);
+            int off_x = 0;
+            int off_y = 0;
+            if(num_there > 1) {
+                off_x = 5 * num_there;
+                off_y = -2.5 * num_there;
+            }
+            for(auto& it = pos.first; it != pos.second; it++) {
+                it->second->drawOffset(off_x, off_y);
+                j++;
+                off_x -= 20;
+                off_y += 10;
             }
         }
     }
-    al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2, 1);
-    al_draw_rectangle(pos.x1, pos.y1 + 40, pos.x2 - 81, pos.y2 - 1, g.color_white, 1);
+    cout << j << endl;
+
+    if(DEBUG_VISIBILITY == true) {
+        al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2, 1);
+        al_draw_rectangle(pos.x1, pos.y1 + 40, pos.x2 - 81, pos.y2 - 1, g.color_white, 1);
+    }
 }
 
 // redraws the top half of a tile (the part that overlaps with the
 // tile above it). Used for occluding character sprites on the map
 void TileMap::drawTopHalfOfTileAt(int x, int y) {
+    if(y >= g.map->size_y - 1)
+        return;
+
     int n = size_x * y + x;
 
     int r_x = x - g.map->view_x;
     int r_y = y - g.map->view_y;
-
-    if(r_y >= g.map->size_y)
-        return;
 
     int off_x = 80 * r_x;
     int off_y = n % 2  == 0 ? 0 : 20;
@@ -1463,6 +1734,16 @@ void GridSystem::gsMouseDownEvent() {
     else if(g.mouse_button == 2) {
         MouseAutoMoveItemToGround();
     }
+    // check if we're clicking the sort buttons
+    for(auto& grid : grids) {
+        if(g.mouse_x > grid->gsb->pos.x1 && g.mouse_y > grid->gsb->pos.y1 &&
+           g.mouse_y < grid->gsb->pos.x2 && g.mouse_y < grid->gsb->pos.y2) {
+            if(grid->gsb_displayed == true) {
+                grid->gsb->mouseDown();
+                break;
+            }
+        }
+    }
 }
 
 void GridSystem::GrabItem() {
@@ -1499,6 +1780,8 @@ void GridSystem::GrabItem() {
         }
         if(found)
             grids.erase(grids.begin() + i);
+
+        held->storage->gsb_displayed = false;
     }
 }
 
@@ -1518,6 +1801,7 @@ void GridSystem::addStorageGrid(void) {
        held->storage != NULL &&
        held->parent->hpinfo != NULL) {
         // ^^ we only want to add it if it's on a hardpoint
+        held->storage->gsb_displayed = true;
         held->resetHardpointPos();
         grids.push_back(held->storage);
     }
@@ -1630,6 +1914,9 @@ void Grid::draw(void) {
         for (int y = pos.y1; y <= pos.y2; y = y + grid_px_y)
             al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
     }
+    if(gsb_displayed == true)
+        gsb->draw();
+
     for (auto& i : items)
         i->draw();
 }
@@ -1757,6 +2044,7 @@ struct InventoryGridSystem : public GridSystem {
     void draw(void) {
         al_draw_text(g.font, g.color_white, 80, 35, 0, "Ground:");
         al_draw_text(g.font, g.color_white, 350, 35, 0, "You:");
+
         GridSystem::draw();
     }
 };
@@ -1801,18 +2089,27 @@ ItemsUI::~ItemsUI() {
     info("~ItemsUI()");
 }
 
+/*
+  TODO: valgrind reports a loss here:
+
+  448 (80 direct, 368 indirect) bytes in 1 blocks are definitely lost in loss record 617 of 702
+  at 0x4C2B100: operator new(unsigned long) (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+  by 0x409DC2: ground_at_player() (main.cpp:1980)
+*/
 Grid *ground_at_player(void) {
     // get ground inventory at player position
     Grid *ground = g.map->tiles[g.map->player->n].ground_items;
 
     // create it if it doesn't exist
     if(ground == NULL) {
+        cout << "creating new ground" << endl;
         ground = new Grid (20, 50, 20, 30, NULL);
-        Item *crowbar = new Item(3, 3, 14, 2, 3);
-        Item *shopping_trolley = new Item(0, 6, 16, 16, 4);
-        ground->AddItem(crowbar);
-        ground->AddItem(shopping_trolley);
-        // ground->items.push_back(crowbar);
+        Item *crowbar = new Item(0, 0, 14, 2, 3);
+        Item *shopping_trolley = new Item(0, 0, 16, 16, 4);
+        Item *pill_bottle = new Item(0, 0, 1, 2, 5);
+        ground->PlaceItemOnGrid(crowbar);
+        ground->PlaceItemOnGrid(shopping_trolley);
+        ground->PlaceItemOnGrid(pill_bottle);
         g.map->tiles[g.map->player->n].ground_items = ground;
     }
     return ground;
@@ -1825,6 +2122,7 @@ void VehicleGridSystem::reset(void) {
     g.map->player->addVehicleHardpoint(this);
 
     Grid *ground = ground_at_player();
+    ground->gsb_displayed = true;
     grids.push_back(ground);
     // reparent();
 
@@ -1832,6 +2130,9 @@ void VehicleGridSystem::reset(void) {
     pos.y1 = 0;
     pos.x2 = 1280;
     pos.y2 = 720;
+
+    countTotalItems();
+    GridSystem::reset();
 }
 
 void InventoryGridSystem::reset(void) {
@@ -1854,6 +2155,7 @@ void InventoryGridSystem::reset(void) {
     g.map->player->addInventoryHardpoints(this);
 
     Grid *ground = ground_at_player();
+    ground->gsb_displayed = true;
     grids.push_back(ground);
     // reparent();
 
@@ -1862,6 +2164,8 @@ void InventoryGridSystem::reset(void) {
     pos.x2 = 1280;
     pos.y2 = 720;
 
+    countTotalItems();
+    GridSystem::reset();
 }
 
 void main_buttons_update(void) {
@@ -1890,8 +2194,6 @@ void button_MainMap_press(void) {
 void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
         g.ui_Items->gridsystem->reset();
-        g.ui_Items->gridsystem->countTotalItems();
-
         g.ui = g.ui_Items;
         g.AddMessage("Switched to inventory.");
         g.color_bg = g.color_grey;
@@ -1902,8 +2204,6 @@ void button_Items_press(void) {
 void button_Vehicle_press(void) {
     if(g.ui != g.ui_Vehicle) {
         g.ui_Vehicle->gridsystem->reset();
-        g.ui_Vehicle->gridsystem->countTotalItems();
-
         g.ui = g.ui_Vehicle;
         g.color_bg = g.color_grey;
         g.AddMessage("Switched to vehicle.");
@@ -1954,6 +2254,8 @@ void load_bitmaps(void) {
     /* 24 */ filenames.push_back("media/items/backpack.png");
     /* 25 */ filenames.push_back("media/buttons/end_turn_up.png");
     /* 26 */ filenames.push_back("media/items/shopping_trolley.png");
+    /* 27 */ filenames.push_back("media/items/pill_bottle.png");
+    /* 28 */ filenames.push_back("media/buttons/sort_grid.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -2075,17 +2377,25 @@ void init_tilemap(void) {
     g.map = new TileMap (10, 10, 16, 16);
 
     TileInfo i;
+    // grass
     i.minimap_color = al_map_rgb(0, 255, 0);
     i.bitmap_index = 0;
+    i.blocks_los = false;
     g.map->tile_info.push_back(i);
+    // tree
     i.minimap_color = al_map_rgb(0, 150, 0);
     i.bitmap_index = 1;
+    i.blocks_los = false;
     g.map->tile_info.push_back(i);
+    // city
     i.minimap_color = al_map_rgb(255, 255, 255);
     i.bitmap_index = 2;
+    i.blocks_los = true;
     g.map->tile_info.push_back(i);
+    // lake
     i.minimap_color = al_map_rgb(0, 0, 200);
     i.bitmap_index = 3;
+    i.blocks_los = false;
     g.map->tile_info.push_back(i);
 
     g.map->bitmaps.push_back(g.bitmaps[17]);
@@ -2098,10 +2408,6 @@ void init_tilemap(void) {
 
 void init_minimap(void) {
     g.minimap = new(MiniMap);
-    g.minimap->pos.x1 = 490;
-    g.minimap->pos.y1 = 210;
-    g.minimap->pos.x2 = g.minimap->pos.x1 + 300;
-    g.minimap->pos.y2 = g.minimap->pos.y1 + 300;
 }
 
 MiniMapUI::MiniMapUI(void) {
@@ -2126,30 +2432,21 @@ MiniMapUI::~MiniMapUI(void) {
 // must be called after init_tilemap();
 void init_characters(void) {
     for(int i = 0; i < 5; i++) {
-        int mx = g.map->size_x;
-        int my = g.map->size_y;
-        int n = (rand() % my) * mx + (rand() % mx);
+        int n = rand() % g.map->max_t;
 
-        Character *c = new Character(n, g.bitmaps[21]);
+        Character *c = new Character(55, g.bitmaps[21]);
 
         // add starting items
         Item *backpack = new Item(0, 0, 7, 7, 1);
-        // Grid *backpack_grid = new Grid(0, 0, 10, 10, NULL);
-        // backpack->storage = backpack_grid;
-
+        c->back->PlaceItemOnGrid(backpack);
         Item *first_aid_kit1 = new Item(0, 0, 6, 6, 2);
-        // Grid *first_aid_kit_grid1 = new Grid(0, 0, 8, 8, NULL);
-        // first_aid_kit1->storage = first_aid_kit_grid1;
-        backpack->storage->AddItem(first_aid_kit1);
-        // backpack->storage->items.push_back(first_aid_kit1);
+        backpack->storage->PlaceItemOnGrid(first_aid_kit1);
         Item *first_aid_kit2 = new Item(0, 0, 6, 6, 2);
-        // Grid *first_aid_kit_grid2 = new Grid(0, 0, 8, 8, NULL);
-        // first_aid_kit2->storage = first_aid_kit_grid2;
-
-        c->back->AddItem(backpack);
-        c->left_hand_hold->AddItem(first_aid_kit2);
-        // c->back->items.push_back(backpack);
-        // c->left_hand_hold->items.push_back(first_aid_kit2);
+        c->left_hand_hold->PlaceItemOnGrid(first_aid_kit2);
+        Item *pill_bottle2 = new Item(0, 0, 1, 2, 5);
+        first_aid_kit1->storage->PlaceItemOnGrid(pill_bottle2);
+        Item *pill_bottle3 = new Item(0, 0, 1, 2, 5);
+        first_aid_kit2->storage->PlaceItemOnGrid(pill_bottle3);
 
         // player is character 0
         if(i == 0) {
