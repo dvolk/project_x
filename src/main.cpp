@@ -373,24 +373,26 @@ struct Grid {
     // "widget" dimensions
     Rect pos;
 
-    // grid spacing in pixels
-    int grid_px_x;
-    int grid_px_y;
+    // grid spacing in pixels. can't be changed at the moment
+    const int8_t grid_px_x = 10;
+    const int8_t grid_px_y = 10;
 
     // grid size in grid units
-    int grid_size_x;
-    int grid_size_y;
+    int16_t grid_size_x;
+    int16_t grid_size_y;
 
     vector<Item *> items;
 
     HardpointInfo *hpinfo;
+
+    // seems like these could be part of InventoryGridSystem, etc
     GridSortButton *gsb;
     bool gsb_displayed;
 
     Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h) {
         hpinfo = h;
-        grid_px_x = 10;
-        grid_px_y = 10;
+        // grid_px_x = 10;
+        // grid_px_y = 10;
         grid_size_x = size_x;
         grid_size_y = size_y;
         pos.x1 = w_pos_x;
@@ -414,7 +416,7 @@ struct Grid {
 
     void AddItem(Item *item);
     void RemoveItem(Item *item);
-    void PlaceItem(Item *to_place);
+    Item *PlaceItem(Item *to_place);
     void Sort(void);
     void Sort(bool (*comp)(Item *l, Item *r));
 
@@ -519,7 +521,9 @@ bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
                    int b_x, int b_y, int b_width, int b_height);
 
 // automatically find a place to place the item on
-void Grid::PlaceItem(Item *to_place) {
+// return NULL if successful, otherwise return the item
+Item *Grid::PlaceItem(Item *to_place) {
+    // cout << "trying to place " << g.item_info[to_place->info_index].name.c_str();
     if(hpinfo != NULL) {
         // if we're on a hard point just check how many item there
         // are there already
@@ -527,8 +531,9 @@ void Grid::PlaceItem(Item *to_place) {
             to_place->pos.x1 = 0;
             to_place->pos.y1 = 0;
             AddItem(to_place);
-            return;
+            return NULL;
         }
+        return to_place;
     }
 
     // if it's a grid we try placing it on every grid square
@@ -573,11 +578,11 @@ void Grid::PlaceItem(Item *to_place) {
             to_place->storage->gsb_displayed = false;
         }
         AddItem(to_place);
+        return NULL;
     }
     else {
         // couldn't place it
-        assert(to_place->parent != NULL);
-        to_place->parent->AddItem(to_place);
+        return to_place;
     }
 }
 
@@ -719,19 +724,7 @@ struct TileInfo {
 struct Tile {
     int8_t info_index;
     int8_t visible;
-    Grid *ground_items;
-
-    Tile() {
-        info("Tile()");
-        ground_items = NULL;
-        info_index = 0;
-        visible = 0;
-    }
-
-    ~Tile() {
-        info("~Tile()");
-        delete ground_items;
-    }
+    vector<Grid *> *ground_items;
 };
 
 struct TileMap : public Widget {
@@ -751,11 +744,11 @@ struct TileMap : public Widget {
       TODO: replace the magic numbers throughout with these
     */
     // size of the hex bitmaps
-    int hex_size_x;
-    int hex_size_y;
+    const int hex_size_x = 100;
+    const int hex_size_y = 80;
     // size of the hex render steps
-    int hex_step_x;
-    int hex_step_y;
+    const int hex_step_x = 80;
+    const int hex_step_y = 40;
 
     // stuff that's constant between TileMap::draw
     // and TileMap::drawTile
@@ -835,6 +828,7 @@ void TileMap::removeCharacter(Character *to_kill) {
         if(character == to_kill) {
             g.map->characters.erase(g.map->characters.begin() + i);
             delete to_kill;
+            return;
         }
         i++;
     }
@@ -880,21 +874,21 @@ void Character::die(void) {
     g.map->removeCharacter(this);
 }
 
-Grid *ground_at_character(Character *character);
+vector<Grid *> *ground_at_character(Character *character);
+void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
 
 void Character::drop_all_items(void) {
-    Grid *ground = ground_at_character(this);
+    vector<Grid *> *ground = ground_at_character(this);
     for(auto& hardpoint : inventory_hardpoints) {
         for(auto& item : hardpoint->items) {
             hardpoint->RemoveItem(item);
-            ground->PlaceItem(item);
+            PlaceItemOnMultiGrid(ground, item);
         }
     }
     for(auto& item : vehicle->items) {
         vehicle->RemoveItem(item);
-        ground->PlaceItem(item);
+        PlaceItemOnMultiGrid(ground, item);
     }
-    ground->Sort();
 }
 
 Button::Button() {
@@ -930,7 +924,7 @@ struct GridSystem : public Widget {
 
     void mouseDown(void) { gsMouseDownEvent(); }
     void mouseUp(void) { gsMouseUpEvent(); }
-    void keyDown(void) { }
+    void keyDown(void);
     void hoverOver(void);
 
     void gsMouseDownEvent(void);
@@ -949,6 +943,11 @@ struct GridSystem : public Widget {
     void AutoMoveAllItems(Grid *from, Grid *to);
 };
 
+vector<Grid *> *ground_at_player(void);
+
+void GridSystem::keyDown(void) {
+}
+
 void GridSystem::AutoMoveItem(Item *item, Grid *from, Grid *to) {
     from->RemoveItem(item);
     to->PlaceItem(item);
@@ -959,12 +958,10 @@ void GridSystem::AutoMoveAllItems(Grid *from, Grid *to) {
         AutoMoveItem(item, from, to);
 }
 
-Grid *ground_at_player(void);
-
 // moves items under mouse cursor to the ground, if possible
 // this is always for the player
 void GridSystem::MouseAutoMoveItemToGround() {
-    Grid *ground = ground_at_player();
+    vector<Grid *> *ground = ground_at_player();
 
     Item *item = NULL;
     Grid *from = NULL;
@@ -980,10 +977,9 @@ void GridSystem::MouseAutoMoveItemToGround() {
 
  got_it:
     assert(item != NULL);
-    assert(ground != NULL);
     assert(from != NULL);
 
-    ground->PlaceItem(item);
+    PlaceItemOnMultiGrid(ground, item);
     reset();
 }
 
@@ -1053,9 +1049,10 @@ TileMap::~TileMap() {
         delete character;
         character = NULL;
     }
-    for(auto& tile : tiles) {
-        delete tile.ground_items;
-    }
+    for(auto& tile : tiles)
+        if(tile.ground_items != NULL)
+            for(auto& grid : *tile.ground_items)
+                delete grid;
 }
 
 TileMap::TileMap(int sx, int sy, int c, int r) {
@@ -1074,11 +1071,11 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     size_x = sx;
     size_y = sy;
 
-    hex_size_x = 100;
-    hex_size_y = 80;
+    // hex_size_x = 100;
+    // hex_size_y = 80;
 
-    hex_step_x = 80;
-    hex_step_y = 40;
+    // hex_step_x = 80;
+    // hex_step_y = 40;
 
     r_off_x = 0;
     r_off_y = 0;
@@ -1212,7 +1209,7 @@ int TileMap::mouseToTileN(void) {
     return size_x * y + x;
 }
 
-void do_turn(void);
+void end_turn(void);
 
 // check if the clicked tile is next to the player
 // if so, move them there.
@@ -1237,7 +1234,7 @@ void TileMap::mouseDown(void) {
         if(g.map->tile_info[g.map->tiles[clicked_nearby].info_index].blocks_movement == false) {
             g.AddMessage("player moved");
             player->move(clicked_nearby);
-            do_turn();
+            end_turn();
             player->update_visibility();
         }
     }
@@ -1680,8 +1677,13 @@ void MessageLog::draw(void) {
 void Button::draw(void) {
     if(pressed == true && down != NULL)
         al_draw_bitmap(down, pos.x1, pos.y1, 0);
-    else
+    else if(up != NULL)
         al_draw_bitmap(up, pos.x1, pos.y1, 0);
+    else
+        al_draw_filled_rectangle(pos.x1, pos.y1,
+                                 pos.x1 + pos.x2,
+                                 pos.y1 + pos.y2,
+                                 g.color_black);
 }
 
 void Button::update() {
@@ -1691,8 +1693,8 @@ void TileMap::generate(void) {
     tiles.reserve(size_x * size_y);
     int up_to = bitmaps.size();
     for(int i = 0; i <= max_t; i++) {
-        tiles[i].info_index = rand() % up_to;
         tiles[i].visible = false;
+        tiles[i].info_index = rand() % up_to;
         tiles[i].ground_items = NULL;
     }
     info("Finished generating map");
@@ -2048,11 +2050,13 @@ void GridSystem::gsMouseUpEvent() {
 }
 
 void Grid::draw(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
+    int y2 = min(pos.y1 + (float)(40 * grid_px_y), pos.y2);
+
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, y2, g.color_grey2);
     if(hpinfo == NULL) {
         for (int x = pos.x1; x <= pos.x2; x = x + grid_px_x)
-            al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
-        for (int y = pos.y1; y <= pos.y2; y = y + grid_px_y)
+            al_draw_line(x, pos.y1, x, y2, g.color_grey3, 1);
+        for (int y = pos.y1; y <= y2; y = y + grid_px_y)
             al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
     }
     if(gsb_displayed == true)
@@ -2128,7 +2132,7 @@ Item *Grid::grab_item(int x, int y) {
     return NULL;
 }
 
-void do_turn() {
+void end_turn() {
     if((int)g.map->characters.size() < 100) {
             g.map->addRandomCharacter();
             g.map->addRandomCharacter();
@@ -2143,11 +2147,11 @@ void do_turn() {
 
         // safe to add and remove characters in this loop
 
-        if(rand() % 10 == 0) {
+        if(rand() % 20 == 0) {
             g.map->addRandomCharacter();
         }
 
-        if(rand() % 20 == 0) {
+        if(rand() % 10 == 0) {
             int pos_to_kill = rand() % (int)g.map->characters.size();
 
             g.map->characters[pos_to_kill]->die();
@@ -2180,6 +2184,8 @@ struct VehicleGridSystem;
 
 struct ItemsUI : public UI {
     InventoryGridSystem *gridsystem;
+    Button *ground_next_page;
+    Button *ground_prev_page;
 
     ItemsUI();
     ~ItemsUI();
@@ -2193,7 +2199,13 @@ struct VehicleUI : public UI {
 };
 
 struct VehicleGridSystem : public GridSystem {
-    VehicleGridSystem() { };
+    int current_ground_page;
+
+    VehicleGridSystem() {
+        current_ground_page = 0;
+        reset();
+    };
+
     ~VehicleGridSystem() {
         info("~VehicleGridSystem()");
     };
@@ -2204,10 +2216,31 @@ struct VehicleGridSystem : public GridSystem {
         al_draw_text(g.font, g.color_white, 390, 135, 0, "Vehicle:");
         GridSystem::draw();
     }
+
+    void keyDown(void) override;
 };
 
+void VehicleGridSystem::keyDown(void) {
+    vector<Grid *> *ground = ground_at_player();
+    if(g.key == ALLEGRO_KEY_M) {
+        if(current_ground_page < (int)(*ground).size() - 1) {
+            current_ground_page++;
+            reset();
+        }
+    }
+    if(g.key == ALLEGRO_KEY_N) {
+        if(current_ground_page > 0) {
+            current_ground_page--;
+            reset();
+        }
+    }
+}
+
 struct InventoryGridSystem : public GridSystem {
+    int current_ground_page;
+
     InventoryGridSystem() {
+        current_ground_page = 0;
         reset();
     }
     ~InventoryGridSystem() {
@@ -2221,7 +2254,35 @@ struct InventoryGridSystem : public GridSystem {
 
         GridSystem::draw();
     }
+
+    void keyDown(void) override;
 };
+
+void InventoryNextGroundPage(void) {
+    cout << "next" << endl;
+    vector<Grid *> *ground = ground_at_player();
+    if(g.ui_Items->gridsystem->current_ground_page< (int)(*ground).size()-1) {
+        g.ui_Items->gridsystem->current_ground_page++;
+        g.ui_Items->gridsystem->reset();
+    }
+}
+
+void InventoryPrevGroundPage(void) {
+    cout << "prev" << endl;
+    if(g.ui_Items->gridsystem->current_ground_page > 0) {
+        g.ui_Items->gridsystem->current_ground_page--;
+        g.ui_Items->gridsystem->reset();
+    }
+}
+
+void InventoryGridSystem::keyDown(void) {
+    if(g.key == ALLEGRO_KEY_M) {
+        InventoryNextGroundPage();
+    }
+    if(g.key == ALLEGRO_KEY_N) {
+        InventoryPrevGroundPage();
+    }
+}
 
 VehicleUI::VehicleUI() {
     gridsystem = new VehicleGridSystem;
@@ -2246,6 +2307,24 @@ VehicleUI::~VehicleUI() {
 ItemsUI::ItemsUI() {
     gridsystem  = new InventoryGridSystem;
 
+    ground_next_page = new Button;
+    ground_next_page->pos.x1 = 200;
+    ground_next_page->pos.y1 = 30;
+    ground_next_page->pos.x2 = 20;
+    ground_next_page->pos.y2 = 20;
+    ground_next_page->up = g.bitmaps[29];
+    ground_next_page->down = NULL;
+    ground_next_page->onMouseDown.connect(ptr_fun(InventoryNextGroundPage));
+
+    ground_prev_page = new Button;
+    ground_prev_page->pos.x1 = 180;
+    ground_prev_page->pos.y1 = 30;
+    ground_prev_page->pos.x2 = 20;
+    ground_prev_page->pos.y2 = 20;
+    ground_prev_page->up = g.bitmaps[30];
+    ground_prev_page->down = NULL;
+    ground_prev_page->onMouseDown.connect(ptr_fun(InventoryPrevGroundPage));
+
     widgets.push_back(gridsystem);
     widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
@@ -2257,38 +2336,80 @@ ItemsUI::ItemsUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(ground_next_page);
+    widgets.push_back(ground_prev_page);
 }
 
 ItemsUI::~ItemsUI() {
     info("~ItemsUI()");
 }
 
+void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
+    // try to place it on the existing pages
+    for(auto& grid : *multigrid) {
+        Item *returned = grid->PlaceItem(item);
+        if(returned == NULL)
+            // woooooo
+            return;
+    }
+    // we couldn't place it on an existing page
+    // make a new grid
+    Grid *new_grid = new Grid (20, 50, 20, 40, NULL);
+
+    if(new_grid == NULL) {
+        // if we can't allocate any more grids
+        info("WARNING: Couldn't allocate grid");
+        delete item;
+        return;
+    }
+
+    // try to place it on the new grid
+    Item *returned = new_grid->PlaceItem(item);
+    // return it to the parent if it can't be placed
+    if(returned != NULL) {
+        assert(item->parent);
+        item->parent->AddItem(returned);
+        delete new_grid;
+        info("WARNING: Item too big for empty ground");
+    }
+    // add a new grid to the multigrid
+    (*multigrid).push_back(new_grid);
+}
+
 /*
   TODO: valgrind reports a loss here
 */
-Grid *ground_at_character(Character *character) {
+vector<Grid *> *ground_at_character(Character *character) {
     // get ground inventory at player position
-    assert(character);
+    assert(character != NULL);
     assert(good_index(character->n) == true);
-    Grid *ground = g.map->tiles[character->n].ground_items;
+    vector<Grid *> *ground = g.map->tiles[character->n].ground_items;
 
-    // create it if it doesn't exist
     if(ground == NULL) {
-        cout << "creating new ground" << endl;
-        ground = new Grid (20, 50, 20, 30, NULL);
-        assert(ground != NULL);
+        ground = new vector<Grid *>;
+    }
+    assert(ground);
+
+    if((*ground).empty()) {
+        // create first grid if it doesn't exist
+        Grid *ground_grid = new Grid (20, 50, 20, 40, NULL);
+        assert(ground_grid != NULL);
+        ground->push_back(ground_grid);
+        // test items
         Item *crowbar = new Item("Crowbar");
-        Item *shopping_trolley = new Item("Shopping trolley");
+        Item *shopping_trolley1 = new Item("Shopping trolley");
+        Item *shopping_trolley2 = new Item("Shopping trolley");
         Item *pill_bottle = new Item("Pill bottle");
-        ground->PlaceItem(crowbar);
-        ground->PlaceItem(shopping_trolley);
-        ground->PlaceItem(pill_bottle);
+        ground_grid->PlaceItem(crowbar);
+        ground_grid->PlaceItem(shopping_trolley1);
+        ground_grid->PlaceItem(shopping_trolley2);
+        ground_grid->PlaceItem(pill_bottle);
     }
     g.map->tiles[character->n].ground_items = ground;
     return ground;
 }
 
-Grid *ground_at_player(void) {
+vector<Grid *> *ground_at_player(void) {
     return ground_at_character(g.map->player);
 }
 
@@ -2298,9 +2419,9 @@ void VehicleGridSystem::reset(void) {
 
     g.map->player->addVehicleHardpoint(this);
 
-    Grid *ground = ground_at_player();
-    ground->gsb_displayed = true;
-    grids.push_back(ground);
+    vector<Grid *> *ground = ground_at_player();
+    (*ground)[current_ground_page]->gsb_displayed = true;
+    grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
     pos.x1 = 0;
@@ -2331,9 +2452,9 @@ void InventoryGridSystem::reset(void) {
 
     g.map->player->addInventoryHardpoints(this);
 
-    Grid *ground = ground_at_player();
-    ground->gsb_displayed = true;
-    grids.push_back(ground);
+    vector<Grid *> *ground = ground_at_player();
+    (*ground)[current_ground_page]->gsb_displayed = true;
+    grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
     pos.x1 = 0;
@@ -2399,7 +2520,7 @@ void button_MiniMap_press(void) {
 }
 
 void button_endturn_press(void) {
-    do_turn();
+    end_turn();
 }
 
 void load_bitmaps(void) {
@@ -2433,6 +2554,8 @@ void load_bitmaps(void) {
     /* 26 */ filenames.push_back("media/items/shopping_trolley.png");
     /* 27 */ filenames.push_back("media/items/pill_bottle.png");
     /* 28 */ filenames.push_back("media/buttons/sort_grid.png");
+    /* 29 */ filenames.push_back("media/buttons/next_page.png");
+    /* 30 */ filenames.push_back("media/buttons/prev_page.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -2804,14 +2927,17 @@ int main(void) {
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
             g.key = ev.keyboard.keycode;
             if(g.key == ALLEGRO_KEY_ESCAPE)
-                break;
+                if(g.ui == g.ui_MainMap)
+                   break;
+                else
+                    button_MainMap_press();
             else
                 g.ui->keyDownEvent();
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
                 if(i < 1000) {
-                     // do_turn();
+                     // end_turn();
                 }
                 g.ui->update();
             }
@@ -2840,8 +2966,9 @@ int main(void) {
       al_uninstall_system();
     */
 
-    for(auto& widget : g.all_widgets)
+    for(auto& widget : g.all_widgets) {
         delete widget;
+    }
 
     info("Exiting");
 
