@@ -2150,9 +2150,9 @@ void GridSystem::gsMouseUpEvent() {
 void Grid::draw(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
     if(hpinfo == NULL) {
-        for (int x = pos.x1; x <= pos.x2; x = x + grid_px_x)
+        for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x)
             al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
-        for (int y = pos.y1; y <= pos.y2; y = y + grid_px_y)
+        for (int y = pos.y1 + grid_px_y; y < pos.y2; y = y + grid_px_y)
             al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
     }
     if(gsb_displayed == true)
