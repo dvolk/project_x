@@ -17,7 +17,7 @@
 
 #include "util.h"
 
-#define DEBUG_VISIBILITY false
+#define DEBUG_VISIBILITY true
 
 using namespace std;
 using namespace sigc;
@@ -35,6 +35,7 @@ struct MainMapUI;
 struct MiniMapUI;
 struct ItemsUI;
 struct VehicleUI;
+struct EncounterUI;
 struct HardpointInfo;
 struct ItemInfo;
 
@@ -84,6 +85,7 @@ struct Game {
     HardpointInfo *right_foot;
     HardpointInfo *left_foot;
     HardpointInfo *vehicle;
+    HardpointInfo *encounter_selected;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -97,6 +99,7 @@ struct Game {
     UI *ui_Conditions;     // not implemented
     UI *ui_Camp;           // not implemented
     VehicleUI *ui_Vehicle;
+    EncounterUI *ui_Encounter;
 
     MessageLog *log;
 
@@ -225,6 +228,32 @@ void init_iteminfo(void) {
     tmp.container_size_x = 1;
     tmp.container_size_y = 2;
     g.item_info.push_back(tmp);
+
+    /* 06 */
+    tmp.name = "Flee";
+    tmp.grid_size_x = 4;
+    tmp.grid_size_y = 4;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[31];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    g.item_info.push_back(tmp);
+
+    /* 07 */
+    tmp.name = "Single attack";
+    tmp.grid_size_x = 4;
+    tmp.grid_size_y = 4;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[32];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    g.item_info.push_back(tmp);
 }
 
 struct Item {
@@ -331,6 +360,7 @@ void init_hardpointinfo(void) {
     g.right_foot = new HardpointInfo;
     g.left_foot = new HardpointInfo;
     g.vehicle = new HardpointInfo;
+    g.encounter_selected = new HardpointInfo;
 
     g.torso->maxItems = 3;
     g.vehicle->vehiclepoint = true;
@@ -499,6 +529,7 @@ Item::Item(string item_name) {
 }
 
 void Grid::AddItem(Item *item) {
+    item->old_parent = item->parent;
     item->parent = this;
     items.push_back(item);
 }
@@ -523,7 +554,6 @@ bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
 // automatically find a place to place the item on
 // return NULL if successful, otherwise return the item
 Item *Grid::PlaceItem(Item *to_place) {
-    // cout << "trying to place " << g.item_info[to_place->info_index].name.c_str();
     if(hpinfo != NULL) {
         // if we're on a hard point just check how many item there
         // are there already
@@ -540,8 +570,10 @@ Item *Grid::PlaceItem(Item *to_place) {
     bool found = false;
     int drop_x = 0;
     int drop_y = 0;
-    for(drop_y = 0; drop_y < grid_size_y; drop_y++) {
-        for(drop_x = 0; drop_x < grid_size_x; drop_x++) {
+    const int limit_x = grid_size_x - to_place->pos.x2;
+    const int limit_y = grid_size_y - to_place->pos.y2;
+    for(drop_y = 0; drop_y <= limit_y ; drop_y++) {
+        for(drop_x = 0; drop_x <= limit_x; drop_x++) {
             int collides_with = 0;
             // check how many items it collides with
             for(auto& item : items) {
@@ -646,6 +678,7 @@ struct Character {
     // 1 - sees immediate neighbours
     // etc
     int current_los_distance;
+    int nextMove;
 
     void update_visibility(void);
 
@@ -709,6 +742,7 @@ Character::Character(void) {
 
     current_los_distance = 3;
     currently_seeing.reserve(50);
+    nextMove = 1000;
     info("Character()");
 }
 
@@ -769,6 +803,8 @@ struct TileMap : public Widget {
     vector<TileInfo> tile_info;
     vector<ALLEGRO_BITMAP *>bitmaps;
 
+    int pos_to_kill;
+
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
 
@@ -811,6 +847,7 @@ void TileMap::addRandomCharacter(void) {
     new_char->left_hand_hold->PlaceItem(pill_bottle);
     new_char->vehicle->PlaceItem(shopping_trolley);
     new_char->right_hand_hold->PlaceItem(first_aid_kit);
+    new_char->nextMove = characters.front()->nextMove + rand() % 1234;
     characters.push_back(new_char);
 }
 
@@ -828,6 +865,7 @@ void TileMap::removeCharacter(Character *to_kill) {
         if(character == to_kill) {
             g.map->characters.erase(g.map->characters.begin() + i);
             delete to_kill;
+            updateCharsByPos();
             return;
         }
         i++;
@@ -854,20 +892,30 @@ void Character::randomMove(void) {
     int new_n;
 
     do {
-        new_n = dir_transform(n, rand() % 6);
+        new_n = dir_transform(n, 1 + rand() % 5);
     } while(good_index(new_n) == false ||
             g.map->tile_info[g.map->tiles[new_n].info_index].blocks_movement == true);
 
     move(new_n);
 }
 
+void runEncounter(void);
+
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
         n = new_n;
+        g.map->updateCharsByPos();
+        if(this != g.map->player &&
+           n == g.map->player->n) {
+            runEncounter();
+        } else if(g.map->charsByPos.count(g.map->player->n) > 1) {
+            runEncounter();
+        }
     }
     else {
         info("WARNING: tried to Character::move() to invalid index");
     }
+    nextMove += 1000 + rand() % 100;
 }
 
 void Character::die(void) {
@@ -901,8 +949,12 @@ struct GridSystem : public Widget {
     vector<Grid *> grids;
 
     Item *held;
+    bool auto_move_to_ground;
+    Grid *auto_target;
 
     GridSystem(void) {
+        auto_move_to_ground = false;
+        auto_target = NULL;
         held = NULL;
     }
     ~GridSystem(void) {
@@ -940,6 +992,7 @@ struct GridSystem : public Widget {
 
     void AutoMoveItem(Item *item, Grid *from, Grid *to);
     void MouseAutoMoveItemToGround();
+    void MouseAutoMoveItemToTarget();
     void AutoMoveAllItems(Grid *from, Grid *to);
 };
 
@@ -980,6 +1033,42 @@ void GridSystem::MouseAutoMoveItemToGround() {
     assert(from != NULL);
 
     PlaceItemOnMultiGrid(ground, item);
+    reset();
+}
+
+// moves item under mouse cursor to the auto_target, if it exists
+// this is always for the player
+void GridSystem::MouseAutoMoveItemToTarget() {
+    assert(auto_target != NULL);
+
+    Item *item = NULL;
+    Grid *from = NULL;
+
+    for(auto& grid : grids) {
+        item = grid->grab_item(g.mouse_x, g.mouse_y);
+        if(item != NULL) {
+            from = grid;
+            goto got_it;
+        }
+    }
+    return;
+
+ got_it:
+    assert(item != NULL);
+    assert(from != NULL);
+
+    if(auto_target->hpinfo != NULL) {
+        // if we're auto-moving to a hard point
+        if((int)auto_target->items.size() >= auto_target->hpinfo->maxItems) {
+            // and there's no space
+            Item *prev = auto_target->items.front();
+            assert(prev->old_parent);
+            // then replace the item that's already there.
+            prev->old_parent->PlaceItem(prev);
+            auto_target->RemoveItem(prev);
+        }
+    }
+    auto_target->PlaceItem(item);
     reset();
 }
 
@@ -1232,17 +1321,16 @@ void TileMap::mouseDown(void) {
         return;
     else {
         if(g.map->tile_info[g.map->tiles[clicked_nearby].info_index].blocks_movement == false) {
-            g.AddMessage("player moved");
             player->move(clicked_nearby);
             end_turn();
             player->update_visibility();
         }
     }
 
-    char buf[100];
-    snprintf(buf, sizeof(buf), "clicked on n=%d %d %d %f %f %f %f",
-             clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
-    g.AddMessage(buf);
+    // char buf[100];
+    // snprintf(buf, sizeof(buf), "clicked on n=%d %d %d %f %f %f %f",
+    //          clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
+    // g.AddMessage(buf);
 }
 
 bool tile_blocks_los(int n) {
@@ -1528,7 +1616,7 @@ struct UI {
     void hoverOverEvent(void);
 
     void update(void);
-    void draw(void);
+    virtual void draw(void);
 
     void toggleMessageLog(void);
 };
@@ -1838,8 +1926,11 @@ void GridSystem::drawItemTooltip(void) {
                                          g.mouse_x + 150, g.mouse_y + 48, g.color_black);
                 al_draw_text(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 8,
                              0, g.item_info[item->info_index].name.c_str());
-                al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
-                              0, "%d g", g.item_info[item->info_index].weight);
+                int weight = g.item_info[item->info_index].weight;
+                if(weight > 0) {
+                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
+                                  0, "%d g", weight);
+                }
 
                 // if the item has a grid, draw it under the text
                 if(item->storage != NULL &&
@@ -1871,7 +1962,13 @@ void GridSystem::gsMouseDownEvent() {
         GrabItem();
     }
     else if(g.mouse_button == 2) {
-        MouseAutoMoveItemToGround();
+        if(auto_move_to_ground == true) {
+            MouseAutoMoveItemToGround();
+        } else {
+            if(auto_target != NULL) {
+                MouseAutoMoveItemToTarget();
+            }
+        }
     }
     // check if we're clicking the sort buttons
     for(auto& grid : grids) {
@@ -1926,6 +2023,7 @@ void GridSystem::GrabItem() {
     }
 }
 
+__attribute__ ((const))
 bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
                    int b_x, int b_y, int b_width, int b_height) {
     return
@@ -2050,13 +2148,11 @@ void GridSystem::gsMouseUpEvent() {
 }
 
 void Grid::draw(void) {
-    int y2 = min(pos.y1 + (float)(40 * grid_px_y), pos.y2);
-
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, y2, g.color_grey2);
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
     if(hpinfo == NULL) {
         for (int x = pos.x1; x <= pos.x2; x = x + grid_px_x)
-            al_draw_line(x, pos.y1, x, y2, g.color_grey3, 1);
-        for (int y = pos.y1; y <= y2; y = y + grid_px_y)
+            al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
+        for (int y = pos.y1; y <= pos.y2; y = y + grid_px_y)
             al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
     }
     if(gsb_displayed == true)
@@ -2132,41 +2228,37 @@ Item *Grid::grab_item(int x, int y) {
     return NULL;
 }
 
+// find the next character that gets to move: it's the character
+// with the lowest nextMove value.
+Character *next(void) {
+    if(g.map->characters.empty() == true)
+        return g.map->player;
+
+    Character *smallest = g.map->characters.front();
+    for(auto& ch : g.map->characters) {
+        if(ch->nextMove < smallest->nextMove) {
+            smallest = ch;
+        }
+    }
+
+    if(smallest->nextMove < g.map->player->nextMove)
+        return smallest;
+    else
+        return g.map->player;
+}
+
 void end_turn() {
-    if((int)g.map->characters.size() < 100) {
-            g.map->addRandomCharacter();
-            g.map->addRandomCharacter();
-    }
-
-    for(auto& c : g.map->characters) {
+    Character *c;
+    // process characters until it's the player's turn again
+    while((c = next()) != g.map->player) {
+        cout << c << ": " << c->nextMove << endl;
         c->randomMove();
-    }
-
-    int current_index = 0;
-    while(current_index <= (int)g.map->characters.size()) {
-
-        // safe to add and remove characters in this loop
-
-        if(rand() % 20 == 0) {
+        if(rand() % 10 == 0) {
             g.map->addRandomCharacter();
         }
-
-        if(rand() % 10 == 0) {
-            int pos_to_kill = rand() % (int)g.map->characters.size();
-
-            g.map->characters[pos_to_kill]->die();
-
-            if(pos_to_kill > current_index) {
-                current_index--;
-            }
-        }
-        current_index++;
     }
 
-    cout << "turn ends with "
-         << (int)g.map->characters.size() << " characters"
-         << endl;
-    g.map->updateCharsByPos();
+    cout << "turn ends with " << (int)g.map->characters.size() << " characters" << endl; g.AddMessage("Turn ends.");
 }
 
 struct MainMapUI : public UI {
@@ -2178,6 +2270,150 @@ struct MiniMapUI : public UI {
     MiniMapUI();
     ~MiniMapUI();
 };
+
+struct EncounterGridSystem : public GridSystem {
+    Grid *options;
+    Grid *selected;
+
+    EncounterGridSystem();
+    ~EncounterGridSystem();
+};
+
+struct EncounterUI : public UI {
+    Character *player;
+    Character *npc;
+    EncounterGridSystem *encounterGrids;
+    ALLEGRO_BITMAP *cur_tile_sprite;
+    Button *button_confirm;
+    Item *flee;
+    Item *single_attack;
+
+    EncounterUI();
+    ~EncounterUI();
+
+    void draw(void) override;
+
+    void setup(void);
+};
+
+EncounterGridSystem::EncounterGridSystem() {
+    options = new Grid (105, 300, 30, 16, NULL);
+    selected = new Grid (410, 300, 30, 16, g.encounter_selected);
+
+    grids.push_back(options);
+    grids.push_back(selected);
+
+    auto_target = selected;
+
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+}
+
+EncounterGridSystem::~EncounterGridSystem() {
+}
+
+void runEncounterStep(void);
+
+EncounterUI::EncounterUI() {
+    encounterGrids = new EncounterGridSystem;
+    flee = new Item ("Flee");
+    single_attack = new Item ("Single attack");
+
+    button_confirm = new Button;
+    button_confirm->pos.x1 = 715;
+    button_confirm->pos.y1 = 300;
+    button_confirm->pos.x2 = 75;
+    button_confirm->pos.y2 = 45;
+    button_confirm->up = g.bitmaps[33];
+    button_confirm->down = NULL;
+    button_confirm->onMouseDown.connect(ptr_fun(runEncounterStep));
+}
+
+void button_MainMap_press(void);
+
+void runEncounter(void) {
+    g.ui_Encounter->setup();
+    g.ui = g.ui_Encounter;
+}
+
+// runs one step of the encounter after the player pressed the
+// confirm button. Could in theory accept multiple actions
+void runEncounterStep(void) {
+    Character *npc = g.ui_Encounter->npc;
+    vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
+
+    if(actions->empty()) {
+        g.AddMessage("Ah! The old human nightmare: endless varieties of stupidity, endless varieties of suffering, endless varieties of banality.");
+        return;
+    }
+
+    string action1 = g.item_info[actions->front()->info_index].name;
+
+    if(action1 == "Flee") {
+
+        g.map->player->randomMove();
+        g.AddMessage("You successfully flee from the encounter.");
+        g.AddMessage("Encounter ends.");
+
+        button_MainMap_press();
+    }
+    else if(action1 == "Single attack") {
+
+        g.AddMessage("KA-POW!");
+        g.AddMessage("The adversary succumbs to their wounds.");
+        g.AddMessage("Encounter ends.");
+        g.map->removeCharacter(npc);
+        g.map->updateCharsByPos();
+
+        button_MainMap_press();
+    } else {
+
+    }
+}
+
+void EncounterUI::setup(void) {
+    g.color_bg = g.color_grey;
+
+    widgets.clear();
+    widgets.push_back(button_confirm);
+    widgets.push_back(g.log);
+
+    encounterGrids->selected->items.clear();
+    encounterGrids->options->items.clear();
+
+    encounterGrids->options->PlaceItem(flee);
+    encounterGrids->options->PlaceItem(single_attack);
+    widgets.push_back(encounterGrids);
+
+    // the player
+    player = g.map->player;
+    // the tile sprite
+    cur_tile_sprite = g.map->bitmaps[g.map->tile_info[g.map->tiles[player->n].info_index].bitmap_index];
+
+    // find the npc
+    g.map->updateCharsByPos();
+    npc = g.map->charsByPos.equal_range(player->n).first->second;
+}
+
+void EncounterUI::draw(void) {
+    al_draw_filled_rectangle(105, 25, 405, 295, g.color_grey2);
+    al_draw_filled_rectangle(410, 25, 680, 295, g.color_grey2);
+    al_draw_filled_rectangle(685, 25, 985, 295, g.color_grey2);
+    al_draw_text(g.font, g.color_white, 200, 10, 0,
+                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich");
+    al_draw_bitmap(player->sprite, 120, 40, 0);
+    al_draw_bitmap(npc->sprite, 700, 40, 0);
+    al_draw_bitmap(cur_tile_sprite, 490, 200, 0);
+
+    UI::draw();
+}
+
+EncounterUI::~EncounterUI() {
+    delete flee;
+    delete single_attack;
+}
 
 struct InventoryGridSystem;
 struct VehicleGridSystem;
@@ -2202,6 +2438,7 @@ struct VehicleGridSystem : public GridSystem {
     int current_ground_page;
 
     VehicleGridSystem() {
+        auto_move_to_ground = true;
         current_ground_page = 0;
         reset();
     };
@@ -2240,6 +2477,7 @@ struct InventoryGridSystem : public GridSystem {
     int current_ground_page;
 
     InventoryGridSystem() {
+        auto_move_to_ground = true;
         current_ground_page = 0;
         reset();
     }
@@ -2484,7 +2722,6 @@ void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
         g.ui = g.ui_MainMap;
         g.color_bg = g.color_black;
-        g.AddMessage("Switched to main map.");
     }
     main_buttons_update();
 }
@@ -2493,7 +2730,6 @@ void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
         g.ui_Items->gridsystem->reset();
         g.ui = g.ui_Items;
-        g.AddMessage("Switched to inventory.");
         g.color_bg = g.color_grey;
     }
     main_buttons_update();
@@ -2504,7 +2740,6 @@ void button_Vehicle_press(void) {
         g.ui_Vehicle->gridsystem->reset();
         g.ui = g.ui_Vehicle;
         g.color_bg = g.color_grey;
-        g.AddMessage("Switched to vehicle.");
     }
     main_buttons_update();
 }
@@ -2514,12 +2749,12 @@ void button_MiniMap_press(void) {
         g.minimap->recreate();
         g.ui = g.ui_MiniMap;
         g.color_bg = g.color_grey;
-        g.AddMessage("Switched to mini map.");
     }
     main_buttons_update();
 }
 
 void button_endturn_press(void) {
+    g.map->player->nextMove += 1000;
     end_turn();
 }
 
@@ -2556,6 +2791,9 @@ void load_bitmaps(void) {
     /* 28 */ filenames.push_back("media/buttons/sort_grid.png");
     /* 29 */ filenames.push_back("media/buttons/next_page.png");
     /* 30 */ filenames.push_back("media/buttons/prev_page.png");
+    /* 31 */ filenames.push_back("media/items/abstract/flee.png");
+    /* 32 */ filenames.push_back("media/items/abstract/single_attack.png");
+    /* 33 */ filenames.push_back("media/buttons/confirm.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -2674,7 +2912,7 @@ void init_messagelog(void) {
 }
 
 void init_tilemap(void) {
-    g.map = new TileMap (150, 150, 16, 16);
+    g.map = new TileMap (8, 8, 16, 16);
 
     TileInfo i;
     // grass
@@ -2746,7 +2984,7 @@ void init_characters(void) {
         else // everyone else is an NPC
             g.map->characters.push_back(c);
 
-        c->move(n);
+        c->n = n;
 
         // add starting items
         Item *backpack = new Item("Backpack");
@@ -2824,6 +3062,7 @@ int main(void) {
     g.display_x = 1280;
     g.display_y = 720;
     g.display = al_create_display(g.display_x, g.display_y);
+
     if(g.display == NULL)
         errorQuit("Failed to create display.");
     else
@@ -2881,9 +3120,11 @@ int main(void) {
         g.ui_MiniMap = new(MiniMapUI);
         g.ui_Items   = new(ItemsUI);
         g.ui_Vehicle = new(VehicleUI);
+        g.ui_Encounter = new(EncounterUI);
 
         // start on the main map
         g.ui = g.ui_MainMap;
+        // g.ui = g.ui_Encounter;
         main_buttons_update();
     }
 
