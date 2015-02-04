@@ -4,8 +4,9 @@
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_font.h>
 
-#include <stdint.h>
+#include <cstdint>
 
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include <set>
@@ -15,9 +16,9 @@
 
 #include <sigc++/sigc++.h>
 
-#include "util.h"
+#include "./util.h"
 
-#define DEBUG_VISIBILITY true
+#define DEBUG_VISIBILITY false
 
 using namespace std;
 using namespace sigc;
@@ -53,6 +54,7 @@ struct Game {
     ALLEGRO_COLOR color_grey;
     ALLEGRO_COLOR color_grey2;
     ALLEGRO_COLOR color_grey3;
+    ALLEGRO_COLOR color_darkgrey;
     ALLEGRO_COLOR color_tile_tint;
     ALLEGRO_COLOR color_active_tile_tint;
     ALLEGRO_COLOR color_bg;
@@ -231,8 +233,8 @@ void init_iteminfo(void) {
 
     /* 06 */
     tmp.name = "Flee";
-    tmp.grid_size_x = 4;
-    tmp.grid_size_y = 4;
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[31];
@@ -244,11 +246,37 @@ void init_iteminfo(void) {
 
     /* 07 */
     tmp.name = "Single attack";
-    tmp.grid_size_x = 4;
-    tmp.grid_size_y = 4;
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[32];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    g.item_info.push_back(tmp);
+
+    /* 08 */
+    tmp.name = "Bullet";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 1;
+    tmp.maxStack = 5;
+    tmp.weight = 5;
+    tmp.sprite = g.bitmaps[34];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    g.item_info.push_back(tmp);
+
+    /* 09 */
+    tmp.name = "Arrow";
+    tmp.grid_size_x = 6;
+    tmp.grid_size_y = 1;
+    tmp.maxStack = 5;
+    tmp.weight = 75;
+    tmp.sprite = g.bitmaps[35];
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -264,6 +292,11 @@ struct Item {
     // index into g.item_info, which contains
     // information that's common to the item
     int info_index;
+    // items can stack onto one item
+    int cur_stack;
+    // items can have their own storage space e.g.
+    // a backpack. NULL if they don't
+    Grid *storage;
     // the grid that the item belongs to. set to NULL
     // when the item is held by the player
     Grid *parent;
@@ -271,20 +304,28 @@ struct Item {
     // so that the item can be returned if it can't
     // be placed
     Grid *old_parent;
-    // items can have their own storage space e.g.
-    // a backpack. NULL if they don't
-    Grid *storage;
     // item's condition. Once it goes negative the item should be
     // destroyed. Item conditions should be decreased a bit on
     // each turn, and seperately when the item is used, so all items
     // should be checked at the end of the turn, and individual items
     // when they're used float condition;
+    // float condition;
 
+    Item(const Item& i) {
+        this->pos = i.pos;
+        this->cur_stack = i.cur_stack;
+        this->info_index = i.info_index;
+        this->parent = i.parent;
+        this->old_parent = i.old_parent;
+        this->storage = i.storage;
+    }
     Item(int info_index);
     Item(string item_name);
+    Item(string item_name, int num_stack);
     ~Item();
 
     void init(int info_index);
+    void init_from_name(string name);
     void resetHardpointPos(void);
 
     void draw(void);
@@ -403,9 +444,10 @@ struct Grid {
     // "widget" dimensions
     Rect pos;
 
-    // grid spacing in pixels. can't be changed at the moment
-    const int8_t grid_px_x = 10;
-    const int8_t grid_px_y = 10;
+    // grid spacing in pixels.
+    // can be changed, but items won't be scaled
+    static const int8_t grid_px_x = 18;
+    static const int8_t grid_px_y = 18;
 
     // grid size in grid units
     int16_t grid_size_x;
@@ -419,10 +461,10 @@ struct Grid {
     GridSortButton *gsb;
     bool gsb_displayed;
 
+    static bool PlaceItemWantsStacking;
+
     Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h) {
         hpinfo = h;
-        // grid_px_x = 10;
-        // grid_px_y = 10;
         grid_size_x = size_x;
         grid_size_y = size_y;
         pos.x1 = w_pos_x;
@@ -455,9 +497,12 @@ struct Grid {
         pos.y2 = pos.y1 + grid_size_y * grid_px_y;
     }
     Item *grab_item(int x, int y); // get item at screen position
+    void unstack_item(int x, int y); // unstack item at screen position
 
     bool item_compatible(Item *i);
 };
+
+bool Grid::PlaceItemWantsStacking = true;
 
 bool BiggerItemsFirst(Item *l, Item *r) {
     return l->pos.x2 * l->pos.y2 > r->pos.x2 * r->pos.y2;
@@ -483,9 +528,13 @@ void Grid::Sort(bool (*comp)(Item *l, Item *r)) {
 
     items.reserve(2 * num_items);
 
+    // placing items with stacking on may delete an item, so
+    // it's turned off here for now.
+    PlaceItemWantsStacking = false;
     for(auto& item : items) {
         PlaceItem(item);
     }
+    PlaceItemWantsStacking = true;
 
     items.erase(items.begin(), items.begin() + num_items);
 
@@ -499,6 +548,7 @@ void Item::init(int info_index) {
     pos.y2 = g.item_info[info_index].grid_size_y;
     parent = NULL;
     old_parent = NULL;
+    cur_stack = 1;
     storage = NULL;
     this->info_index = info_index;
     if(g.item_info[info_index].isContainer == true)
@@ -513,7 +563,16 @@ Item::Item(int info_index) {
     init(info_index);
 }
 
+Item::Item(string item_name, int num_stack) {
+    init_from_name(item_name);
+    this->cur_stack = num_stack;
+}
+
 Item::Item(string item_name) {
+    init_from_name(item_name);
+}
+
+void Item::init_from_name(string item_name) {
     int i = 0;
     for(auto& info : g.item_info) {
         if(info.name == item_name) {
@@ -551,6 +610,9 @@ void Grid::RemoveItem(Item *to_remove) {
 bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
                    int b_x, int b_y, int b_width, int b_height);
 
+/*
+  TODO: this function is too big
+*/
 // automatically find a place to place the item on
 // return NULL if successful, otherwise return the item
 Item *Grid::PlaceItem(Item *to_place) {
@@ -570,32 +632,52 @@ Item *Grid::PlaceItem(Item *to_place) {
     bool found = false;
     int drop_x = 0;
     int drop_y = 0;
+    // item to merge with if we're stacking it
+    Item *merge_with = NULL;
+    // skip grid squares that place the item beyond grid bounds
     const int limit_x = grid_size_x - to_place->pos.x2;
     const int limit_y = grid_size_y - to_place->pos.y2;
+    // we check every grid square
     for(drop_y = 0; drop_y <= limit_y ; drop_y++) {
         for(drop_x = 0; drop_x <= limit_x; drop_x++) {
             int collides_with = 0;
-            // check how many items it collides with
             for(auto& item : items) {
-                if(rectIntersect(item->pos.x1 * 10,
-                                 item->pos.y1 * 10,
-                                 item->pos.x2 * 10,
-                                 item->pos.y2 * 10,
-                                 drop_x * 10,
-                                 drop_y * 10,
-                                 to_place->pos.x2 * 10,
-                                 to_place->pos.y2 * 10)) {
+                // check if we can stack it with an existing item
+                if(PlaceItemWantsStacking == true) {
+                    // if this is the same item type
+                    if(item->info_index == to_place->info_index) {
+                        // check if we can add it to the stack
+                        if(item->cur_stack < g.item_info[item->info_index].maxStack) {
+                            if(item != to_place) {
+                                // don't merge with yourself
+                                merge_with = item;
+                                found = true;
+                                goto done;
+                            }
+                        }
+                    }
+                }
+
+                // check how many items it collides with
+                if(rectIntersect(item->pos.x1 * grid_px_x,
+                                 item->pos.y1 * grid_px_y,
+                                 item->pos.x2 * grid_px_x,
+                                 item->pos.y2 * grid_px_y,
+                                 drop_x * grid_px_x,
+                                 drop_y * grid_px_y,
+                                 to_place->pos.x2 * grid_px_x,
+                                 to_place->pos.y2 * grid_px_y)) {
                     collides_with += 1;
                 }
             }
             if(collides_with == 0) {
                 // it doesn't collide with any items, so
                 // check the right and bottom bounds of the grid
-                if(pos.x1 + (drop_x + to_place->pos.x2) * 10 <= pos.x2 &&
-                   pos.y1 + (drop_y + to_place->pos.y2) * 10 <= pos.y2) {
-                    found = true;
-                    goto done;
-                }
+                // if(pos.x1 + (drop_x + to_place->pos.x2) * grid_px_x <= pos.x2 &&
+                //    pos.y1 + (drop_y + to_place->pos.y2) * grid_px_y <= pos.y2) {
+                found = true;
+                goto done;
+                // }
             }
         }
     }
@@ -603,7 +685,24 @@ Item *Grid::PlaceItem(Item *to_place) {
     if(found == true) {
         to_place->pos.x1 = drop_x;
         to_place->pos.y1 = drop_y;
-
+        // if we're merging it
+        if(merge_with != NULL) {
+            // check if we can merge all of it into the item
+            if(merge_with->cur_stack + to_place->cur_stack <= g.item_info[to_place->info_index].maxStack) {
+                merge_with->cur_stack += to_place->cur_stack;
+                // if so, delete the item
+                delete to_place;
+                return NULL;
+            } else {
+                // otherwise we still have some number of them to place
+                int moved = g.item_info[to_place->info_index].maxStack - merge_with->cur_stack;
+                merge_with->cur_stack += moved;
+                to_place->cur_stack -= moved;
+                // recursively place the rest
+                PlaceItem(to_place);
+            }
+            return NULL;
+        }
         // clear the grid sort button if the new grid isn't a hardpoint
         if(to_place->storage != NULL &&
            this->hpinfo == NULL) {
@@ -644,7 +743,7 @@ Item::~Item() {
 
 void Item::resetHardpointPos(void) {
     if(parent != NULL) {
-        storage->pos.x1 = parent->pos.x1 + pos.x2 * 10 + 10;
+        storage->pos.x1 = parent->pos.x1 + pos.x2 * Grid::grid_px_x + 10;
         storage->pos.y1 = parent->pos.y1;
         storage->resetPos();
         storage->gsb->reset();
@@ -709,22 +808,22 @@ Character::Character(void) {
     this->n = 0;
     this->sprite = g.bitmaps[21];
 
-    int off_x = 350;
-    int off_y = 100;
-    neck = new Grid (off_x, off_y - 50, 4, 4, g.neck);
-    head = new Grid (off_x, off_y, 4, 4, g.head);
-    right_shoulder = new Grid (off_x - 50, off_y, 4, 4, g.right_shoulder);
-    left_shoulder = new Grid (off_x + 50, off_y, 4, 4, g.left_shoulder);
-    torso = new Grid (off_x - 15, off_y + 50, 7, 8, g.torso);
-    right_hand = new Grid (off_x - 65, off_y + 100, 4, 4, g.right_hand_hold);
-    left_hand = new Grid (off_x + 65, off_y + 100, 4, 4, g.left_hand_hold);
-    legs = new Grid (off_x - 15, off_y + 140, 7, 10, g.legs);
-    right_foot = new Grid (off_x - 25, off_y + 250, 4, 4, g.right_foot);
-    left_foot = new Grid (off_x + 25, off_y + 250, 4, 4, g.left_foot);
-    right_hand_hold = new Grid (530, 175, 4, 4, g.right_hand_hold);
-    left_hand_hold = new Grid (530, 300, 4, 4, g.left_hand_hold);
-    vehicle = new Grid(400, 150, 4, 4, g.vehicle);
-    back = new Grid(530, 50, 4, 4, g.back);
+    int off_x = 600;
+    int off_y = 85;
+    neck = new Grid (off_x - 50, off_y - 75, 2, 2, g.neck);
+    head = new Grid (off_x, off_y - 15, 2, 3, g.head);
+    right_shoulder = new Grid (off_x - 53, off_y + 10, 2, 2, g.right_shoulder);
+    left_shoulder = new Grid (off_x + 53, off_y + 10, 2, 2, g.left_shoulder);
+    torso = new Grid (off_x - 22, off_y + 50, 5, 9, g.torso);
+    right_hand = new Grid (off_x - 75, off_y + 190, 2, 2, g.right_hand_hold);
+    left_hand = new Grid (off_x + 85, off_y + 190, 2, 2, g.left_hand_hold);
+    legs = new Grid (off_x - 12, off_y + 220, 4, 11, g.legs);
+    right_foot = new Grid (off_x - 25, off_y + 430, 2, 2, g.right_foot);
+    left_foot = new Grid (off_x + 30, off_y + 430, 2, 2, g.left_foot);
+    right_hand_hold = new Grid (770, 210, 2, 2, g.right_hand_hold);
+    left_hand_hold = new Grid (770, 400, 2, 2, g.left_hand_hold);
+    vehicle = new Grid(500, 150, 2, 2, g.vehicle);
+    back = new Grid(770, 10, 2, 2, g.back);
 
     inventory_hardpoints.push_back(right_hand_hold);
     inventory_hardpoints.push_back(left_hand_hold);
@@ -1755,7 +1854,7 @@ void MessageLog::draw(void) {
 
     int off_y = 8;
     int lines_n = lines.size();
-    int start = max(0, lines_n - 23);
+    int start = max(0, lines_n - 16);
     for(int i = start; i < lines_n; i++) {
         al_draw_text(font, g.color_grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
         off_y = off_y + 8;
@@ -1917,10 +2016,10 @@ void GridSystem::drawItemTooltip(void) {
     // this should probably work some other way
     for(auto& grid : grids) {
         for(auto& item : grid->items) {
-            if(item->parent->pos.x1 + item->pos.x1 * 10 <= g.mouse_x &&
-               item->parent->pos.y1 + item->pos.y1 * 10 <= g.mouse_y &&
-               item->parent->pos.x1 + (item->pos.x1 + item->pos.x2) * 10 >= g.mouse_x &&
-               item->parent->pos.y1 + (item->pos.y1 + item->pos.y2) * 10 >= g.mouse_y) {
+            if(item->parent->pos.x1 + item->pos.x1 * Grid::grid_px_x <= g.mouse_x &&
+               item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= g.mouse_y &&
+               item->parent->pos.x1 + (item->pos.x1 + item->pos.x2) * Grid::grid_px_x >= g.mouse_x &&
+               item->parent->pos.y1 + (item->pos.y1 + item->pos.y2) * Grid::grid_px_y >= g.mouse_y) {
 
                 al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
                                          g.mouse_x + 150, g.mouse_y + 48, g.color_black);
@@ -1929,7 +2028,7 @@ void GridSystem::drawItemTooltip(void) {
                 int weight = g.item_info[item->info_index].weight;
                 if(weight > 0) {
                     al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
-                                  0, "%d g", weight);
+                                  0, "%d g", weight * item->cur_stack);
                 }
 
                 // if the item has a grid, draw it under the text
@@ -1969,7 +2068,12 @@ void GridSystem::gsMouseDownEvent() {
                 MouseAutoMoveItemToTarget();
             }
         }
+    } else if(g.mouse_button == 4) {
+        for(auto& grid : grids) {
+            grid->unstack_item(g.mouse_x, g.mouse_y);
+        }
     }
+
     // check if we're clicking the sort buttons
     for(auto& grid : grids) {
         if(grid->gsb == NULL)
@@ -1998,9 +2102,9 @@ void GridSystem::GrabItem() {
  got_it:
     held = i;
     g.hold_off_x =
-        g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * 10);
+        g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
     g.hold_off_y =
-        g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * 10);
+        g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * Grid::grid_px_y);
     held->old_parent = held->parent;
     held->parent = NULL;
 
@@ -2046,32 +2150,37 @@ void GridSystem::addStorageGrid(void) {
     }
 }
 
+/*
+  TODO: this function is too big
+*/
 void GridSystem::gsMouseUpEvent() {
     // are we holding an item?
     if(held == NULL)
         return;
 
+    // proposed position to drop it into relative to the
+    // grid currently being examined
+    int drop_x = 0;
+    int drop_y = 0;
+
+    Item *merge_with = NULL;
+    Grid *merge_grid = NULL;
     // find a grid to drop it on
     int i = 0;
     for(auto& grid : grids) {
-        // proposed position to drop it into relative to the
-        // grid currently being examined
-        int drop_x = 0;
-        int drop_y = 0;
-
         // the bounds check depends if the grid is a real grid
         // or a hardpoint
         bool in_bounds = false;
         if(grid->hpinfo == NULL) {
             // grid
-            drop_x = ((g.mouse_x - g.hold_off_x) - grid->pos.x1) / 10;
-            drop_y = ((g.mouse_y - g.hold_off_y) - grid->pos.y1) / 10;
+            drop_x = ((g.mouse_x - g.hold_off_x) - grid->pos.x1) / Grid::grid_px_x;
+            drop_y = ((g.mouse_y - g.hold_off_y) - grid->pos.y1) / Grid::grid_px_y;
             in_bounds =
                 g.mouse_x - g.hold_off_x >= grid->pos.x1 &&
                 g.mouse_y - g.hold_off_y >= grid->pos.y1 &&
-                g.mouse_x - g.hold_off_x + 10 * held->pos.x2
+                g.mouse_x - g.hold_off_x + Grid::grid_px_x * held->pos.x2
                 <= grid->pos.x2 + 8 &&
-                g.mouse_y - g.hold_off_y + 10 * held->pos.y2
+                g.mouse_y - g.hold_off_y + Grid::grid_px_y * held->pos.y2
                 <= grid->pos.y2 + 8;
         }
         else {
@@ -2087,20 +2196,31 @@ void GridSystem::gsMouseUpEvent() {
             // is this a real grid?
             if(grid->hpinfo == NULL) {
                 // bounds check items in grid
+                int blocks = 0;
                 for(auto& item : grid->items) {
-                    if(rectIntersect(item->pos.x1 * 10,
-                                     item->pos.y1 * 10,
-                                     item->pos.x2 * 10,
-                                     item->pos.y2 * 10,
-                                     drop_x * 10,
-                                     drop_y * 10,
-                                     held->pos.x2 * 10,
-                                     held->pos.y2 * 10)) {
+                    if(rectIntersect(item->pos.x1 * Grid::grid_px_x,
+                                     item->pos.y1 * Grid::grid_px_y,
+                                     item->pos.x2 * Grid::grid_px_x,
+                                     item->pos.y2 * Grid::grid_px_y,
+                                     drop_x * Grid::grid_px_x,
+                                     drop_y * Grid::grid_px_y,
+                                     held->pos.x2 * Grid::grid_px_x,
+                                     held->pos.y2 * Grid::grid_px_y)) {
+                        blocks++;
                         // there's an item there already:
                         // abort
-                        goto blocked;
+                        if(item->info_index != held->info_index)
+                            goto blocked;
+                        if(item->pos.x1 == drop_x &&
+                           item->pos.y1 == drop_y) {
+                            merge_with = item;
+                            merge_grid = grid;
+                            goto stack_it;
+                        }
                     }
                 }
+                if(blocks > 0)
+                    goto blocked;
             } // or a hardpoint?
             else if(grid->hpinfo->maxItems <= (int)grid->items.size()) {
                 // too many items on the hardpoint
@@ -2145,6 +2265,42 @@ void GridSystem::gsMouseUpEvent() {
     char b[40];
     snprintf(b, sizeof(b), "Blocked on grid %d", i);
     g.AddMessage(b);
+    return;
+
+ stack_it:
+    held->parent = merge_grid;
+    int old_x1 = held->pos.x1;
+    int old_y1 = held->pos.y1;
+    held->pos.x1 = drop_x;
+    held->pos.y1 = drop_y;
+    if(merge_with != NULL) {
+        // check if we can merge all of it into the item
+        if(merge_with->cur_stack + held->cur_stack <= g.item_info[held->info_index].maxStack) {
+            merge_with->cur_stack += held->cur_stack;
+            // if so, delete the item
+            delete held;
+            held = NULL;
+            return;
+        } else {
+            // otherwise we still have some number of them to place
+            int moved = g.item_info[held->info_index].maxStack - merge_with->cur_stack;
+            merge_with->cur_stack += moved;
+            held->cur_stack -= moved;
+            // place the rest
+            Item *returned = merge_grid->PlaceItem(held);
+            // if we can't place the rest, sent it back whereever it came from
+            if(returned != NULL) {
+                /*
+                  TODO: is this correct in all cases?
+                */
+                held->pos.x1 = old_x1;
+                held->pos.y1 = old_y1;
+                held->parent = held->old_parent;
+                held->old_parent->items.push_back(held);
+            }
+        }
+        return;
+    }
 }
 
 void Grid::draw(void) {
@@ -2184,10 +2340,10 @@ void Item::draw(void) {
 
     if(parent != NULL) {
         // we're on a grid
-        int x1 = parent->pos.x1 + pos.x1 * 10;
-        int y1 = parent->pos.y1 + pos.y1 * 10;
-        int x2 = parent->pos.x1 + (pos.x1 + pos.x2) * 10;
-        int y2 = parent->pos.y1 + (pos.y1 + pos.y2) * 10;
+        int x1 = parent->pos.x1 + pos.x1 * Grid::grid_px_x;
+        int y1 = parent->pos.y1 + pos.y1 * Grid::grid_px_y;
+        int x2 = parent->pos.x1 + (pos.x1 + pos.x2) * Grid::grid_px_x;
+        int y2 = parent->pos.y1 + (pos.y1 + pos.y2) * Grid::grid_px_y;
 
         if(sprite == NULL) {
             al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
@@ -2195,12 +2351,19 @@ void Item::draw(void) {
         }
         else
             al_draw_bitmap(sprite, x1, y1, 0);
+
+        if(cur_stack > 1) {
+            // draw number of stacked items
+            char buf[4];
+            sprintf(buf, "%d", cur_stack);
+            al_draw_text(g.font, g.color_black, x2 - 9, y2 - 9, 0, buf);
+        }
     } else {
         // we're held by the mouse
         int x1 = g.mouse_x - g.hold_off_x;
         int y1 = g.mouse_y - g.hold_off_y;
-        int x2 = g.mouse_x - g.hold_off_x + pos.x2 * 10;
-        int y2 = g.mouse_y - g.hold_off_y + pos.y2 * 10;
+        int x2 = g.mouse_x - g.hold_off_x + pos.x2 * 16;
+        int y2 = g.mouse_y - g.hold_off_y + pos.y2 * 16;
 
         if(sprite == NULL) {
             al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
@@ -2210,14 +2373,37 @@ void Item::draw(void) {
             al_draw_bitmap(sprite, x1, y1, 0);
     }
 }
+/*
+  valgrind reports a loss here
+*/
+void Grid::unstack_item(int x, int y) {
+    int c = 0;
+    for (auto& i : items) {
+        if(i->parent->pos.x1 + i->pos.x1 * grid_px_x <= x &&
+           i->parent->pos.y1 + i->pos.y1 * grid_px_y <= y &&
+           i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * grid_px_x >= x &&
+           i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * grid_px_y >= y) {
+            if(i->cur_stack > 1) {
+                Item *other = new Item (*i);
+                other->cur_stack = i->cur_stack / 2;
+                i->cur_stack = i->cur_stack - other->cur_stack;
+                PlaceItemWantsStacking = false;
+                PlaceItem(other);
+                PlaceItemWantsStacking = true;
+            }
+            return;
+        }
+        c++;
+    }
+}
 
 Item *Grid::grab_item(int x, int y) {
     int c = 0;
     for (auto& i : items) {
-        if(i->parent->pos.x1 + i->pos.x1 * 10 <= x &&
-           i->parent->pos.y1 + i->pos.y1 * 10 <= y &&
-           i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * 10 >= x &&
-           i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * 10 >= y) {
+        if(i->parent->pos.x1 + i->pos.x1 * grid_px_x <= x &&
+           i->parent->pos.y1 + i->pos.y1 * grid_px_y <= y &&
+           i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * grid_px_x >= x &&
+           i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * grid_px_y >= y) {
 
             Item *a = items[c];
             items.erase(items.begin() + c);
@@ -2297,8 +2483,8 @@ struct EncounterUI : public UI {
 };
 
 EncounterGridSystem::EncounterGridSystem() {
-    options = new Grid (105, 300, 30, 16, NULL);
-    selected = new Grid (410, 300, 30, 16, g.encounter_selected);
+    options = new Grid (105, 300, 16, 10, NULL);
+    selected = new Grid (410, 300, 16, 10, g.encounter_selected);
 
     grids.push_back(options);
     grids.push_back(selected);
@@ -2312,6 +2498,8 @@ EncounterGridSystem::EncounterGridSystem() {
 }
 
 EncounterGridSystem::~EncounterGridSystem() {
+    delete options;
+    delete selected;
 }
 
 void runEncounterStep(void);
@@ -2402,7 +2590,7 @@ void EncounterUI::draw(void) {
     al_draw_filled_rectangle(410, 25, 680, 295, g.color_grey2);
     al_draw_filled_rectangle(685, 25, 985, 295, g.color_grey2);
     al_draw_text(g.font, g.color_white, 200, 10, 0,
-                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich");
+                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
     al_draw_bitmap(player->sprite, 120, 40, 0);
     al_draw_bitmap(npc->sprite, 700, 40, 0);
     al_draw_bitmap(cur_tile_sprite, 490, 200, 0);
@@ -2449,8 +2637,8 @@ struct VehicleGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) {
-        al_draw_text(g.font, g.color_white, 80, 35, 0, "Ground:");
-        al_draw_text(g.font, g.color_white, 390, 135, 0, "Vehicle:");
+        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+        al_draw_text(g.font, g.color_white, 500, 135, 0, "Vehicle:");
         GridSystem::draw();
     }
 
@@ -2487,8 +2675,7 @@ struct InventoryGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) {
-        al_draw_text(g.font, g.color_white, 80, 35, 0, "Ground:");
-        al_draw_text(g.font, g.color_white, 350, 35, 0, "You:");
+        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
 
         GridSystem::draw();
     }
@@ -2546,8 +2733,8 @@ ItemsUI::ItemsUI() {
     gridsystem  = new InventoryGridSystem;
 
     ground_next_page = new Button;
-    ground_next_page->pos.x1 = 200;
-    ground_next_page->pos.y1 = 30;
+    ground_next_page->pos.x1 = 485;
+    ground_next_page->pos.y1 = 50;
     ground_next_page->pos.x2 = 20;
     ground_next_page->pos.y2 = 20;
     ground_next_page->up = g.bitmaps[29];
@@ -2555,8 +2742,8 @@ ItemsUI::ItemsUI() {
     ground_next_page->onMouseDown.connect(ptr_fun(InventoryNextGroundPage));
 
     ground_prev_page = new Button;
-    ground_prev_page->pos.x1 = 180;
-    ground_prev_page->pos.y1 = 30;
+    ground_prev_page->pos.x1 = 465;
+    ground_prev_page->pos.y1 = 50;
     ground_prev_page->pos.x2 = 20;
     ground_prev_page->pos.y2 = 20;
     ground_prev_page->up = g.bitmaps[30];
@@ -2592,7 +2779,7 @@ void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
     }
     // we couldn't place it on an existing page
     // make a new grid
-    Grid *new_grid = new Grid (20, 50, 20, 40, NULL);
+    Grid *new_grid = new Grid  (105, 25, 20, 30, NULL);
 
     if(new_grid == NULL) {
         // if we can't allocate any more grids
@@ -2630,18 +2817,20 @@ vector<Grid *> *ground_at_character(Character *character) {
 
     if((*ground).empty()) {
         // create first grid if it doesn't exist
-        Grid *ground_grid = new Grid (20, 50, 20, 40, NULL);
+        Grid *ground_grid = new Grid (105, 25, 20, 30, NULL);
         assert(ground_grid != NULL);
         ground->push_back(ground_grid);
         // test items
         Item *crowbar = new Item("Crowbar");
         Item *shopping_trolley1 = new Item("Shopping trolley");
-        Item *shopping_trolley2 = new Item("Shopping trolley");
         Item *pill_bottle = new Item("Pill bottle");
+        Item *arrows1 = new Item("Arrow", 4);
+        Item *arrows2 = new Item("Arrow", 3);
         ground_grid->PlaceItem(crowbar);
         ground_grid->PlaceItem(shopping_trolley1);
-        ground_grid->PlaceItem(shopping_trolley2);
         ground_grid->PlaceItem(pill_bottle);
+        ground_grid->PlaceItem(arrows1);
+        ground_grid->PlaceItem(arrows2);
     }
     g.map->tiles[character->n].ground_items = ground;
     return ground;
@@ -2794,6 +2983,8 @@ void load_bitmaps(void) {
     /* 31 */ filenames.push_back("media/items/abstract/flee.png");
     /* 32 */ filenames.push_back("media/items/abstract/single_attack.png");
     /* 33 */ filenames.push_back("media/buttons/confirm.png");
+    /* 34 */ filenames.push_back("media/items/bullets.png");
+    /* 34 */ filenames.push_back("media/items/arrow.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -2904,7 +3095,7 @@ void init_buttons(void) {
 void init_messagelog(void) {
     g.log = new(MessageLog);
     g.log->pos.x1 = 100;
-    g.log->pos.y1 = 520;
+    g.log->pos.y1 = 570;
     g.log->pos.x2 = 1080;
     g.log->pos.y2 = 200;
     g.log->background = g.bitmaps[16];
@@ -2912,7 +3103,7 @@ void init_messagelog(void) {
 }
 
 void init_tilemap(void) {
-    g.map = new TileMap (8, 8, 16, 16);
+    g.map = new TileMap (200, 200, 16, 16);
 
     TileInfo i;
     // grass
@@ -2997,6 +3188,10 @@ void init_characters(void) {
         first_aid_kit1->storage->PlaceItem(pill_bottle2);
         Item *pill_bottle3 = new Item("Pill bottle");
         first_aid_kit2->storage->PlaceItem(pill_bottle3);
+        Item *bullets1 = new Item("Bullet", 5);
+        backpack->storage->PlaceItem(bullets1);
+        Item *bullets2 = new Item("Bullet", 3);
+        backpack->storage->PlaceItem(bullets2);
     }
 
     g.map->updateCharsByPos();
@@ -3100,6 +3295,7 @@ int main(void) {
     g.color_grey = al_color_name("grey");
     g.color_grey2 = al_map_rgb(200, 200, 200);
     g.color_grey3 = al_map_rgb(220, 220, 220);
+    g.color_darkgrey = al_map_rgb(100, 100, 110);
     g.color_black = al_map_rgb(0, 0, 0);
     g.color_white = al_map_rgb(255, 255, 255);
     g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
