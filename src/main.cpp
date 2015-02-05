@@ -37,6 +37,7 @@ struct MiniMapUI;
 struct ItemsUI;
 struct VehicleUI;
 struct EncounterUI;
+struct CraftingUI;
 struct HardpointInfo;
 struct ItemInfo;
 
@@ -96,7 +97,7 @@ struct Game {
     MainMapUI *ui_MainMap;
     MiniMapUI *ui_MiniMap;
     UI *ui_Skills;         // not implemented
-    UI *ui_Crafting;       // not implemented
+    CraftingUI *ui_Crafting;
     ItemsUI *ui_Items;
     UI *ui_Conditions;     // not implemented
     UI *ui_Camp;           // not implemented
@@ -133,6 +134,16 @@ struct Rect {
 
     void print(void);
 };
+
+__attribute__ ((const))
+bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
+                   int b_x, int b_y, int b_width, int b_height) {
+    return
+        !(b_x >= a_x + a_width
+          || b_x + b_width <= a_x
+          || b_y >= a_y + a_height
+          || b_y + b_height <= a_y);
+}
 
 void Rect::print(void) {
     printf("x1: %f y1: %f x2: %f y2: %f\n", x1, y1, x2, y2);
@@ -207,8 +218,8 @@ void init_iteminfo(void) {
 
     /* 04 */
     tmp.name = "Shopping trolley";
-    tmp.grid_size_x = 16;
-    tmp.grid_size_y = 16;
+    tmp.grid_size_x = 12;
+    tmp.grid_size_y = 12;
     tmp.maxStack = 1;
     tmp.weight = 5000;
     tmp.sprite = g.bitmaps[26];
@@ -606,9 +617,6 @@ void Grid::RemoveItem(Item *to_remove) {
     assert(found == true);
     items.erase(items.begin() + c);
 }
-
-bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
-                   int b_x, int b_y, int b_width, int b_height);
 
 /*
   TODO: this function is too big
@@ -1047,9 +1055,16 @@ Button::Button() {
 struct GridSystem : public Widget {
     vector<Grid *> grids;
 
+    // grids for which we can't manually take or place items (the crafting results)
+    vector<Grid *> interaction_forbidden;
+
     Item *held;
     bool auto_move_to_ground;
     Grid *auto_target;
+
+    // fires when an item -may- have been placed or removed
+    // used to recompute crafting output
+    signal<void> change;
 
     GridSystem(void) {
         auto_move_to_ground = false;
@@ -1073,8 +1088,14 @@ struct GridSystem : public Widget {
         }
     }
 
-    void mouseDown(void) { gsMouseDownEvent(); }
-    void mouseUp(void) { gsMouseUpEvent(); }
+    void mouseDown(void) {
+        gsMouseDownEvent();
+        change.emit();
+    }
+    void mouseUp(void) {
+        gsMouseUpEvent();
+        change.emit();
+    }
     void keyDown(void);
     void hoverOver(void);
 
@@ -1092,7 +1113,6 @@ struct GridSystem : public Widget {
     void AutoMoveItem(Item *item, Grid *from, Grid *to);
     void MouseAutoMoveItemToGround();
     void MouseAutoMoveItemToTarget();
-    void AutoMoveAllItems(Grid *from, Grid *to);
 };
 
 vector<Grid *> *ground_at_player(void);
@@ -1103,11 +1123,6 @@ void GridSystem::keyDown(void) {
 void GridSystem::AutoMoveItem(Item *item, Grid *from, Grid *to) {
     from->RemoveItem(item);
     to->PlaceItem(item);
-}
-
-void GridSystem::AutoMoveAllItems(Grid *from, Grid *to) {
-    for(auto& item : from->items)
-        AutoMoveItem(item, from, to);
 }
 
 // moves items under mouse cursor to the ground, if possible
@@ -1132,6 +1147,7 @@ void GridSystem::MouseAutoMoveItemToGround() {
     assert(from != NULL);
 
     PlaceItemOnMultiGrid(ground, item);
+    change.emit();
     reset();
 }
 
@@ -2092,10 +2108,20 @@ void GridSystem::GrabItem() {
     // does any grid contain an item at that position?
     Item *i = NULL;
     for(auto& grid : grids) {
-        i = grid->grab_item(g.mouse_x, g.mouse_y);
-        if(i != NULL)
-            goto got_it;
+        bool skip = false;
+        for(auto& forbidden : interaction_forbidden) {
+            if(grid == forbidden) {
+                // we can't grab items out of forbidden grids
+                skip = true;
+            }
+        }
+        if(skip == false) {
+            i = grid->grab_item(g.mouse_x, g.mouse_y);
+            if(i != NULL)
+                goto got_it;
+        }
     }
+
     // no
     return;
 
@@ -2125,16 +2151,6 @@ void GridSystem::GrabItem() {
 
         held->storage->gsb_displayed = false;
     }
-}
-
-__attribute__ ((const))
-bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
-                   int b_x, int b_y, int b_width, int b_height) {
-    return
-        !(b_x >= a_x + a_width
-          || b_x + b_width <= a_x
-          || b_y >= a_y + a_height
-          || b_y + b_height <= a_y);
 }
 
 // adds the storage grid of the held item (if there is one)
@@ -2193,6 +2209,13 @@ void GridSystem::gsMouseUpEvent() {
         }
 
         if(in_bounds) {
+            // we can't drop stuff on some grids
+            for(auto& forbidden : interaction_forbidden) {
+                if(grid == forbidden) {
+                    goto blocked;
+                }
+            }
+
             // is this a real grid?
             if(grid->hpinfo == NULL) {
                 // bounds check items in grid
@@ -2273,43 +2296,48 @@ void GridSystem::gsMouseUpEvent() {
     int old_y1 = held->pos.y1;
     held->pos.x1 = drop_x;
     held->pos.y1 = drop_y;
-    if(merge_with != NULL) {
-        // check if we can merge all of it into the item
-        if(merge_with->cur_stack + held->cur_stack <= g.item_info[held->info_index].maxStack) {
-            merge_with->cur_stack += held->cur_stack;
-            // if so, delete the item
-            delete held;
-            held = NULL;
-            return;
-        } else {
-            // otherwise we still have some number of them to place
-            int moved = g.item_info[held->info_index].maxStack - merge_with->cur_stack;
-            merge_with->cur_stack += moved;
-            held->cur_stack -= moved;
-            // place the rest
-            Item *returned = merge_grid->PlaceItem(held);
-            // if we can't place the rest, sent it back whereever it came from
-            if(returned != NULL) {
-                /*
-                  TODO: is this correct in all cases?
-                */
-                held->pos.x1 = old_x1;
-                held->pos.y1 = old_y1;
-                held->parent = held->old_parent;
-                held->old_parent->items.push_back(held);
-            }
-        }
+
+    assert(merge_with != NULL);
+
+    // check if we can merge all of it into the item
+    if(merge_with->cur_stack + held->cur_stack <= g.item_info[held->info_index].maxStack) {
+        merge_with->cur_stack += held->cur_stack;
+        // if so, delete the item
+        delete held;
+        held = NULL;
         return;
+    } else {
+        // otherwise we still have some number of them to place
+        int moved = g.item_info[held->info_index].maxStack - merge_with->cur_stack;
+        merge_with->cur_stack += moved;
+        held->cur_stack -= moved;
+        // place the rest
+        Item *returned = merge_grid->PlaceItem(held);
+        // if we can't place the rest, sent it back whereever it came from
+        if(returned != NULL) {
+            /*
+              TODO: is this correct in all cases?
+            */
+            held->pos.x1 = old_x1;
+            held->pos.y1 = old_y1;
+            held->parent = held->old_parent;
+            held->old_parent->items.push_back(held);
+        }
     }
+    return;
 }
 
 void Grid::draw(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
     if(hpinfo == NULL) {
-        for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x)
+        for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x) {
             al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
-        for (int y = pos.y1 + grid_px_y; y < pos.y2; y = y + grid_px_y)
+            // al_draw_line(x - 9, pos.y1, x - 9, pos.y2, g.color_grey, 1);
+        }
+        for (int y = pos.y1 + grid_px_y; y < pos.y2; y = y + grid_px_y) {
             al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
+            // al_draw_line(pos.x1, y - 9, pos.x2, y - 9, g.color_grey, 1);
+        }
     }
     if(gsb_displayed == true)
         gsb->draw();
@@ -2404,7 +2432,6 @@ Item *Grid::grab_item(int x, int y) {
            i->parent->pos.y1 + i->pos.y1 * grid_px_y <= y &&
            i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * grid_px_x >= x &&
            i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * grid_px_y >= y) {
-
             Item *a = items[c];
             items.erase(items.begin() + c);
             return a;
@@ -2434,17 +2461,181 @@ Character *next(void) {
 }
 
 void end_turn() {
+    g.map->player->nextMove += 1000;
+
     Character *c;
     // process characters until it's the player's turn again
     while((c = next()) != g.map->player) {
         cout << c << ": " << c->nextMove << endl;
         c->randomMove();
-        if(rand() % 10 == 0) {
-            g.map->addRandomCharacter();
-        }
     }
 
     cout << "turn ends with " << (int)g.map->characters.size() << " characters" << endl; g.AddMessage("Turn ends.");
+}
+
+struct CraftingGridSystem : public GridSystem {
+    Grid *ingredients;
+    Grid *results;
+
+    int current_ground_page;
+
+    CraftingGridSystem();
+    ~CraftingGridSystem();
+
+    void reset(void);
+    void exit(void);
+};
+
+// dump ingredients onto the ground
+void CraftingGridSystem::exit(void) {
+    while(ingredients->items.empty() == false) {
+        Item *moving = ingredients->items.front();
+        PlaceItemOnMultiGrid(ground_at_player(), moving);
+        ingredients->RemoveItem(moving);
+    }
+}
+
+struct CraftingUI : public UI {
+    CraftingGridSystem *craftGrids;
+    Button *button_confirm;
+    Button *next_recipe;
+    Button *prev_recipe;
+    int current_recipe;
+
+    CraftingUI();
+    ~CraftingUI();
+
+    void draw(void) override;
+    void setup(void);
+};
+
+void CraftingUI::draw(void) {
+    al_draw_text(g.font, g.color_white, 200, 8, 0, "ground:");
+    al_draw_text(g.font, g.color_white, 700, 8, 0, "ingredients:");
+    al_draw_text(g.font, g.color_white, 700, 295, 0, "preview:");
+    UI::draw();
+}
+
+// count the total number of item of type, taking into account stacking
+int countItemsOfType(Grid* grid, int searching_for) {
+    int c = 0;
+    for(auto& item : grid->items) {
+        if(item->info_index == searching_for) {
+            c += item->cur_stack;
+        }
+    }
+    cout << searching_for << " " << c << endl;
+    return c;
+}
+
+struct Recipe {
+    string name;
+    int time_cost;
+    // item info_index and amount
+    vector<pair<int, int>> ingredients;
+    // item info_index and amount
+    vector<pair<int, int>> results;
+    // tools are ingredients that aren't consumed
+    // item info_index
+    vector<int> tools;
+
+    bool player_has_ingredients(Grid *on);
+};
+
+vector<Recipe *> recipes;
+
+bool Recipe::player_has_ingredients(Grid *on) {
+    for(auto& tool : tools) {
+        bool there = false;
+        for(auto& item : on->items) {
+            if(item->info_index == tool) {
+                there = true;
+            }
+        }
+        if(there == false) {
+            return false;
+        }
+    }
+    for(auto& ingredient : ingredients) {
+        if(countItemsOfType(on, ingredient.first) < ingredient.second) {
+            return false;
+        }
+    }
+    return true;
+}
+
+vector<Recipe *> find_craftable_recipe(Grid *ingredients) {
+    vector<Recipe *> ret;
+
+    for(auto& recipe : recipes) {
+        if(recipe->player_has_ingredients(ingredients) == true)
+            ret.push_back(recipe);
+    }
+    return ret;
+}
+
+void remove_amount_from_grid(Grid *ingredients, int index, int amount) {
+    // remove items' stack size
+    for(auto& item : ingredients->items) {
+        if(item->info_index == index) {
+            int removed = min(amount, item->cur_stack);
+            item->cur_stack -= removed;
+            amount -= removed;
+            if(amount == 0) {
+                break;
+            }
+        }
+    }
+
+    assert(amount == 0);
+
+    // remove items that have 0 stack size
+    vector<Item *>::iterator it;
+    for(it = ingredients->items.begin(); it != ingredients->items.end();) {
+        if((*it)->cur_stack <= 0) {
+            delete *it;
+            it = ingredients->items.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+void create_results(Recipe *recipe) {
+    // create and add crafted items to the ground
+    for(auto& result : recipe->results) {
+        int amount = result.second;
+        while(amount > 0) {
+            Item *crafted = new Item (result.first);
+            PlaceItemOnMultiGrid(ground_at_player(), crafted);
+            amount--;
+        }
+    }
+    // remove ingredients
+    for(auto& ingredient : recipe->ingredients) {
+        remove_amount_from_grid(g.ui_Crafting->craftGrids->ingredients,
+                                ingredient.first,
+                                ingredient.second);
+    }
+}
+
+void init_recipes(void) {
+    Recipe *two_arrows_to_kit = new Recipe;
+    two_arrows_to_kit->name = "First aid kit"; 
+    two_arrows_to_kit->time_cost = 1234;
+    two_arrows_to_kit->ingredients.push_back(make_pair(9, 2));
+    two_arrows_to_kit->tools.push_back(3);
+    two_arrows_to_kit->results.push_back(make_pair(2, 1));
+
+    Recipe *shopping_trolley_to_3crowbars = new Recipe;
+    shopping_trolley_to_3crowbars->name = "Crowbars";
+    shopping_trolley_to_3crowbars->time_cost = 1234;
+    shopping_trolley_to_3crowbars->ingredients.push_back(make_pair(4, 1));
+    shopping_trolley_to_3crowbars->results.push_back(make_pair(3, 3));
+
+    recipes.push_back(two_arrows_to_kit);
+    recipes.push_back(shopping_trolley_to_3crowbars);
 }
 
 struct MainMapUI : public UI {
@@ -2456,6 +2647,127 @@ struct MiniMapUI : public UI {
     MiniMapUI();
     ~MiniMapUI();
 };
+
+CraftingGridSystem::CraftingGridSystem() {
+    ingredients = new Grid(500, 25, 33, 12, NULL);
+    results = new Grid(500, 310, 33, 12, NULL);
+    current_ground_page = 0;
+}
+
+CraftingGridSystem::~CraftingGridSystem() {
+    delete ingredients;
+    delete results;
+}
+
+void runCrafting(void);
+
+void updateCraftingOutput(void) {
+    cout << "something changed! maybe" << endl;
+
+    Grid *results = g.ui_Crafting->craftGrids->results;
+
+    // delete the items on the output grid
+    vector<Item *>::iterator it;
+    for(it = results->items.begin(); it != results->items.end();) {
+        delete *it;
+        it = results->items.erase(it);
+    }
+
+    if(g.ui_Crafting->craftGrids->ingredients->items.empty() == true)
+        return;
+
+    vector<Recipe *> rs = find_craftable_recipe(g.ui_Crafting->craftGrids->ingredients);
+
+    if(rs.empty())
+        return;
+
+    vector<pair<int, int>> recipe_output = rs.front()->results;
+
+    for(auto& result : recipe_output) {
+        int amount = result.second;
+        while(amount > 0) {
+            Item *crafted = new Item (result.first);
+            results->PlaceItem(crafted);
+            amount--;
+        }
+    }
+}
+
+CraftingUI::CraftingUI() {
+    craftGrids = new CraftingGridSystem;
+    craftGrids->change.connect(ptr_fun(updateCraftingOutput));
+
+    button_confirm = new Button;
+    button_confirm->pos.x1 = 500;
+    button_confirm->pos.y1 = 260;
+    button_confirm->pos.x2 = 75;
+    button_confirm->pos.y2 = 45;
+    button_confirm->up = g.bitmaps[33];
+    button_confirm->down = NULL;
+    button_confirm->onMouseDown.connect(ptr_fun(runCrafting));
+
+    setup();
+}
+
+CraftingUI::~CraftingUI() {
+}
+
+void CraftingGridSystem::reset(void) {
+    ingredients->items.clear();
+    results->items.clear();
+    interaction_forbidden.clear();
+
+    grids.clear();
+    grids.push_back(ingredients);
+    grids.push_back(results);
+    vector<Grid *> *ground = ground_at_player();
+    (*ground)[current_ground_page]->gsb_displayed = true;
+    grids.push_back((*ground)[current_ground_page]);
+    interaction_forbidden.push_back(results);
+
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+
+    countTotalItems();
+    GridSystem::reset();
+}
+
+void CraftingUI::setup(void) {
+    widgets.clear();
+    widgets.push_back(button_confirm);
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_endturn);
+
+    craftGrids->reset();
+
+    widgets.push_back(craftGrids);
+}
+
+void runCrafting(void) {
+    Grid *in = g.ui_Crafting->craftGrids->ingredients;
+    // Grid *out = g.ui_Crafting->craftGrids->results;
+
+    cout << "hello" << endl;
+
+    vector<Recipe *> rs = find_craftable_recipe(in);
+    if(!rs.empty()) {
+        cout << "created something" << endl;
+        create_results(rs.front());
+        g.AddMessage("Crafted " + rs.front()->name);
+    }
+
+    updateCraftingOutput();
+}
 
 struct EncounterGridSystem : public GridSystem {
     Grid *options;
@@ -2904,11 +3216,15 @@ void main_buttons_update(void) {
         g.button_Items->pressed = true;
     else if(g.ui == g.ui_Vehicle)
         g.button_Vehicle->pressed = true;
+    else if(g.ui == g.ui_Crafting)
+        g.button_Crafting->pressed = true;
 }
 
 // these could probably be a single function
 void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MainMap;
         g.color_bg = g.color_black;
     }
@@ -2917,6 +3233,8 @@ void button_MainMap_press(void) {
 
 void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
         g.ui_Items->gridsystem->reset();
         g.ui = g.ui_Items;
         g.color_bg = g.color_grey;
@@ -2926,6 +3244,8 @@ void button_Items_press(void) {
 
 void button_Vehicle_press(void) {
     if(g.ui != g.ui_Vehicle) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
         g.ui_Vehicle->gridsystem->reset();
         g.ui = g.ui_Vehicle;
         g.color_bg = g.color_grey;
@@ -2935,8 +3255,19 @@ void button_Vehicle_press(void) {
 
 void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
         g.minimap->recreate();
         g.ui = g.ui_MiniMap;
+        g.color_bg = g.color_grey;
+    }
+    main_buttons_update();
+}
+
+void button_Crafting_press(void) {
+    if(g.ui != g.ui_Crafting) {
+        g.ui_Crafting->craftGrids->reset();
+        g.ui = g.ui_Crafting;
         g.color_bg = g.color_grey;
     }
     main_buttons_update();
@@ -3042,6 +3373,7 @@ void init_buttons(void) {
     g.button_Crafting->pos.y2 = 60;
     g.button_Crafting->up = g.bitmaps[6];
     g.button_Crafting->down = g.bitmaps[7];
+    g.button_Crafting->onMouseDown.connect(ptr_fun(button_Crafting_press));
 
     // right
     g.button_Items->pos.x1 = 1180;
@@ -3310,13 +3642,15 @@ int main(void) {
     init_buttons();
     init_messagelog();
     init_minimap();
+    init_recipes();
 
     {
-        g.ui_MainMap = new(MainMapUI);
-        g.ui_MiniMap = new(MiniMapUI);
-        g.ui_Items   = new(ItemsUI);
-        g.ui_Vehicle = new(VehicleUI);
-        g.ui_Encounter = new(EncounterUI);
+        g.ui_MainMap   = new MainMapUI;
+        g.ui_MiniMap   = new MiniMapUI;
+        g.ui_Items     = new ItemsUI;
+        g.ui_Vehicle   = new VehicleUI;
+        g.ui_Encounter = new EncounterUI;
+        g.ui_Crafting  = new CraftingUI;
 
         // start on the main map
         g.ui = g.ui_MainMap;
@@ -3373,9 +3707,9 @@ int main(void) {
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
-                if(i < 1000) {
-                     // end_turn();
-                }
+                // if(i < 1000) {
+                //     end_turn();
+                // }
                 g.ui->update();
             }
             redraw = true;
