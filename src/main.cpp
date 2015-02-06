@@ -38,8 +38,10 @@ struct ItemsUI;
 struct VehicleUI;
 struct EncounterUI;
 struct CraftingUI;
+struct SkillsUI;
 struct HardpointInfo;
 struct ItemInfo;
+struct Item;
 
 // global state
 struct Game {
@@ -74,6 +76,7 @@ struct Game {
     MiniMap *minimap;
     vector<ItemInfo> item_info;
 
+    // Items UI
     HardpointInfo *right_hand_hold;
     HardpointInfo *left_hand_hold;
     HardpointInfo *right_hand;
@@ -88,7 +91,13 @@ struct Game {
     HardpointInfo *right_foot;
     HardpointInfo *left_foot;
     HardpointInfo *vehicle;
+
+    // encounter UI
     HardpointInfo *encounter_selected;
+
+    // condition UI
+    HardpointInfo *medical_upper_torso;
+    HardpointInfo *medical_lower_torso;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -96,7 +105,7 @@ struct Game {
 
     MainMapUI *ui_MainMap;
     MiniMapUI *ui_MiniMap;
-    UI *ui_Skills;         // not implemented
+    SkillsUI *ui_Skills;
     CraftingUI *ui_Crafting;
     ItemsUI *ui_Items;
     UI *ui_Conditions;     // not implemented
@@ -105,6 +114,8 @@ struct Game {
     EncounterUI *ui_Encounter;
 
     MessageLog *log;
+
+    Item *skills[64];
 
     // current mouse state
     int mouse_x;
@@ -160,6 +171,9 @@ struct ItemInfo {
     bool isContainer;
     int container_size_x;
     int container_size_y;
+    bool skill;
+    bool apply_to_body;
+    bool consumed_on_application;
     ALLEGRO_BITMAP *sprite;
 };
 
@@ -175,6 +189,9 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 01 */
@@ -188,6 +205,9 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 8;
     tmp.container_size_y = 8;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 02 */
@@ -201,6 +221,9 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 5;
     tmp.container_size_y = 5;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 03 */
@@ -214,6 +237,9 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 04 */
@@ -227,6 +253,9 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 20;
     tmp.container_size_y = 20;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 05 */
@@ -240,6 +269,9 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 1;
     tmp.container_size_y = 2;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 06 */
@@ -253,6 +285,9 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 07 */
@@ -266,6 +301,9 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 08 */
@@ -279,6 +317,9 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 
     /* 09 */
@@ -292,6 +333,105 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    g.item_info.push_back(tmp);
+
+    /* 10 */
+    tmp.name = "Quick";
+    tmp.grid_size_x = 6;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[36];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = true;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    g.item_info.push_back(tmp);
+
+    /* 11 */
+    tmp.name = "Lockpicking";
+    tmp.grid_size_x = 6;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[37];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = true;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    g.item_info.push_back(tmp);
+
+    /* 12 */
+    tmp.name = "Myopia";
+    tmp.grid_size_x = 6;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[38];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = true;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    g.item_info.push_back(tmp);
+
+    /* 13 */
+    tmp.name = "Metabolism";
+    tmp.grid_size_x = 6;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[39];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = true;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    g.item_info.push_back(tmp);
+
+    /* 14 */
+    tmp.name = "Whiskey";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 5;
+    tmp.weight = 50;
+    tmp.sprite = g.bitmaps[40];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = true;
+    tmp.consumed_on_application = true;
+    g.item_info.push_back(tmp);
+
+    /* 15 */
+    tmp.name = "Clean rag";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 10;
+    tmp.weight = 50;
+    tmp.sprite = g.bitmaps[41];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = true;
+    tmp.consumed_on_application = false;
     g.item_info.push_back(tmp);
 }
 
@@ -341,7 +481,15 @@ struct Item {
 
     void draw(void);
 
-    bool isVehicle(void) { return g.item_info[info_index].isVehicle; }
+    bool isVehicle(void) {
+        return g.item_info[info_index].isVehicle;
+    }
+    bool isMedical(void) {
+        return g.item_info[info_index].apply_to_body;
+    }
+    bool isConsumedOnApplication(void) {
+        return g.item_info[info_index].consumed_on_application;
+    }
 };
 
 struct Widget {
@@ -389,11 +537,13 @@ struct HardpointInfo {
     ALLEGRO_BITMAP *sprite;
     int maxItems;
     bool vehiclepoint;
+    bool medical;
 
     HardpointInfo() {
         vehiclepoint = false;
         maxItems = 1;
         sprite = NULL;
+        medical = false;
     }
 };
 
@@ -413,7 +563,11 @@ void init_hardpointinfo(void) {
     g.left_foot = new HardpointInfo;
     g.vehicle = new HardpointInfo;
     g.encounter_selected = new HardpointInfo;
+    g.medical_upper_torso = new HardpointInfo;
+    g.medical_lower_torso = new HardpointInfo;
 
+    g.medical_upper_torso->medical = true;
+    g.medical_lower_torso->medical = true;
     g.torso->maxItems = 3;
     g.vehicle->vehiclepoint = true;
 }
@@ -452,6 +606,9 @@ struct GridSortButton : public Widget {
 };
 
 struct Grid {
+    /* TODO: since only the player needs this, pos could be moved
+       to GridSystem to save memory
+    */
     // "widget" dimensions
     Rect pos;
 
@@ -461,8 +618,8 @@ struct Grid {
     static const int8_t grid_px_y = 18;
 
     // grid size in grid units
-    int16_t grid_size_x;
-    int16_t grid_size_y;
+    int8_t grid_size_x;
+    int8_t grid_size_y;
 
     vector<Item *> items;
 
@@ -495,7 +652,7 @@ struct Grid {
     }
 
     void draw(void);
-    void drawAt(int x, int y);
+    void drawAt(float x, float y);
 
     void AddItem(Item *item);
     void RemoveItem(Item *item);
@@ -730,6 +887,10 @@ bool Grid::item_compatible(Item *i) {
     if(hpinfo == NULL)
         return true;
 
+    if(hpinfo->medical == true &&
+       i->isMedical() == false)
+        return false;
+    
     // can only place vehicles in vehicle hardpoint
     if(hpinfo->vehiclepoint == true &&
        i->isVehicle() == false)
@@ -777,6 +938,10 @@ struct Character {
     Grid *right_foot;
     Grid *left_foot;
     Grid *vehicle;
+
+    Grid *medical_upper_torso;
+    Grid *medical_lower_torso;
+
     vector<Grid *> inventory_hardpoints;
 
     ALLEGRO_BITMAP *sprite;
@@ -787,7 +952,7 @@ struct Character {
     int current_los_distance;
     int nextMove;
 
-    void update_visibility(void);
+    uint64_t skills;
 
     Character();
 
@@ -799,9 +964,14 @@ struct Character {
         info("~Character()");
     };
 
+    void update_visibility(void);
+
     void draw(void);
     void drawOffset(int offset_x, int offset_y);
 
+    /*
+      TODO why is this here
+    */
     void addInventoryHardpoints(GridSystem *gs);
     void addVehicleHardpoint(GridSystem *gs);
 
@@ -810,7 +980,29 @@ struct Character {
     void drop_all_items(void);
     void randomMove(void);
     void move(int new_n);
+
+    bool hasSkill(int n);
+    void enableSkill(int n);
+    void disableSkill(int n);
 };
+
+bool Character::hasSkill(int n) {
+    return skills & (uint64_t(1) << n);
+}
+
+void Character::enableSkill(int n) {
+    skills |= uint64_t(1) << n;
+}
+
+void Character::disableSkill(int n) {
+    skills &= ~(uint64_t(1) << n);
+}
+
+bool isCraftingSkill(int n) {
+    return
+        n == 1 || // lockpicking
+        n == 1;
+}
 
 Character::Character(void) {
     this->n = 0;
@@ -833,6 +1025,9 @@ Character::Character(void) {
     vehicle = new Grid(500, 150, 2, 2, g.vehicle);
     back = new Grid(770, 10, 2, 2, g.back);
 
+    medical_upper_torso = new Grid(500, 50, 2, 2, g.medical_upper_torso);
+    medical_lower_torso = new Grid(500, 100, 2, 2, g.medical_lower_torso);
+    
     inventory_hardpoints.push_back(right_hand_hold);
     inventory_hardpoints.push_back(left_hand_hold);
     inventory_hardpoints.push_back(right_hand);
@@ -850,6 +1045,9 @@ Character::Character(void) {
     current_los_distance = 3;
     currently_seeing.reserve(50);
     nextMove = 1000;
+
+    skills = 0;
+
     info("Character()");
 }
 
@@ -1066,6 +1264,15 @@ struct GridSystem : public Widget {
     // used to recompute crafting output
     signal<void> change;
 
+    // fires when an item is applied to a hardpoint (used for
+    // applying disinfectant to wounds
+    signal<void> applied;
+
+    /*
+      TODO: work out how to connect signal with parameters
+    */
+    pair<Grid*, Item*> applied_params;
+
     GridSystem(void) {
         auto_move_to_ground = false;
         auto_target = NULL;
@@ -1090,11 +1297,9 @@ struct GridSystem : public Widget {
 
     void mouseDown(void) {
         gsMouseDownEvent();
-        change.emit();
     }
     void mouseUp(void) {
         gsMouseUpEvent();
-        change.emit();
     }
     void keyDown(void);
     void hoverOver(void);
@@ -1147,7 +1352,6 @@ void GridSystem::MouseAutoMoveItemToGround() {
     assert(from != NULL);
 
     PlaceItemOnMultiGrid(ground, item);
-    change.emit();
     reset();
 }
 
@@ -2133,6 +2337,7 @@ void GridSystem::GrabItem() {
         g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * Grid::grid_px_y);
     held->old_parent = held->parent;
     held->parent = NULL;
+    change.emit();
 
     if(held->storage != NULL) {
         // if this item was on a hardpoint, we need to remove
@@ -2208,7 +2413,7 @@ void GridSystem::gsMouseUpEvent() {
                 g.mouse_y <= grid->pos.y2 + 8;
         }
 
-        if(in_bounds) {
+        if(in_bounds == true) {
             // we can't drop stuff on some grids
             for(auto& forbidden : interaction_forbidden) {
                 if(grid == forbidden) {
@@ -2244,8 +2449,9 @@ void GridSystem::gsMouseUpEvent() {
                 }
                 if(blocks > 0)
                     goto blocked;
-            } // or a hardpoint?
-            else if(grid->hpinfo->maxItems <= (int)grid->items.size()) {
+            }
+            // or a hardpoint?
+            else if(grid->hpinfo->maxItems < (int)grid->items.size() + held->cur_stack) {
                 // too many items on the hardpoint
                 goto blocked;
             }
@@ -2254,6 +2460,24 @@ void GridSystem::gsMouseUpEvent() {
             if(grid->item_compatible(held) == false)
                goto blocked;
 
+            // this is for putting water/whiskey on a wound. A charge is
+            // consumed and we emit a signal that an item was applied.
+            if(grid->hpinfo != NULL &&
+               held->isConsumedOnApplication() == true) {
+
+                applied_params = make_pair(grid, held);
+                applied.emit();
+
+                if(held->cur_stack == 1) {
+                    delete held;
+                    held = NULL;
+                    return;
+                } else {
+                    held->cur_stack--;
+                    goto blocked;
+                }
+            }
+
             // we've found the grid and there's nothing blocking
             // the placement there, so drop it
             held->parent = grid;
@@ -2261,7 +2485,7 @@ void GridSystem::gsMouseUpEvent() {
             held->pos.x1 = drop_x;
             held->pos.y1 = drop_y;
             grid->items.push_back(held);
-
+            change.emit();
             addStorageGrid();
 
             char b[60];
@@ -2324,21 +2548,22 @@ void GridSystem::gsMouseUpEvent() {
             held->old_parent->items.push_back(held);
         }
     }
+    change.emit();
     return;
 }
 
 void Grid::draw(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
+
     if(hpinfo == NULL) {
         for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x) {
             al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
-            // al_draw_line(x - 9, pos.y1, x - 9, pos.y2, g.color_grey, 1);
         }
         for (int y = pos.y1 + grid_px_y; y < pos.y2; y = y + grid_px_y) {
             al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
-            // al_draw_line(pos.x1, y - 9, pos.x2, y - 9, g.color_grey, 1);
         }
     }
+
     if(gsb_displayed == true)
         gsb->draw();
 
@@ -2346,21 +2571,14 @@ void Grid::draw(void) {
         i->draw();
 }
 
-void Grid::drawAt(int x, int y) {
-    // well...
-    int old_x1 = pos.x1;
-    int old_y1 = pos.y1;
-    int old_x2 = pos.x2;
-    int old_y2 = pos.y2;
+void Grid::drawAt(float x, float y) {
+    Rect old = pos;
     pos.x1 = x;
     pos.y1 = y;
-    pos.x2 = x + grid_size_x * grid_px_x;
-    pos.y2 = y + grid_size_y * grid_px_y;
+    pos.x2 = x + float(grid_size_x * grid_px_x);
+    pos.y2 = y + float(grid_size_y * grid_px_y);
     draw();
-    pos.x1 = old_x1;
-    pos.y1 = old_y1;
-    pos.x2 = old_x2;
-    pos.y2 = old_y2;
+    pos = old;
 }
 
 void Item::draw(void) {
@@ -2486,20 +2704,35 @@ struct CraftingGridSystem : public GridSystem {
     void exit(void);
 };
 
-// dump ingredients onto the ground
+// clean up the crafting grids when we're leaving the UI
 void CraftingGridSystem::exit(void) {
+    // dump ingredients onto the ground
     while(ingredients->items.empty() == false) {
         Item *moving = ingredients->items.front();
-        PlaceItemOnMultiGrid(ground_at_player(), moving);
+        // don't move crafting skills
+        if(g.item_info[moving->info_index].skill == false) {
+            PlaceItemOnMultiGrid(ground_at_player(), moving);
+        }
         ingredients->RemoveItem(moving);
+    }
+    // remove skills from the ground
+    Grid *ground = ground_at_player()->at(current_ground_page);
+    vector<Item *>::iterator it;
+    for(it = ground->items.begin(); it != ground->items.end();) {
+        if(g.item_info[(*it)->info_index].skill == true) {
+            it = ground->items.erase(it);
+        }
+        else {
+            ++it;
+        }
     }
 }
 
 struct CraftingUI : public UI {
     CraftingGridSystem *craftGrids;
     Button *button_confirm;
-    Button *next_recipe;
-    Button *prev_recipe;
+    Button *button_next_recipe;
+    Button *button_prev_recipe;
     int current_recipe;
 
     CraftingUI();
@@ -2512,7 +2745,7 @@ struct CraftingUI : public UI {
 void CraftingUI::draw(void) {
     al_draw_text(g.font, g.color_white, 200, 8, 0, "ground:");
     al_draw_text(g.font, g.color_white, 700, 8, 0, "ingredients:");
-    al_draw_text(g.font, g.color_white, 700, 295, 0, "preview:");
+    al_draw_text(g.font, g.color_white, 800, 295, 0, "preview:");
     UI::draw();
 }
 
@@ -2622,11 +2855,18 @@ void create_results(Recipe *recipe) {
 
 void init_recipes(void) {
     Recipe *two_arrows_to_kit = new Recipe;
-    two_arrows_to_kit->name = "First aid kit"; 
+    two_arrows_to_kit->name = "First aid kit";
     two_arrows_to_kit->time_cost = 1234;
     two_arrows_to_kit->ingredients.push_back(make_pair(9, 2));
     two_arrows_to_kit->tools.push_back(3);
     two_arrows_to_kit->results.push_back(make_pair(2, 1));
+
+    Recipe *arrow_to_bullet = new Recipe;
+    arrow_to_bullet->name = "Bullet";
+    arrow_to_bullet->time_cost = 1234;
+    arrow_to_bullet->ingredients.push_back(make_pair(9, 1));
+    arrow_to_bullet->tools.push_back(11);
+    arrow_to_bullet->results.push_back(make_pair(8, 1));
 
     Recipe *shopping_trolley_to_3crowbars = new Recipe;
     shopping_trolley_to_3crowbars->name = "Crowbars";
@@ -2635,6 +2875,7 @@ void init_recipes(void) {
     shopping_trolley_to_3crowbars->results.push_back(make_pair(3, 3));
 
     recipes.push_back(two_arrows_to_kit);
+    recipes.push_back(arrow_to_bullet);
     recipes.push_back(shopping_trolley_to_3crowbars);
 }
 
@@ -2655,6 +2896,7 @@ CraftingGridSystem::CraftingGridSystem() {
 }
 
 CraftingGridSystem::~CraftingGridSystem() {
+    info("~CraftingGridSystem()");
     delete ingredients;
     delete results;
 }
@@ -2669,20 +2911,33 @@ void updateCraftingOutput(void) {
     // delete the items on the output grid
     vector<Item *>::iterator it;
     for(it = results->items.begin(); it != results->items.end();) {
+        // it would be more efficient to have a global store of all items and then
+        // add and remove pointers rather than creating all these objects
         delete *it;
         it = results->items.erase(it);
     }
 
     if(g.ui_Crafting->craftGrids->ingredients->items.empty() == true)
+        // no ingredients
         return;
 
     vector<Recipe *> rs = find_craftable_recipe(g.ui_Crafting->craftGrids->ingredients);
 
+    // check next/prev recipe buttons bounds
+    if(g.ui_Crafting->current_recipe > (int)rs.size() - 1)
+        g.ui_Crafting->current_recipe = (int)rs.size() - 1;
+
+    if(g.ui_Crafting->current_recipe < 0)
+        g.ui_Crafting->current_recipe = 0;
+
+    // no recipes
     if(rs.empty())
         return;
 
-    vector<pair<int, int>> recipe_output = rs.front()->results;
+    // output of the recipe
+    vector<pair<int, int>> recipe_output = rs.at(g.ui_Crafting->current_recipe)->results;
 
+    // fill the live preview
     for(auto& result : recipe_output) {
         int amount = result.second;
         while(amount > 0) {
@@ -2693,12 +2948,31 @@ void updateCraftingOutput(void) {
     }
 }
 
+void craftingNextRecipe(void) {
+    cout << g.ui_Crafting->current_recipe++ << endl;
+    updateCraftingOutput();
+}
+
+void craftingPrevRecipe(void) {
+    cout << g.ui_Crafting->current_recipe-- << endl;
+    updateCraftingOutput();
+}
+
 CraftingUI::CraftingUI() {
     craftGrids = new CraftingGridSystem;
     craftGrids->change.connect(ptr_fun(updateCraftingOutput));
 
+    button_prev_recipe = new Button;
+    button_prev_recipe->pos.x1 = 500;
+    button_prev_recipe->pos.y1 = 260;
+    button_prev_recipe->pos.x2 = 75;
+    button_prev_recipe->pos.y2 = 45;
+    button_prev_recipe->up = g.bitmaps[33];
+    button_prev_recipe->down = NULL;
+    button_prev_recipe->onMouseDown.connect(ptr_fun(craftingPrevRecipe));
+
     button_confirm = new Button;
-    button_confirm->pos.x1 = 500;
+    button_confirm->pos.x1 = 580;
     button_confirm->pos.y1 = 260;
     button_confirm->pos.x2 = 75;
     button_confirm->pos.y2 = 45;
@@ -2706,6 +2980,16 @@ CraftingUI::CraftingUI() {
     button_confirm->down = NULL;
     button_confirm->onMouseDown.connect(ptr_fun(runCrafting));
 
+    button_next_recipe = new Button;
+    button_next_recipe->pos.x1 = 660;
+    button_next_recipe->pos.y1 = 260;
+    button_next_recipe->pos.x2 = 75;
+    button_next_recipe->pos.y2 = 45;
+    button_next_recipe->up = g.bitmaps[33];
+    button_next_recipe->down = NULL;
+    button_next_recipe->onMouseDown.connect(ptr_fun(craftingNextRecipe));
+
+    current_recipe = 0;
     setup();
 }
 
@@ -2722,6 +3006,15 @@ void CraftingGridSystem::reset(void) {
     grids.push_back(results);
     vector<Grid *> *ground = ground_at_player();
     (*ground)[current_ground_page]->gsb_displayed = true;
+
+    // add relevant skills to the ground
+    for(int i = 0; i < 64; i++) {
+        if(g.map->player->hasSkill(i) &&
+           isCraftingSkill(i)) {
+            (*ground)[current_ground_page]->PlaceItem(g.skills[i]);
+        }
+    }
+
     grids.push_back((*ground)[current_ground_page]);
     interaction_forbidden.push_back(results);
 
@@ -2736,7 +3029,9 @@ void CraftingGridSystem::reset(void) {
 
 void CraftingUI::setup(void) {
     widgets.clear();
+    widgets.push_back(button_prev_recipe);
     widgets.push_back(button_confirm);
+    widgets.push_back(button_next_recipe);
     widgets.push_back(g.log);
     widgets.push_back(g.button_MainMap);
     widgets.push_back(g.button_MiniMap);
@@ -2751,19 +3046,20 @@ void CraftingUI::setup(void) {
     craftGrids->reset();
 
     widgets.push_back(craftGrids);
+    craftGrids->exit();
 }
 
 void runCrafting(void) {
     Grid *in = g.ui_Crafting->craftGrids->ingredients;
-    // Grid *out = g.ui_Crafting->craftGrids->results;
+    int selected_recipe = g.ui_Crafting->current_recipe;
 
     cout << "hello" << endl;
 
     vector<Recipe *> rs = find_craftable_recipe(in);
     if(!rs.empty()) {
         cout << "created something" << endl;
-        create_results(rs.front());
-        g.AddMessage("Crafted " + rs.front()->name);
+        create_results(rs.at(selected_recipe));
+        g.AddMessage("Crafted " + rs.at(selected_recipe)->name);
     }
 
     updateCraftingOutput();
@@ -2976,11 +3272,7 @@ void VehicleGridSystem::keyDown(void) {
 struct InventoryGridSystem : public GridSystem {
     int current_ground_page;
 
-    InventoryGridSystem() {
-        auto_move_to_ground = true;
-        current_ground_page = 0;
-        reset();
-    }
+    InventoryGridSystem();
     ~InventoryGridSystem() {
         info("~InventoryGridSystem()");
     };
@@ -2994,6 +3286,21 @@ struct InventoryGridSystem : public GridSystem {
 
     void keyDown(void) override;
 };
+
+void appliedCB(void) {
+    Grid *was_applied = g.ui_Items->gridsystem->applied_params.first;
+    Item *applied_to = g.ui_Items->gridsystem->applied_params.second;
+
+    cout << "applied " << was_applied << " to " << applied_to << endl;
+    return;
+}
+
+InventoryGridSystem::InventoryGridSystem() {
+    auto_move_to_ground = true;
+    current_ground_page = 0;
+    applied.connect(ptr_fun(appliedCB));
+    reset();
+}
 
 void InventoryNextGroundPage(void) {
     cout << "next" << endl;
@@ -3081,6 +3388,105 @@ ItemsUI::~ItemsUI() {
     info("~ItemsUI()");
 }
 
+struct SkillsGridSystem : public GridSystem {
+    Grid *good;
+    Grid *bad;
+
+    SkillsGridSystem() {
+        // skills bitmaps are 6x2
+        good = new Grid(400, 20, 4 * 6, 6 * 2, NULL);
+        bad = new Grid(400, 300, 4 * 6, 6 * 2, NULL);
+        reset();
+    };
+
+    ~SkillsGridSystem() {
+        info("~SkillsGridSystem()");
+    };
+
+    void reset(void);
+};
+
+void init_skills(void) {
+    Item *metabolism = new Item ("Metabolism");
+    Item *quick = new Item ("Quick");
+    Item *lockpicking = new Item ("Lockpicking");
+    Item *myopia = new Item ("Myopia");
+
+    // the first 32 are good, the last 32 are bad
+    g.skills[0] = quick;
+    g.skills[1] = lockpicking;
+    g.skills[32] = metabolism;
+    g.skills[33] = myopia;
+}
+
+void SkillsGridSystem::reset(void) {
+    good->items.clear();
+    bad->items.clear();
+
+    for(int i = 0; i < 32; i++) {
+        if(g.map->player->hasSkill(i)) {
+            good->PlaceItem(g.skills[i]);
+        }
+    }
+
+    for(int i = 32; i < 63; i++) {
+        if(g.map->player->hasSkill(i)) {
+            bad->PlaceItem(g.skills[i]);
+        }
+    }
+
+    interaction_forbidden.clear();
+
+    grids.clear();
+    grids.push_back(good);
+    grids.push_back(bad);
+    interaction_forbidden.push_back(good);
+    interaction_forbidden.push_back(bad);
+
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+
+    countTotalItems();
+    GridSystem::reset();
+}
+
+struct SkillsUI : public UI {
+    SkillsGridSystem *skillsGrid;
+
+    SkillsUI();
+    ~SkillsUI();
+
+    // void draw(void) override;
+
+    void setup(void);
+};
+
+void SkillsUI::setup(void) {
+    skillsGrid->reset();
+}
+
+SkillsUI::SkillsUI() {
+    skillsGrid = new SkillsGridSystem;
+
+    widgets.push_back(skillsGrid);
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_endturn);
+}
+
+SkillsUI::~SkillsUI() {
+    info("~SkillsUI()");
+}
+
 void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
     // try to place it on the existing pages
     for(auto& grid : *multigrid) {
@@ -3138,11 +3544,15 @@ vector<Grid *> *ground_at_character(Character *character) {
         Item *pill_bottle = new Item("Pill bottle");
         Item *arrows1 = new Item("Arrow", 4);
         Item *arrows2 = new Item("Arrow", 3);
+        Item *whiskey = new Item("Whiskey", 3);
+        Item *clean_rag = new Item("Clean rag", 7);
         ground_grid->PlaceItem(crowbar);
         ground_grid->PlaceItem(shopping_trolley1);
         ground_grid->PlaceItem(pill_bottle);
         ground_grid->PlaceItem(arrows1);
         ground_grid->PlaceItem(arrows2);
+        ground_grid->PlaceItem(whiskey);
+        ground_grid->PlaceItem(clean_rag);
     }
     g.map->tiles[character->n].ground_items = ground;
     return ground;
@@ -3188,6 +3598,11 @@ void InventoryGridSystem::reset(void) {
     grids.push_back(g.map->player->legs);
     grids.push_back(g.map->player->right_foot);
     grids.push_back(g.map->player->left_foot);
+    /*
+      testing
+    */
+    grids.push_back(g.map->player->medical_upper_torso);
+    grids.push_back(g.map->player->medical_lower_torso);
 
     g.map->player->addInventoryHardpoints(this);
 
@@ -3218,6 +3633,8 @@ void main_buttons_update(void) {
         g.button_Vehicle->pressed = true;
     else if(g.ui == g.ui_Crafting)
         g.button_Crafting->pressed = true;
+    else if(g.ui == g.ui_Skills)
+        g.button_Skills->pressed = true;
 }
 
 // these could probably be a single function
@@ -3259,6 +3676,17 @@ void button_MiniMap_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.minimap->recreate();
         g.ui = g.ui_MiniMap;
+        g.color_bg = g.color_grey;
+    }
+    main_buttons_update();
+}
+
+void button_Skills_press(void) {
+    if(g.ui != g.ui_Skills) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
+        g.ui_Skills->skillsGrid->reset();
+        g.ui = g.ui_Skills;
         g.color_bg = g.color_grey;
     }
     main_buttons_update();
@@ -3315,7 +3743,13 @@ void load_bitmaps(void) {
     /* 32 */ filenames.push_back("media/items/abstract/single_attack.png");
     /* 33 */ filenames.push_back("media/buttons/confirm.png");
     /* 34 */ filenames.push_back("media/items/bullets.png");
-    /* 34 */ filenames.push_back("media/items/arrow.png");
+    /* 35 */ filenames.push_back("media/items/arrow.png");
+    /* 36 */ filenames.push_back("media/items/abstract/skill_quick.png");
+    /* 37 */ filenames.push_back("media/items/abstract/skill_lockpicking.png");
+    /* 38 */ filenames.push_back("media/items/abstract/skill_myopia.png");
+    /* 39 */ filenames.push_back("media/items/abstract/skill_metabolism.png");
+    /* 40 */ filenames.push_back("media/items/whiskey.png");
+    /* 41 */ filenames.push_back("media/items/clean_rag.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -3366,6 +3800,7 @@ void init_buttons(void) {
     g.button_Skills->pos.y2 = 60;
     g.button_Skills->up = g.bitmaps[4];
     g.button_Skills->down = g.bitmaps[5];
+    g.button_Skills->onMouseDown.connect(ptr_fun(button_Skills_press));
 
     g.button_Crafting->pos.x1 = 0;
     g.button_Crafting->pos.y1 = 660;
@@ -3435,7 +3870,7 @@ void init_messagelog(void) {
 }
 
 void init_tilemap(void) {
-    g.map = new TileMap (200, 200, 16, 16);
+    g.map = new TileMap (8, 8, 16, 16);
 
     TileInfo i;
     // grass
@@ -3529,6 +3964,10 @@ void init_characters(void) {
     g.map->updateCharsByPos();
     g.map->player->update_visibility();
     g.map->focusOnPlayer();
+    g.map->player->enableSkill(0);
+    g.map->player->enableSkill(1);
+    g.map->player->enableSkill(32);
+    g.map->player->enableSkill(33);
 }
 
 MainMapUI::MainMapUI() {
@@ -3643,6 +4082,7 @@ int main(void) {
     init_messagelog();
     init_minimap();
     init_recipes();
+    init_skills();
 
     {
         g.ui_MainMap   = new MainMapUI;
@@ -3651,6 +4091,7 @@ int main(void) {
         g.ui_Vehicle   = new VehicleUI;
         g.ui_Encounter = new EncounterUI;
         g.ui_Crafting  = new CraftingUI;
+        g.ui_Skills    = new SkillsUI;
 
         // start on the main map
         g.ui = g.ui_MainMap;
