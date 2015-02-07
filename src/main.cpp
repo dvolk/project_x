@@ -39,6 +39,7 @@ struct VehicleUI;
 struct EncounterUI;
 struct CraftingUI;
 struct SkillsUI;
+struct ConditionUI;
 struct HardpointInfo;
 struct ItemInfo;
 struct Item;
@@ -98,6 +99,14 @@ struct Game {
     // condition UI
     HardpointInfo *medical_upper_torso;
     HardpointInfo *medical_lower_torso;
+    HardpointInfo *medical_left_upper_leg;
+    HardpointInfo *medical_right_upper_leg;
+    HardpointInfo *medical_left_lower_leg;
+    HardpointInfo *medical_right_lower_leg;
+    HardpointInfo *medical_left_upper_arm;
+    HardpointInfo *medical_right_upper_arm;
+    HardpointInfo *medical_left_lower_arm;
+    HardpointInfo *medical_right_lower_arm;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -108,7 +117,7 @@ struct Game {
     SkillsUI *ui_Skills;
     CraftingUI *ui_Crafting;
     ItemsUI *ui_Items;
-    UI *ui_Conditions;     // not implemented
+    ConditionUI *ui_Condition;
     UI *ui_Camp;           // not implemented
     VehicleUI *ui_Vehicle;
     EncounterUI *ui_Encounter;
@@ -172,8 +181,12 @@ struct ItemInfo {
     int container_size_x;
     int container_size_y;
     bool skill;
+    // can it be applied to a body part (i.e. bandages and disinfectants)?
     bool apply_to_body;
+    // when applied to a body part, is it consumed (i.e. disinfectants)?
     bool consumed_on_application;
+    // when used, is it consumed (i.e. food, water, medicine)?
+    bool consumed_on_use;
     ALLEGRO_BITMAP *sprite;
 };
 
@@ -192,6 +205,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 01 */
@@ -203,11 +217,12 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[24];
     tmp.isVehicle = false;
     tmp.isContainer = true;
-    tmp.container_size_x = 8;
-    tmp.container_size_y = 8;
+    tmp.container_size_x = 10;
+    tmp.container_size_y = 10;
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 02 */
@@ -224,6 +239,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 03 */
@@ -240,6 +256,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 04 */
@@ -256,6 +273,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 05 */
@@ -272,6 +290,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 06 */
@@ -288,6 +307,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 07 */
@@ -304,6 +324,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 08 */
@@ -320,6 +341,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 09 */
@@ -336,6 +358,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 10 */
@@ -352,6 +375,7 @@ void init_iteminfo(void) {
     tmp.skill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 11 */
@@ -368,6 +392,7 @@ void init_iteminfo(void) {
     tmp.skill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 12 */
@@ -384,6 +409,7 @@ void init_iteminfo(void) {
     tmp.skill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 13 */
@@ -400,6 +426,7 @@ void init_iteminfo(void) {
     tmp.skill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 
     /* 14 */
@@ -416,6 +443,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = true;
     tmp.consumed_on_application = true;
+    tmp.consumed_on_use = true;
     g.item_info.push_back(tmp);
 
     /* 15 */
@@ -432,6 +460,7 @@ void init_iteminfo(void) {
     tmp.skill = false;
     tmp.apply_to_body = true;
     tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
 }
 
@@ -481,6 +510,9 @@ struct Item {
 
     void draw(void);
 
+    const char *getName(void) {
+        return g.item_info[info_index].name.c_str();
+    }
     bool isVehicle(void) {
         return g.item_info[info_index].isVehicle;
     }
@@ -489,6 +521,13 @@ struct Item {
     }
     bool isConsumedOnApplication(void) {
         return g.item_info[info_index].consumed_on_application;
+    }
+    bool isUsable(void) {
+        return
+            storage == NULL;
+    }
+    bool isConsumedOnUse(void) {
+        return g.item_info[info_index].consumed_on_use;
     }
 };
 
@@ -565,9 +604,25 @@ void init_hardpointinfo(void) {
     g.encounter_selected = new HardpointInfo;
     g.medical_upper_torso = new HardpointInfo;
     g.medical_lower_torso = new HardpointInfo;
+    g.medical_left_upper_leg = new HardpointInfo;
+    g.medical_right_upper_leg = new HardpointInfo;
+    g.medical_left_lower_leg = new HardpointInfo;
+    g.medical_right_lower_leg = new HardpointInfo;
+    g.medical_left_upper_arm = new HardpointInfo;
+    g.medical_right_upper_arm = new HardpointInfo;
+    g.medical_left_lower_arm = new HardpointInfo;
+    g.medical_right_lower_arm = new HardpointInfo;
 
     g.medical_upper_torso->medical = true;
     g.medical_lower_torso->medical = true;
+    g.medical_left_upper_leg->medical = true;;
+    g.medical_right_upper_leg->medical = true;;
+    g.medical_left_lower_leg->medical = true;;
+    g.medical_right_lower_leg->medical = true;;
+    g.medical_left_upper_arm->medical = true;;
+    g.medical_right_upper_arm->medical = true;;
+    g.medical_left_lower_arm->medical = true;;
+    g.medical_right_lower_arm->medical = true;;
     g.torso->maxItems = 3;
     g.vehicle->vehiclepoint = true;
 }
@@ -684,9 +739,11 @@ void Grid::Sort(void) {
     Sort(BiggerItemsFirst);
 }
 
+vector<Grid *> *ground_at_player();
+void PlaceItemOnMultiGrid(vector<Grid *> *ground, Item *item);
+
 void Grid::Sort(bool (*comp)(Item *l, Item *r)) {
     int num_items = items.size();
-
     for(auto& item : items) {
         item->pos.x1 = -999;
         item->pos.y1 = -999;
@@ -700,7 +757,10 @@ void Grid::Sort(bool (*comp)(Item *l, Item *r)) {
     // it's turned off here for now.
     PlaceItemWantsStacking = false;
     for(auto& item : items) {
-        PlaceItem(item);
+        Item *ret = PlaceItem(item);
+        if(ret != NULL) {
+            // TODO: this can fail
+        }
     }
     PlaceItemWantsStacking = true;
 
@@ -836,13 +896,8 @@ Item *Grid::PlaceItem(Item *to_place) {
                 }
             }
             if(collides_with == 0) {
-                // it doesn't collide with any items, so
-                // check the right and bottom bounds of the grid
-                // if(pos.x1 + (drop_x + to_place->pos.x2) * grid_px_x <= pos.x2 &&
-                //    pos.y1 + (drop_y + to_place->pos.y2) * grid_px_y <= pos.y2) {
                 found = true;
                 goto done;
-                // }
             }
         }
     }
@@ -864,7 +919,8 @@ Item *Grid::PlaceItem(Item *to_place) {
                 merge_with->cur_stack += moved;
                 to_place->cur_stack -= moved;
                 // recursively place the rest
-                PlaceItem(to_place);
+                Item *ret = PlaceItem(to_place);
+                return ret;
             }
             return NULL;
         }
@@ -887,10 +943,11 @@ bool Grid::item_compatible(Item *i) {
     if(hpinfo == NULL)
         return true;
 
+    // can't place/use non-medical items on body parts
     if(hpinfo->medical == true &&
        i->isMedical() == false)
         return false;
-    
+
     // can only place vehicles in vehicle hardpoint
     if(hpinfo->vehiclepoint == true &&
        i->isVehicle() == false)
@@ -941,6 +998,14 @@ struct Character {
 
     Grid *medical_upper_torso;
     Grid *medical_lower_torso;
+    Grid *medical_left_upper_leg;
+    Grid *medical_right_upper_leg;
+    Grid *medical_left_lower_leg;
+    Grid *medical_right_lower_leg;
+    Grid *medical_left_upper_arm;
+    Grid *medical_right_upper_arm;
+    Grid *medical_left_lower_arm;
+    Grid *medical_right_lower_arm;
 
     vector<Grid *> inventory_hardpoints;
 
@@ -984,7 +1049,17 @@ struct Character {
     bool hasSkill(int n);
     void enableSkill(int n);
     void disableSkill(int n);
+
+    void useItem(Item *i);
 };
+
+void Character::useItem(Item *i) {
+    if(i->isConsumedOnUse()) {
+        i->parent->RemoveItem(i);
+        delete i;
+    }
+    cout << "used " << i << endl;
+}
 
 bool Character::hasSkill(int n) {
     return skills & (uint64_t(1) << n);
@@ -1008,9 +1083,10 @@ Character::Character(void) {
     this->n = 0;
     this->sprite = g.bitmaps[21];
 
-    int off_x = 600;
-    int off_y = 85;
-    neck = new Grid (off_x - 50, off_y - 75, 2, 2, g.neck);
+    const int off_x = 555;
+    const int off_y = 85;
+
+    neck = new Grid (off_x, off_y - 75, 2, 2, g.neck);
     head = new Grid (off_x, off_y - 15, 2, 3, g.head);
     right_shoulder = new Grid (off_x - 53, off_y + 10, 2, 2, g.right_shoulder);
     left_shoulder = new Grid (off_x + 53, off_y + 10, 2, 2, g.left_shoulder);
@@ -1020,14 +1096,24 @@ Character::Character(void) {
     legs = new Grid (off_x - 12, off_y + 220, 4, 11, g.legs);
     right_foot = new Grid (off_x - 25, off_y + 430, 2, 2, g.right_foot);
     left_foot = new Grid (off_x + 30, off_y + 430, 2, 2, g.left_foot);
-    right_hand_hold = new Grid (770, 210, 2, 2, g.right_hand_hold);
-    left_hand_hold = new Grid (770, 400, 2, 2, g.left_hand_hold);
-    vehicle = new Grid(500, 150, 2, 2, g.vehicle);
-    back = new Grid(770, 10, 2, 2, g.back);
 
-    medical_upper_torso = new Grid(500, 50, 2, 2, g.medical_upper_torso);
-    medical_lower_torso = new Grid(500, 100, 2, 2, g.medical_lower_torso);
-    
+    back = new Grid(680, 10, 2, 2, g.back);
+    right_hand_hold = new Grid (680, 210, 2, 2, g.right_hand_hold);
+    left_hand_hold = new Grid (680, 400, 2, 2, g.left_hand_hold);
+
+    vehicle = new Grid(500, 150, 2, 2, g.vehicle);
+
+    medical_upper_torso = new Grid(off_x - 22, off_y + 50, 5, 4, g.medical_upper_torso);
+    medical_lower_torso = new Grid(off_x - 22, off_y + 132, 5, 4, g.medical_lower_torso);
+    medical_left_upper_leg = new Grid(off_x - 22, off_y + 214, 2, 5, g.medical_left_upper_leg);
+    medical_right_upper_leg = new Grid(off_x + 32, off_y + 214, 2, 5, g.medical_right_upper_leg);
+    medical_left_lower_leg = new Grid(off_x - 22, off_y + 314, 2, 6, g.medical_left_lower_leg);
+    medical_right_lower_leg = new Grid(off_x + 32, off_y + 314, 2, 6, g.medical_left_lower_leg);
+    medical_left_upper_arm = new Grid(off_x - 62, off_y + 50, 2, 4, g.medical_upper_torso);
+    medical_right_upper_arm = new Grid(off_x + 72, off_y + 50, 2, 4, g.medical_upper_torso);
+    medical_left_lower_arm = new Grid(off_x - 62, off_y + 132, 2, 5, g.medical_upper_torso);
+    medical_right_lower_arm = new Grid(off_x + 72, off_y + 132, 2, 5, g.medical_upper_torso);
+
     inventory_hardpoints.push_back(right_hand_hold);
     inventory_hardpoints.push_back(left_hand_hold);
     inventory_hardpoints.push_back(right_hand);
@@ -1129,7 +1215,7 @@ struct TileMap : public Widget {
 
     int mouseToTileN(void);
     void focusOnPlayer(void);
-    Character *characterAt(int n);
+    Character *characterAt(int n); // this is never used?
     bool playerSees(int n);
 
     void updateCharsByPos(void);
@@ -2104,6 +2190,15 @@ void TileMap::generate(void) {
         tiles[i].info_index = rand() % up_to;
         tiles[i].ground_items = NULL;
     }
+    int n = 0;
+    for(int i = 0; i <= 5; i++) {
+        tiles[n].info_index = 1;
+        n = dir_transform(n, 3);
+    }
+    for(int i = 0; i <= 5; i++) {
+        tiles[n].info_index = 1;
+        n = dir_transform(n, 5);
+    }
     info("Finished generating map");
 }
 
@@ -2135,6 +2230,10 @@ void TileMap::drawTile(int i, int x, int y) {
                            0);
         }
         else {
+            /*
+              TODO: this causes allocations? so it might be better
+              generate and store tinted bitmaps
+            */
             // otherwise draw it 50% tinted
             al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
                                   g.color_tile_tint,
@@ -2409,8 +2508,8 @@ void GridSystem::gsMouseUpEvent() {
             in_bounds =
                 g.mouse_x >= grid->pos.x1 &&
                 g.mouse_y >= grid->pos.y1 &&
-                g.mouse_x <= grid->pos.x2 + 8 &&
-                g.mouse_y <= grid->pos.y2 + 8;
+                g.mouse_x <= grid->pos.x2 + 17 &&
+                g.mouse_y <= grid->pos.y2 + 17;
         }
 
         if(in_bounds == true) {
@@ -2435,10 +2534,29 @@ void GridSystem::gsMouseUpEvent() {
                                      held->pos.x2 * Grid::grid_px_x,
                                      held->pos.y2 * Grid::grid_px_y)) {
                         blocks++;
+                        if(item->storage != NULL) {
+                            // we're blocked by an item but it has storage
+                            // try to place the held item into it
+                            Item *ret = item->storage->PlaceItem(held);
+                            if(ret == NULL) {
+                                held = NULL;
+                                return;
+                            } else {
+                                // We couldn't place it in storage.
+                                // dump it on the ground instead
+                                vector<Grid *> *ground = ground_at_player();
+                                PlaceItemOnMultiGrid(ground, ret);
+                                held = NULL;
+                                return;
+                            }
+                        }
                         // there's an item there already:
                         // abort
                         if(item->info_index != held->info_index)
                             goto blocked;
+                        /*
+                          TODO: inspect this logic here
+                        */
                         if(item->pos.x1 == drop_x &&
                            item->pos.y1 == drop_y) {
                             merge_with = item;
@@ -2460,21 +2578,25 @@ void GridSystem::gsMouseUpEvent() {
             if(grid->item_compatible(held) == false)
                goto blocked;
 
-            // this is for putting water/whiskey on a wound. A charge is
-            // consumed and we emit a signal that an item was applied.
+            // if we put something on a body part, we need to emit a signal
+            // so that the logic can take place
             if(grid->hpinfo != NULL &&
-               held->isConsumedOnApplication() == true) {
+               grid->hpinfo->medical == true) {
 
                 applied_params = make_pair(grid, held);
                 applied.emit();
 
-                if(held->cur_stack == 1) {
-                    delete held;
-                    held = NULL;
-                    return;
-                } else {
-                    held->cur_stack--;
-                    goto blocked;
+                // this is for putting water/whiskey on a wound. A charge is
+                // consumed and we emit a signal that an item was applied.
+                if(held->isConsumedOnApplication() == true) {
+                    if(held->cur_stack == 1) {
+                        delete held;
+                        held = NULL;
+                        return;
+                    } else {
+                        held->cur_stack--;
+                        goto blocked;
+                    }
                 }
             }
 
@@ -2516,8 +2638,6 @@ void GridSystem::gsMouseUpEvent() {
 
  stack_it:
     held->parent = merge_grid;
-    int old_x1 = held->pos.x1;
-    int old_y1 = held->pos.y1;
     held->pos.x1 = drop_x;
     held->pos.y1 = drop_y;
 
@@ -2536,17 +2656,14 @@ void GridSystem::gsMouseUpEvent() {
         merge_with->cur_stack += moved;
         held->cur_stack -= moved;
         // place the rest
+
         Item *returned = merge_grid->PlaceItem(held);
-        // if we can't place the rest, sent it back whereever it came from
+        // if we can't place the rest, sent it to the ground
         if(returned != NULL) {
-            /*
-              TODO: is this correct in all cases?
-            */
-            held->pos.x1 = old_x1;
-            held->pos.y1 = old_y1;
-            held->parent = held->old_parent;
-            held->old_parent->items.push_back(held);
+            vector<Grid *> *ground = ground_at_player();
+            PlaceItemOnMultiGrid(ground, returned);
         }
+        held = NULL;
     }
     change.emit();
     return;
@@ -2622,6 +2739,7 @@ void Item::draw(void) {
 /*
   valgrind reports a loss here
 */
+// this does a lot more than unstack now
 void Grid::unstack_item(int x, int y) {
     int c = 0;
     for (auto& i : items) {
@@ -2630,12 +2748,29 @@ void Grid::unstack_item(int x, int y) {
            i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * grid_px_x >= x &&
            i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * grid_px_y >= y) {
             if(i->cur_stack > 1) {
+                vector<Grid *> *ground = ground_at_player();
+                // if the item is stacked
                 Item *other = new Item (*i);
                 other->cur_stack = i->cur_stack / 2;
                 i->cur_stack = i->cur_stack - other->cur_stack;
                 PlaceItemWantsStacking = false;
-                PlaceItem(other);
+                PlaceItemOnMultiGrid(ground, other);
                 PlaceItemWantsStacking = true;
+                return;
+            }
+            if(i->storage != NULL) {
+                // the item has storage, empty it out (onto the ground)
+                vector<Grid *> *ground = ground_at_player();
+                while(i->storage->items.empty() == false) {
+                    Item *moving = i->storage->items.front();
+                    PlaceItemOnMultiGrid(ground, moving);
+                    i->storage->RemoveItem(moving);
+                }
+                return;
+            }
+            if(i->isUsable()) {
+                // we're using an item
+                g.map->player->useItem(i);
             }
             return;
         }
@@ -3213,6 +3348,7 @@ EncounterUI::~EncounterUI() {
 
 struct InventoryGridSystem;
 struct VehicleGridSystem;
+struct ConditionGridSystem;
 
 struct ItemsUI : public UI {
     InventoryGridSystem *gridsystem;
@@ -3223,8 +3359,19 @@ struct ItemsUI : public UI {
     ~ItemsUI();
 };
 
+struct ConditionUI : public UI {
+    ConditionGridSystem *gridsystem;
+    Button *ground_next_page;
+    Button *ground_prev_page;
+
+    ConditionUI();
+    ~ConditionUI();
+};
+
 struct VehicleUI : public UI {
     VehicleGridSystem *gridsystem;
+    Button *ground_next_page;
+    Button *ground_prev_page;
 
     VehicleUI();
     ~VehicleUI();
@@ -3287,19 +3434,64 @@ struct InventoryGridSystem : public GridSystem {
     void keyDown(void) override;
 };
 
-void appliedCB(void) {
-    Grid *was_applied = g.ui_Items->gridsystem->applied_params.first;
-    Item *applied_to = g.ui_Items->gridsystem->applied_params.second;
+struct ConditionGridSystem : public GridSystem {
+    int current_ground_page;
 
-    cout << "applied " << was_applied << " to " << applied_to << endl;
+    ConditionGridSystem();
+    ~ConditionGridSystem() {
+        info("~ConditionGridSystem()");
+    };
+
+    void reset(void);
+    void draw(void) {
+        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+        al_draw_filled_rectangle(1000, 50, 1175, 500, g.color_white);
+        al_draw_text(g.font, g.color_black, 1008, 58, 0, "Current conditions:");
+        GridSystem::draw();
+    }
+
+    void keyDown(void) override;
+};
+
+void appliedCB(void) {
+    Grid *applied_to = g.ui_Condition->gridsystem->applied_params.first;
+    Item *was_applied = g.ui_Condition->gridsystem->applied_params.second;
+
+    char buf[50];
+    sprintf(buf, "Applied %s to %p", was_applied->getName(), applied_to);
+    g.AddMessage(buf);
     return;
 }
 
 InventoryGridSystem::InventoryGridSystem() {
     auto_move_to_ground = true;
     current_ground_page = 0;
+    reset();
+}
+
+ConditionGridSystem::ConditionGridSystem() {
+    auto_move_to_ground = true;
+    current_ground_page = 0;
     applied.connect(ptr_fun(appliedCB));
     reset();
+}
+
+// holy duplication
+void ConditionPrevGroundPage(void) {
+    cout << "prev" << endl;
+    if(g.ui_Condition->gridsystem->current_ground_page > 0) {
+        g.ui_Condition->gridsystem->current_ground_page--;
+        g.ui_Condition->gridsystem->reset();
+    }
+}
+
+void ConditionNextGroundPage(void) {
+    cout << "next" << endl;
+    vector<Grid *> *ground = ground_at_player();
+    if(g.ui_Condition->gridsystem->current_ground_page< (int)(*ground).size()-1) {
+        g.ui_Condition->gridsystem->current_ground_page++;
+        g.ui_Condition->gridsystem->reset();
+    }
 }
 
 void InventoryNextGroundPage(void) {
@@ -3319,7 +3511,34 @@ void InventoryPrevGroundPage(void) {
     }
 }
 
+void VehicleNextGroundPage(void) {
+    cout << "next" << endl;
+    vector<Grid *> *ground = ground_at_player();
+    if(g.ui_Vehicle->gridsystem->current_ground_page< (int)(*ground).size()-1) {
+        g.ui_Vehicle->gridsystem->current_ground_page++;
+        g.ui_Vehicle->gridsystem->reset();
+    }
+}
+
+void VehiclePrevGroundPage(void) {
+    cout << "prev" << endl;
+    if(g.ui_Vehicle->gridsystem->current_ground_page > 0) {
+        g.ui_Vehicle->gridsystem->current_ground_page--;
+        g.ui_Vehicle->gridsystem->reset();
+    }
+}
+
+
 void InventoryGridSystem::keyDown(void) {
+    if(g.key == ALLEGRO_KEY_M) {
+        InventoryNextGroundPage();
+    }
+    if(g.key == ALLEGRO_KEY_N) {
+        InventoryPrevGroundPage();
+    }
+}
+
+void ConditionGridSystem::keyDown(void) {
     if(g.key == ALLEGRO_KEY_M) {
         InventoryNextGroundPage();
     }
@@ -3330,6 +3549,24 @@ void InventoryGridSystem::keyDown(void) {
 
 VehicleUI::VehicleUI() {
     gridsystem = new VehicleGridSystem;
+
+    ground_next_page = new Button;
+    ground_next_page->pos.x1 = 485;
+    ground_next_page->pos.y1 = 50;
+    ground_next_page->pos.x2 = 20;
+    ground_next_page->pos.y2 = 20;
+    ground_next_page->up = g.bitmaps[29];
+    ground_next_page->down = NULL;
+    ground_next_page->onMouseDown.connect(ptr_fun(VehicleNextGroundPage));
+
+    ground_prev_page = new Button;
+    ground_prev_page->pos.x1 = 465;
+    ground_prev_page->pos.y1 = 50;
+    ground_prev_page->pos.x2 = 20;
+    ground_prev_page->pos.y2 = 20;
+    ground_prev_page->up = g.bitmaps[30];
+    ground_prev_page->down = NULL;
+    ground_prev_page->onMouseDown.connect(ptr_fun(VehiclePrevGroundPage));
 
     widgets.push_back(gridsystem);
     widgets.push_back(g.log);
@@ -3342,6 +3579,8 @@ VehicleUI::VehicleUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(ground_next_page);
+    widgets.push_back(ground_prev_page);
 }
 
 VehicleUI::~VehicleUI() {
@@ -3384,8 +3623,48 @@ ItemsUI::ItemsUI() {
     widgets.push_back(ground_prev_page);
 }
 
+ConditionUI::ConditionUI() {
+    gridsystem  = new ConditionGridSystem;
+
+    ground_next_page = new Button;
+    ground_next_page->pos.x1 = 485;
+    ground_next_page->pos.y1 = 50;
+    ground_next_page->pos.x2 = 20;
+    ground_next_page->pos.y2 = 20;
+    ground_next_page->up = g.bitmaps[29];
+    ground_next_page->down = NULL;
+    ground_next_page->onMouseDown.connect(ptr_fun(ConditionNextGroundPage));
+
+    ground_prev_page = new Button;
+    ground_prev_page->pos.x1 = 465;
+    ground_prev_page->pos.y1 = 50;
+    ground_prev_page->pos.x2 = 20;
+    ground_prev_page->pos.y2 = 20;
+    ground_prev_page->up = g.bitmaps[30];
+    ground_prev_page->down = NULL;
+    ground_prev_page->onMouseDown.connect(ptr_fun(ConditionPrevGroundPage));
+
+    widgets.push_back(gridsystem);
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_endturn);
+    widgets.push_back(ground_next_page);
+    widgets.push_back(ground_prev_page);
+}
+
 ItemsUI::~ItemsUI() {
     info("~ItemsUI()");
+}
+
+ConditionUI::~ConditionUI() {
+    info("~ConditionUI()");
 }
 
 struct SkillsGridSystem : public GridSystem {
@@ -3544,8 +3823,8 @@ vector<Grid *> *ground_at_character(Character *character) {
         Item *pill_bottle = new Item("Pill bottle");
         Item *arrows1 = new Item("Arrow", 4);
         Item *arrows2 = new Item("Arrow", 3);
-        Item *whiskey = new Item("Whiskey", 3);
-        Item *clean_rag = new Item("Clean rag", 7);
+        Item *whiskey = new Item("Whiskey", 10);
+        Item *clean_rag = new Item("Clean rag", 30);
         ground_grid->PlaceItem(crowbar);
         ground_grid->PlaceItem(shopping_trolley1);
         ground_grid->PlaceItem(pill_bottle);
@@ -3598,11 +3877,41 @@ void InventoryGridSystem::reset(void) {
     grids.push_back(g.map->player->legs);
     grids.push_back(g.map->player->right_foot);
     grids.push_back(g.map->player->left_foot);
-    /*
-      testing
-    */
+
+    g.map->player->addInventoryHardpoints(this);
+
+    vector<Grid *> *ground = ground_at_player();
+    (*ground)[current_ground_page]->gsb_displayed = true;
+    grids.push_back((*ground)[current_ground_page]);
+    // reparent();
+
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+
+    countTotalItems();
+    GridSystem::reset();
+}
+
+void ConditionGridSystem::reset(void) {
+    // add backpack and hand hardpoints
+    grids.clear();
+    grids.push_back(g.map->player->right_hand_hold);
+    grids.push_back(g.map->player->left_hand_hold);
+    grids.push_back(g.map->player->back);
+
+    // body hardpoints
     grids.push_back(g.map->player->medical_upper_torso);
     grids.push_back(g.map->player->medical_lower_torso);
+    grids.push_back(g.map->player->medical_left_upper_leg);
+    grids.push_back(g.map->player->medical_right_upper_leg);
+    grids.push_back(g.map->player->medical_left_lower_leg);
+    grids.push_back(g.map->player->medical_right_lower_leg);
+    grids.push_back(g.map->player->medical_left_upper_arm);
+    grids.push_back(g.map->player->medical_right_upper_arm);
+    grids.push_back(g.map->player->medical_left_lower_arm);
+    grids.push_back(g.map->player->medical_right_lower_arm);
 
     g.map->player->addInventoryHardpoints(this);
 
@@ -3635,6 +3944,8 @@ void main_buttons_update(void) {
         g.button_Crafting->pressed = true;
     else if(g.ui == g.ui_Skills)
         g.button_Skills->pressed = true;
+    else if(g.ui == g.ui_Condition)
+        g.button_Condition->pressed = true;
 }
 
 // these could probably be a single function
@@ -3687,6 +3998,17 @@ void button_Skills_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.ui_Skills->skillsGrid->reset();
         g.ui = g.ui_Skills;
+        g.color_bg = g.color_grey;
+    }
+    main_buttons_update();
+}
+
+void button_Condition_press(void) {
+    if(g.ui != g.ui_Skills) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
+        g.ui_Condition->gridsystem->reset();
+        g.ui = g.ui_Condition;
         g.color_bg = g.color_grey;
     }
     main_buttons_update();
@@ -3825,6 +4147,7 @@ void init_buttons(void) {
     g.button_Condition->pos.y2 = 60;
     g.button_Condition->up = g.bitmaps[10];
     g.button_Condition->down = g.bitmaps[11];
+    g.button_Condition->onMouseDown.connect(ptr_fun(button_Condition_press));
 
     g.button_Camp->pos.x1 = 1180;
     g.button_Camp->pos.y1 = 400;
@@ -3870,7 +4193,7 @@ void init_messagelog(void) {
 }
 
 void init_tilemap(void) {
-    g.map = new TileMap (8, 8, 16, 16);
+    g.map = new TileMap (10, 10, 16, 16);
 
     TileInfo i;
     // grass
@@ -4092,11 +4415,10 @@ int main(void) {
         g.ui_Encounter = new EncounterUI;
         g.ui_Crafting  = new CraftingUI;
         g.ui_Skills    = new SkillsUI;
+        g.ui_Condition = new ConditionUI;
 
         // start on the main map
-        g.ui = g.ui_MainMap;
-        // g.ui = g.ui_Encounter;
-        main_buttons_update();
+        button_MainMap_press();
     }
 
     bool redraw = true;
