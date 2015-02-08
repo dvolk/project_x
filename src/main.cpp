@@ -18,7 +18,7 @@
 
 #include "./util.h"
 
-#define DEBUG_VISIBILITY false
+const bool DEBUG_VISIBILITY = false;
 
 using namespace std;
 using namespace sigc;
@@ -1350,9 +1350,10 @@ struct GridSystem : public Widget {
     // used to recompute crafting output
     signal<void> change;
 
-    // fires when an item is applied to a hardpoint (used for
+    // fires when an item is applied to/removed from a hardpoint (used for
     // applying disinfectant to wounds
     signal<void> applied;
+    signal<void> removed; /* TODO */
 
     /*
       TODO: work out how to connect signal with parameters
@@ -1995,6 +1996,8 @@ void TileMap::handleKeyDown(void) {
         else
             g.log->visible = true;
     }
+    if(g.key == ALLEGRO_KEY_SPACE)
+        end_turn();
 
     char buf[35];
     snprintf(buf, sizeof(buf),
@@ -2182,6 +2185,15 @@ void Button::draw(void) {
 void Button::update() {
 }
 
+void mkRingM(int n, int m) {
+    for(int i = 1; i <= 6; i++) {
+        for(int j = 0; j < m; j++) {
+            g.map->tiles[n].info_index = 2;
+            n = dir_transform(n, i);
+        }
+    }
+}
+
 void TileMap::generate(void) {
     tiles.reserve(size_x * size_y);
     int up_to = bitmaps.size();
@@ -2190,15 +2202,8 @@ void TileMap::generate(void) {
         tiles[i].info_index = rand() % up_to;
         tiles[i].ground_items = NULL;
     }
-    int n = 0;
-    for(int i = 0; i <= 5; i++) {
-        tiles[n].info_index = 1;
-        n = dir_transform(n, 3);
-    }
-    for(int i = 0; i <= 5; i++) {
-        tiles[n].info_index = 1;
-        n = dir_transform(n, 5);
-    }
+    mkRingM(4 * size_x + 5, 1);
+    mkRingM(5 * size_x + 3, 3);
     info("Finished generating map");
 }
 
@@ -2389,7 +2394,15 @@ void GridSystem::gsMouseDownEvent() {
         }
     } else if(g.mouse_button == 4) {
         for(auto& grid : grids) {
-            grid->unstack_item(g.mouse_x, g.mouse_y);
+            bool skip = false;
+            for(auto& forbidden : interaction_forbidden) {
+                if(grid == forbidden) {
+                    // we can't grab items out of forbidden grids
+                    skip = true;
+                }
+            }
+            if(skip == false)
+                grid->unstack_item(g.mouse_x, g.mouse_y);
         }
     }
 
@@ -3458,7 +3471,9 @@ void appliedCB(void) {
     Item *was_applied = g.ui_Condition->gridsystem->applied_params.second;
 
     char buf[50];
-    sprintf(buf, "Applied %s to %p", was_applied->getName(), applied_to);
+    sprintf(buf, "Applied %s to %p",
+            was_applied->getName(),
+            (void*)applied_to);
     g.AddMessage(buf);
     return;
 }
@@ -4311,11 +4326,32 @@ MainMapUI::~MainMapUI(void) {
     info("~MainMapUI()");
 }
 
+void init_colors(void) {
+    g.color_grey = al_color_name("grey");
+    g.color_grey2 = al_map_rgb(200, 200, 200);
+    g.color_grey3 = al_map_rgb(220, 220, 220);
+    g.color_darkgrey = al_map_rgb(100, 100, 110);
+    g.color_black = al_map_rgb(0, 0, 0);
+    g.color_white = al_map_rgb(255, 255, 255);
+    g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
+    g.color_active_tile_tint = al_map_rgba_f(1, 1, 1, 0.2);
+    g.color_bg = g.color_black;
+}
+
 void allegro_init(void) {
     int ret = 0;
 
     al_init(); // no return value
     info("Probably initialized core allegro library.");
+
+    g.display_x = 1280;
+    g.display_y = 720;
+    g.display = al_create_display(g.display_x, g.display_y);
+
+    if(g.display == NULL)
+        errorQuit("Failed to create display.");
+    else
+        info("Created display.");
 
     ret = al_init_primitives_addon();
     if(ret == false)
@@ -4343,19 +4379,17 @@ void allegro_init(void) {
         errorQuit("Failed to initialize mouse.");
     else
         info("Initialized mouse.");
+
+    g.font = al_create_builtin_font();
+    if(g.font == NULL)
+        errorQuit("failed to load builtin font.");
+    else
+        info("Loaded builtin font.");
+
 }
 
 int main(void) {
     allegro_init();
-
-    g.display_x = 1280;
-    g.display_y = 720;
-    g.display = al_create_display(g.display_x, g.display_y);
-
-    if(g.display == NULL)
-        errorQuit("Failed to create display.");
-    else
-        info("Created display.");
 
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
     if(event_queue == NULL)
@@ -4369,12 +4403,6 @@ int main(void) {
     else
         info("Created timer.");
 
-    g.font = al_create_builtin_font();
-    if(g.font == NULL)
-        errorQuit("failed to load builtin font.");
-    else
-        info("Loaded builtin font.");
-
     ALLEGRO_EVENT ev;
     ALLEGRO_MOUSE_STATE mouse_state;
     ALLEGRO_KEYBOARD_STATE keyboard_state;
@@ -4386,17 +4414,8 @@ int main(void) {
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
-    g.color_grey = al_color_name("grey");
-    g.color_grey2 = al_map_rgb(200, 200, 200);
-    g.color_grey3 = al_map_rgb(220, 220, 220);
-    g.color_darkgrey = al_map_rgb(100, 100, 110);
-    g.color_black = al_map_rgb(0, 0, 0);
-    g.color_white = al_map_rgb(255, 255, 255);
-    g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
-    g.color_active_tile_tint = al_map_rgba_f(1, 1, 1, 0.2);
-    g.color_bg = g.color_black;
-
     load_bitmaps();
+    init_colors();
     init_iteminfo();
     init_tilemap();
     init_hardpointinfo();
