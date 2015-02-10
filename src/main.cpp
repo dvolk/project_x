@@ -40,8 +40,11 @@ struct EncounterUI;
 struct CraftingUI;
 struct SkillsUI;
 struct ConditionUI;
+struct CampUI;
+struct ScavengeUI;
 struct HardpointInfo;
 struct ItemInfo;
+struct LocationInfo;
 struct Item;
 
 // global state
@@ -72,10 +75,13 @@ struct Game {
     Button *button_Camp;
     Button *button_Vehicle;
     Button *button_endturn;
+    Button *button_scavenge;
 
     TileMap *map;
     MiniMap *minimap;
+
     vector<ItemInfo> item_info;
+    vector<LocationInfo> location_info;
 
     // Items UI
     HardpointInfo *right_hand_hold;
@@ -118,9 +124,10 @@ struct Game {
     CraftingUI *ui_Crafting;
     ItemsUI *ui_Items;
     ConditionUI *ui_Condition;
-    UI *ui_Camp;           // not implemented
+    CampUI *ui_Camp;
     VehicleUI *ui_Vehicle;
     EncounterUI *ui_Encounter;
+    ScavengeUI *ui_Scavenge;
 
     MessageLog *log;
 
@@ -446,7 +453,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = true;
     g.item_info.push_back(tmp);
 
-    /* 15 */
+    /* 14 */
     tmp.name = "Clean rag";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
@@ -462,7 +469,43 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     g.item_info.push_back(tmp);
+
+    /* 16 */
+    tmp.name = "Factory";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[42];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    g.item_info.push_back(tmp);
+
+    /* 17 */
+    tmp.name = "Shack in the woods";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[43];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    g.item_info.push_back(tmp);
 }
+
+
 
 struct Item {
     // position and size of the item on the grid
@@ -1139,17 +1182,56 @@ Character::Character(void) {
 
 int dir_transform(int n, int dir);
 
+// data that's common to all tiles of the same type
 struct TileInfo {
     int bitmap_index;
     ALLEGRO_COLOR minimap_color;
     bool blocks_los;
     bool blocks_movement;
+    bool has_locations;
 };
 
+// data that's common to all locations of the same type
+struct LocationInfo {
+    Item *location_item;
+    string description;
+
+    // these are base values. The actual values depend on where on the map
+    // you are
+    int8_t base_loot_level;
+    int8_t base_safety_level;
+    int8_t base_sneak_level;
+};
+
+void init_locationdata(void) {
+    Item *factory = new Item ("Factory");
+    Item *shack = new Item ("Shack in the woods");
+
+    LocationInfo tmp;
+    tmp.base_loot_level = 100;
+    tmp.base_safety_level = 100;
+    tmp.base_sneak_level = 100;
+    tmp.location_item = factory;
+    tmp.description = "An abandoned factory, full of decaying industrial equipment.";
+    g.location_info.push_back(tmp);
+
+    tmp.description = "A shack in the woods.";
+    tmp.location_item = shack;
+    g.location_info.push_back(tmp);
+}
+
+// a location on the
+struct Location {
+    int8_t info_index; // index into LocationInfo
+    int last_looted;
+};
+
+// a hex tile
 struct Tile {
-    int8_t info_index;
+    int8_t info_index; // index into TileInfo
     int8_t visible;
     vector<Grid *> *ground_items;
+    vector<Location *> *locations;
 };
 
 struct TileMap : public Widget {
@@ -2201,6 +2283,7 @@ void TileMap::generate(void) {
         tiles[i].visible = false;
         tiles[i].info_index = rand() % up_to;
         tiles[i].ground_items = NULL;
+        tiles[i].locations = NULL;
     }
     mkRingM(4 * size_x + 5, 1);
     mkRingM(5 * size_x + 3, 3);
@@ -3189,6 +3272,7 @@ void CraftingUI::setup(void) {
     widgets.push_back(g.button_Condition);
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_scavenge);
     widgets.push_back(g.button_endturn);
 
     craftGrids->reset();
@@ -3341,6 +3425,130 @@ void EncounterUI::setup(void) {
     npc = g.map->charsByPos.equal_range(player->n).first->second;
 }
 
+struct ScavengeGridSystem : public GridSystem {
+    Grid *options;
+    Grid *selected;
+
+    ScavengeGridSystem();
+    ~ScavengeGridSystem();
+};
+
+struct ScavengeUI : public UI {
+    Character *player;
+    Tile *current_tile;
+    ScavengeGridSystem *gridsystem;
+    // ALLEGRO_BITMAP *cur_tile_sprite;
+    Button *button_confirm;
+    int current_stage;
+    unordered_map<Item *, Location *> items_to_locations;
+
+    ScavengeUI();
+    ~ScavengeUI();
+
+    void draw(void) override { UI::draw(); };
+
+    void setup(void);
+};
+
+ScavengeGridSystem::ScavengeGridSystem() {
+    options = new Grid (105, 380, 20, 10, NULL);
+    selected = new Grid (480, 380, 20, 10, NULL);
+
+    grids.push_back(options);
+    grids.push_back(selected);
+
+    auto_target = selected;
+
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+}
+
+ScavengeGridSystem::~ScavengeGridSystem() {
+    delete options;
+    delete selected;
+}
+
+void runScavenging(void) {
+    vector<Item *> *selected = &g.ui_Scavenge->gridsystem->selected->items;
+    if(selected->empty()) {
+        return;
+    }
+    Item *location_item = selected->front();
+    Location *location =g.ui_Scavenge->items_to_locations.find(location_item)->second;
+    assert(location != NULL);
+
+    PlaceItemOnMultiGrid(ground_at_player(), new Item ("Crowbar"));
+    location->last_looted = g.map->player->nextMove;
+    button_MainMap_press();
+    g.ui_Scavenge->current_stage = 0;
+}
+
+ScavengeUI::ScavengeUI() {
+    gridsystem = new ScavengeGridSystem;
+    gridsystem->reset();
+
+    button_confirm = new Button;
+    button_confirm->pos.x1 = 855;
+    button_confirm->pos.y1 = 380;
+    button_confirm->pos.x2 = 75;
+    button_confirm->pos.y2 = 45;
+    button_confirm->up = g.bitmaps[33];
+    button_confirm->down = NULL;
+    button_confirm->onMouseDown.connect(ptr_fun(runScavenging));
+    current_stage = 0;
+}
+
+ScavengeUI::~ScavengeUI() { }
+
+vector<Location *> *locations_at_character(Character *character);
+
+void ScavengeUI::setup(void) {
+    g.color_bg = g.color_grey;
+
+    widgets.clear();
+    widgets.push_back(button_confirm);
+    widgets.push_back(g.log);
+
+    gridsystem->selected->items.clear();
+    gridsystem->options->items.clear();
+    items_to_locations.clear();
+
+    if(current_stage == 0) {
+        player = g.map->player;
+        vector<Location *> *locations = locations_at_character(player);
+        for(auto& location : *locations) {
+            if(location->last_looted == 0 ||
+               location->last_looted + 10000< player->nextMove) {
+                Item *i = g.location_info[location->info_index].location_item;
+                // we add the location items to the options grid
+                gridsystem->options->PlaceItem(i);
+                // we make a map from location items to locations
+                // so runScavenging can know which location we're looting
+                // based on the item selected
+                items_to_locations.insert(pair<Item *, Location *>(i, location));
+            }
+        }
+    } else if(current_stage == 1) {
+        // show options for looting
+    } else if(current_stage == 2) {
+        // show what we got
+    }
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_endturn);
+    widgets.push_back(gridsystem);
+}
+
 void EncounterUI::draw(void) {
     al_draw_filled_rectangle(105, 25, 405, 295, g.color_grey2);
     al_draw_filled_rectangle(410, 25, 680, 295, g.color_grey2);
@@ -3362,6 +3570,7 @@ EncounterUI::~EncounterUI() {
 struct InventoryGridSystem;
 struct VehicleGridSystem;
 struct ConditionGridSystem;
+struct CampGridSystem;
 
 struct ItemsUI : public UI {
     InventoryGridSystem *gridsystem;
@@ -3370,6 +3579,15 @@ struct ItemsUI : public UI {
 
     ItemsUI();
     ~ItemsUI();
+};
+
+struct CampUI : public UI {
+    CampGridSystem *gridsystem;
+    Button *ground_next_page;
+    Button *ground_prev_page;
+
+    CampUI();
+    ~CampUI();
 };
 
 struct ConditionUI : public UI {
@@ -3413,7 +3631,51 @@ struct VehicleGridSystem : public GridSystem {
     void keyDown(void) override;
 };
 
+struct CampGridSystem : public GridSystem {
+    int current_ground_page;
+    Grid *current_campsite;
+    Grid *available_campsites;
+
+    CampGridSystem() {
+        current_campsite = new Grid (520, 133, 20, 24, NULL);
+        available_campsites = new Grid (950, 133, 10, 24, NULL);
+        auto_move_to_ground = true;
+        current_ground_page = 0;
+        reset();
+    };
+
+    ~CampGridSystem() {
+        info("~CampGridSystem()");
+    };
+
+    void reset(void);
+    void draw(void) override {
+        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+        al_draw_text(g.font, g.color_white, 600, 10, 0, "Current campsite::");
+        al_draw_text(g.font, g.color_white, 950, 10, 0, "Available campsites:");
+        GridSystem::draw();
+    }
+
+    void keyDown(void) override;
+};
+
 void VehicleGridSystem::keyDown(void) {
+    vector<Grid *> *ground = ground_at_player();
+    if(g.key == ALLEGRO_KEY_M) {
+        if(current_ground_page < (int)(*ground).size() - 1) {
+            current_ground_page++;
+            reset();
+        }
+    }
+    if(g.key == ALLEGRO_KEY_N) {
+        if(current_ground_page > 0) {
+            current_ground_page--;
+            reset();
+        }
+    }
+}
+
+void CampGridSystem::keyDown(void) {
     vector<Grid *> *ground = ground_at_player();
     if(g.key == ALLEGRO_KEY_M) {
         if(current_ground_page < (int)(*ground).size() - 1) {
@@ -3509,6 +3771,23 @@ void ConditionNextGroundPage(void) {
     }
 }
 
+void CampPrevGroundPage(void) {
+    cout << "prev" << endl;
+    if(g.ui_Camp->gridsystem->current_ground_page > 0) {
+        g.ui_Camp->gridsystem->current_ground_page--;
+        g.ui_Camp->gridsystem->reset();
+    }
+}
+
+void CampNextGroundPage(void) {
+    cout << "next" << endl;
+    vector<Grid *> *ground = ground_at_player();
+    if(g.ui_Camp->gridsystem->current_ground_page< (int)(*ground).size()-1) {
+        g.ui_Camp->gridsystem->current_ground_page++;
+        g.ui_Camp->gridsystem->reset();
+    }
+}
+
 void InventoryNextGroundPage(void) {
     cout << "next" << endl;
     vector<Grid *> *ground = ground_at_player();
@@ -3594,12 +3873,54 @@ VehicleUI::VehicleUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_scavenge);
+    widgets.push_back(ground_next_page);
+    widgets.push_back(ground_prev_page);
+}
+
+CampUI::CampUI() {
+    gridsystem = new CampGridSystem;
+
+    ground_next_page = new Button;
+    ground_next_page->pos.x1 = 485;
+    ground_next_page->pos.y1 = 50;
+    ground_next_page->pos.x2 = 20;
+    ground_next_page->pos.y2 = 20;
+    ground_next_page->up = g.bitmaps[29];
+    ground_next_page->down = NULL;
+    ground_next_page->onMouseDown.connect(ptr_fun(CampNextGroundPage));
+
+    ground_prev_page = new Button;
+    ground_prev_page->pos.x1 = 465;
+    ground_prev_page->pos.y1 = 50;
+    ground_prev_page->pos.x2 = 20;
+    ground_prev_page->pos.y2 = 20;
+    ground_prev_page->up = g.bitmaps[30];
+    ground_prev_page->down = NULL;
+    ground_prev_page->onMouseDown.connect(ptr_fun(CampPrevGroundPage));
+
+    widgets.push_back(gridsystem);
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_scavenge);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
 
 VehicleUI::~VehicleUI() {
     info("~VehicleUI()");
+}
+
+CampUI::~CampUI() {
+    info("~CampUI()");
 }
 
 ItemsUI::ItemsUI() {
@@ -3634,6 +3955,7 @@ ItemsUI::ItemsUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_scavenge);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -3670,6 +3992,7 @@ ConditionUI::ConditionUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_scavenge);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -3775,6 +4098,7 @@ SkillsUI::SkillsUI() {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_scavenge);
 }
 
 SkillsUI::~SkillsUI() {
@@ -3811,6 +4135,38 @@ void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
     }
     // add a new grid to the multigrid
     (*multigrid).push_back(new_grid);
+}
+
+int tile_to_locations_index(const Tile t) {
+    return 0;
+}
+
+// returns, or creates, locations at a tile
+vector<Location *> *locations_at_character(Character *character) {
+    // get locations at player position
+    assert(character != NULL);
+    assert(good_index(character->n) == true);
+    vector<Location *> *locations = g.map->tiles[character->n].locations;
+
+    if(locations == NULL) {
+        locations = new vector<Location *>;
+    }
+    assert(locations);
+
+    if((*locations).empty()) {
+        // create first location if it doesn't exist
+        Location *location1 = new Location;
+        location1->info_index = 0;
+        location1->last_looted = 0;
+        Location *location2 = new Location;
+        location2->info_index = 1;
+        location2->last_looted = 0;
+
+        locations->push_back(location1);
+        locations->push_back(location2);
+    }
+    g.map->tiles[character->n].locations = locations;
+    return locations;
 }
 
 /*
@@ -3861,6 +4217,25 @@ void VehicleGridSystem::reset(void) {
     grids.push_back(g.map->player->vehicle);
 
     g.map->player->addVehicleHardpoint(this);
+
+    vector<Grid *> *ground = ground_at_player();
+    (*ground)[current_ground_page]->gsb_displayed = true;
+    grids.push_back((*ground)[current_ground_page]);
+    // reparent();
+
+    pos.x1 = 0;
+    pos.y1 = 0;
+    pos.x2 = 1280;
+    pos.y2 = 720;
+
+    countTotalItems();
+    GridSystem::reset();
+}
+
+void CampGridSystem::reset(void) {
+    grids.clear();
+    grids.push_back(current_campsite);
+    grids.push_back(available_campsites);
 
     vector<Grid *> *ground = ground_at_player();
     (*ground)[current_ground_page]->gsb_displayed = true;
@@ -4019,11 +4394,34 @@ void button_Skills_press(void) {
 }
 
 void button_Condition_press(void) {
-    if(g.ui != g.ui_Skills) {
+    if(g.ui != g.ui_Condition) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Condition->gridsystem->reset();
         g.ui = g.ui_Condition;
+        g.color_bg = g.color_grey;
+    }
+    main_buttons_update();
+}
+
+void button_Camp_press(void) {
+    if(g.ui != g.ui_Camp) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
+        g.ui_Camp->gridsystem->reset();
+        g.ui = g.ui_Camp;
+        g.color_bg = g.color_grey;
+    }
+    main_buttons_update();
+}
+
+void button_Scavenge_press(void) {
+    if(g.ui != g.ui_Scavenge) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
+        g.ui_Scavenge->setup();
+        g.ui_Scavenge->gridsystem->reset();
+        g.ui = g.ui_Scavenge;
         g.color_bg = g.color_grey;
     }
     main_buttons_update();
@@ -4087,6 +4485,9 @@ void load_bitmaps(void) {
     /* 39 */ filenames.push_back("media/items/abstract/skill_metabolism.png");
     /* 40 */ filenames.push_back("media/items/whiskey.png");
     /* 41 */ filenames.push_back("media/items/clean_rag.png");
+    /* 42 */ filenames.push_back("media/items/locations/factory.png");
+    /* 43 */ filenames.push_back("media/items/locations/wood_shack.png");
+    /* 44 */ filenames.push_back("media/buttons/scavenge.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -4113,6 +4514,7 @@ void init_buttons(void) {
     g.button_Camp      = new Button;
     g.button_Vehicle   = new Button;
     g.button_endturn   = new Button;
+    g.button_scavenge  = new Button;
 
     // left
     g.button_MainMap->pos.x1 = 0;
@@ -4170,6 +4572,7 @@ void init_buttons(void) {
     g.button_Camp->pos.y2 = 60;
     g.button_Camp->up = g.bitmaps[12];
     g.button_Camp->down = g.bitmaps[13];
+    g.button_Camp->onMouseDown.connect(ptr_fun(button_Camp_press));
 
     g.button_Vehicle->pos.x1 = 1180;
     g.button_Vehicle->pos.y1 = 460;
@@ -4186,6 +4589,14 @@ void init_buttons(void) {
     g.button_endturn->up = g.bitmaps[25];
     g.button_endturn->down = NULL;
     g.button_endturn->onMouseDown.connect(ptr_fun(button_endturn_press));
+
+    g.button_scavenge->pos.x1 = 1180;
+    g.button_scavenge->pos.y1 = 30;
+    g.button_scavenge->pos.x2 = 100;
+    g.button_scavenge->pos.y2 = 30;
+    g.button_scavenge->up = g.bitmaps[44];
+    g.button_scavenge->down = NULL;
+    g.button_scavenge->onMouseDown.connect(ptr_fun(button_Scavenge_press));
 
     g.main_buttons.insert(g.button_MainMap);
     g.main_buttons.insert(g.button_MiniMap);
@@ -4216,24 +4627,28 @@ void init_tilemap(void) {
     i.bitmap_index = 0;
     i.blocks_los = false;
     i.blocks_movement = false;
+    i.has_locations = false;
     g.map->tile_info.push_back(i);
     // tree
     i.minimap_color = al_map_rgb(0, 150, 0);
     i.bitmap_index = 1;
     i.blocks_los = false;
     i.blocks_movement = false;
+    i.has_locations = true;
     g.map->tile_info.push_back(i);
     // city
     i.minimap_color = al_map_rgb(255, 255, 255);
     i.bitmap_index = 2;
     i.blocks_los = true;
     i.blocks_movement = false;
+    i.has_locations = true;
     g.map->tile_info.push_back(i);
     // swamp
     i.minimap_color = al_map_rgb(0, 0, 200);
     i.bitmap_index = 3;
     i.blocks_los = false;
     i.blocks_movement = false;
+    i.has_locations = true;
     g.map->tile_info.push_back(i);
 
     g.map->bitmaps.push_back(g.bitmaps[17]);
@@ -4260,6 +4675,7 @@ MiniMapUI::MiniMapUI(void) {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.minimap);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_scavenge);
 }
 
 MiniMapUI::~MiniMapUI(void) {
@@ -4293,10 +4709,9 @@ void init_characters(void) {
         first_aid_kit1->storage->PlaceItem(pill_bottle2);
         Item *pill_bottle3 = new Item("Pill bottle");
         first_aid_kit2->storage->PlaceItem(pill_bottle3);
-        Item *bullets1 = new Item("Bullet", 5);
-        backpack->storage->PlaceItem(bullets1);
-        Item *bullets2 = new Item("Bullet", 3);
-        backpack->storage->PlaceItem(bullets2);
+
+        backpack->storage->PlaceItem(new Item("Bullet", 5));
+        backpack->storage->PlaceItem(new Item("Bullet", 3));
     }
 
     g.map->updateCharsByPos();
@@ -4319,6 +4734,7 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Condition);
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_scavenge);
     widgets.push_back(g.button_endturn);
 }
 
@@ -4425,6 +4841,7 @@ int main(void) {
     init_minimap();
     init_recipes();
     init_skills();
+    init_locationdata();
 
     {
         g.ui_MainMap   = new MainMapUI;
@@ -4435,6 +4852,8 @@ int main(void) {
         g.ui_Crafting  = new CraftingUI;
         g.ui_Skills    = new SkillsUI;
         g.ui_Condition = new ConditionUI;
+        g.ui_Camp      = new CampUI;
+        g.ui_Scavenge  = new ScavengeUI;
 
         // start on the main map
         button_MainMap_press();
