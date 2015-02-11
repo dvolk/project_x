@@ -946,6 +946,8 @@ Item *Grid::PlaceItem(Item *to_place) {
     }
  done:
     if(found == true) {
+        cout << "placing " << g.item_info[to_place->info_index].name << " on " << this << endl;
+
         to_place->pos.x1 = drop_x;
         to_place->pos.y1 = drop_y;
         // if we're merging it
@@ -1141,8 +1143,8 @@ Character::Character(void) {
     left_foot = new Grid (off_x + 30, off_y + 430, 2, 2, g.left_foot);
 
     back = new Grid(680, 10, 2, 2, g.back);
-    right_hand_hold = new Grid (680, 210, 2, 2, g.right_hand_hold);
-    left_hand_hold = new Grid (680, 400, 2, 2, g.left_hand_hold);
+    right_hand_hold = new Grid (680, 195, 2, 2, g.right_hand_hold);
+    left_hand_hold = new Grid (680, 380, 2, 2, g.left_hand_hold);
 
     vehicle = new Grid(500, 150, 2, 2, g.vehicle);
 
@@ -1381,8 +1383,6 @@ void Character::move(int new_n) {
         if(this != g.map->player &&
            n == g.map->player->n) {
             runEncounter();
-        } else if(g.map->charsByPos.count(g.map->player->n) > 1) {
-            runEncounter();
         }
     }
     else {
@@ -1399,6 +1399,7 @@ vector<Grid *> *ground_at_character(Character *character);
 void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
 
 void Character::drop_all_items(void) {
+    cout << this << " drop_all_items at " << this->n << endl;
     vector<Grid *> *ground = ground_at_character(this);
     for(auto& hardpoint : inventory_hardpoints) {
         for(auto& item : hardpoint->items) {
@@ -2910,8 +2911,6 @@ Character *next(void) {
 }
 
 void end_turn() {
-    g.map->player->nextMove += 1000;
-
     Character *c;
     // process characters until it's the player's turn again
     while((c = next()) != g.map->player) {
@@ -3423,6 +3422,8 @@ void EncounterUI::setup(void) {
     // find the npc
     g.map->updateCharsByPos();
     npc = g.map->charsByPos.equal_range(player->n).first->second;
+
+    cout << "running encounter at: " << player->n << ' ' << npc->n << endl;
 }
 
 struct ScavengeGridSystem : public GridSystem {
@@ -3441,6 +3442,8 @@ struct ScavengeUI : public UI {
     Button *button_confirm;
     int current_stage;
     unordered_map<Item *, Location *> items_to_locations;
+    Item *selected_location;
+    vector<Item *> selected_tools;
 
     ScavengeUI();
     ~ScavengeUI();
@@ -3448,7 +3451,13 @@ struct ScavengeUI : public UI {
     void draw(void) override { UI::draw(); };
 
     void setup(void);
+    void reset(void);
 };
+
+void ScavengeUI::reset(void) {
+    current_stage = 0;
+    gridsystem->visible = true;
+}
 
 ScavengeGridSystem::ScavengeGridSystem() {
     options = new Grid (105, 380, 20, 10, NULL);
@@ -3463,6 +3472,8 @@ ScavengeGridSystem::ScavengeGridSystem() {
     pos.y1 = 0;
     pos.x2 = 1280;
     pos.y2 = 720;
+
+    reset();
 }
 
 ScavengeGridSystem::~ScavengeGridSystem() {
@@ -3471,23 +3482,45 @@ ScavengeGridSystem::~ScavengeGridSystem() {
 }
 
 void runScavenging(void) {
+    int *stage = &g.ui_Scavenge->current_stage;
+    cout << *stage << endl;
+
     vector<Item *> *selected = &g.ui_Scavenge->gridsystem->selected->items;
-    if(selected->empty()) {
-        return;
+
+    if(*stage == 0) {
+        if(selected->empty()) {
+            return;
+        }
+        // after the first stage, we picked a location
+        g.ui_Scavenge->selected_location = selected->front();
+    } else if(*stage == 1) {
+        // after the second step, we picked the tools used for scavenging
+        g.ui_Scavenge->selected_tools = *selected;
     }
-    Item *location_item = selected->front();
+
+
+    Item *location_item = g.ui_Scavenge->selected_location;
     Location *location =g.ui_Scavenge->items_to_locations.find(location_item)->second;
     assert(location != NULL);
 
-    PlaceItemOnMultiGrid(ground_at_player(), new Item ("Crowbar"));
-    location->last_looted = g.map->player->nextMove;
-    button_MainMap_press();
-    g.ui_Scavenge->current_stage = 0;
+    if(*stage == 0) {
+        // show options for this tile
+        (*stage)++;
+        g.ui_Scavenge->setup();
+    } else if(*stage == 1) {
+        // take location and options, generate items scavenged,
+        // and show results ("found something"/"found nothing")
+        PlaceItemOnMultiGrid(ground_at_player(), new Item ("Crowbar"));
+        location->last_looted = g.map->player->nextMove;
+        (*stage)++;
+        g.ui_Scavenge->setup();
+    } else if(*stage == 2) {
+        button_MainMap_press();
+    }
 }
 
 ScavengeUI::ScavengeUI() {
     gridsystem = new ScavengeGridSystem;
-    gridsystem->reset();
 
     button_confirm = new Button;
     button_confirm->pos.x1 = 855;
@@ -3497,7 +3530,6 @@ ScavengeUI::ScavengeUI() {
     button_confirm->up = g.bitmaps[33];
     button_confirm->down = NULL;
     button_confirm->onMouseDown.connect(ptr_fun(runScavenging));
-    current_stage = 0;
 }
 
 ScavengeUI::~ScavengeUI() { }
@@ -3513,14 +3545,14 @@ void ScavengeUI::setup(void) {
 
     gridsystem->selected->items.clear();
     gridsystem->options->items.clear();
-    items_to_locations.clear();
 
     if(current_stage == 0) {
+        items_to_locations.clear();
         player = g.map->player;
         vector<Location *> *locations = locations_at_character(player);
         for(auto& location : *locations) {
             if(location->last_looted == 0 ||
-               location->last_looted + 10000< player->nextMove) {
+               location->last_looted + 10000 < player->nextMove) {
                 Item *i = g.location_info[location->info_index].location_item;
                 // we add the location items to the options grid
                 gridsystem->options->PlaceItem(i);
@@ -3531,8 +3563,10 @@ void ScavengeUI::setup(void) {
             }
         }
     } else if(current_stage == 1) {
+        gridsystem->options->PlaceItem(new Item ("Crowbar"));
         // show options for looting
     } else if(current_stage == 2) {
+        gridsystem->visible = false;
         // show what we got
     }
     widgets.push_back(g.log);
@@ -4336,6 +4370,8 @@ void main_buttons_update(void) {
         g.button_Skills->pressed = true;
     else if(g.ui == g.ui_Condition)
         g.button_Condition->pressed = true;
+    else if(g.ui == g.ui_Camp)
+        g.button_Camp->pressed = true;
 }
 
 // these could probably be a single function
@@ -4419,6 +4455,7 @@ void button_Scavenge_press(void) {
     if(g.ui != g.ui_Scavenge) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        g.ui_Scavenge->reset();
         g.ui_Scavenge->setup();
         g.ui_Scavenge->gridsystem->reset();
         g.ui = g.ui_Scavenge;
