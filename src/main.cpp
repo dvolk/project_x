@@ -14,14 +14,11 @@
 #include <cmath>
 #include <algorithm>
 
-#include <sigc++/sigc++.h>
-
 #include "./util.h"
 
 const bool DEBUG_VISIBILITY = false;
 
 using namespace std;
-using namespace sigc;
 
 struct MessageLog;
 struct Grid;
@@ -578,9 +575,9 @@ struct Widget {
     Rect pos;
     bool visible;
 
-    signal<void> onMouseDown;
-    signal<void> onMouseUp;
-    signal<void> onKeyDown;
+    void (*onMouseDown)(void);
+    void (*onMouseUp)(void);
+    void (*onKeyDown)(void);
 
     virtual void mouseDown(void) = 0;
     virtual void mouseUp(void) = 0;
@@ -589,6 +586,9 @@ struct Widget {
 
     Widget() {
         visible = true;
+        onMouseDown = NULL;
+        onMouseUp = NULL;
+        onKeyDown = NULL;
         g.all_widgets.insert(this);
     }
 
@@ -1431,12 +1431,12 @@ struct GridSystem : public Widget {
 
     // fires when an item -may- have been placed or removed
     // used to recompute crafting output
-    signal<void> change;
+    void (*change)(void);
 
     // fires when an item is applied to/removed from a hardpoint (used for
     // applying disinfectant to wounds
-    signal<void> applied;
-    signal<void> removed; /* TODO */
+    void (*applied)(void);
+    void (*removed)(void); /* TODO */
 
     /*
       TODO: work out how to connect signal with parameters
@@ -1447,6 +1447,9 @@ struct GridSystem : public Widget {
         auto_move_to_ground = false;
         auto_target = NULL;
         held = NULL;
+        change = NULL;
+        applied = NULL;
+        removed = NULL;
     }
     ~GridSystem(void) {
         delete held;
@@ -2125,7 +2128,8 @@ void UI::mouseDownEvent(void) {
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->mouseDown();
-            widget->onMouseDown.emit();
+            if(widget->onMouseDown != NULL)
+                widget->onMouseDown();
             // break;
         }
     }
@@ -2139,7 +2143,8 @@ void UI::mouseUpEvent(void) {
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->mouseUp();
-            widget->onMouseUp.emit();
+            if(widget->onMouseUp != NULL)
+                widget->onMouseUp();
             // break;
         }
     }
@@ -2151,9 +2156,10 @@ void UI::keyDownEvent(void) {
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
+           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) { 
             widget->keyDown();
-            widget->onKeyDown.emit();
+            if(widget->onKeyDown != NULL)
+                widget->onKeyDown();
             // break;
         }
     }
@@ -2533,7 +2539,9 @@ void GridSystem::GrabItem() {
         g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * Grid::grid_px_y);
     held->old_parent = held->parent;
     held->parent = NULL;
-    change.emit();
+
+    if(change != NULL)
+        change();
 
     if(held->storage != NULL) {
         // if this item was on a hardpoint, we need to remove
@@ -2681,7 +2689,8 @@ void GridSystem::gsMouseUpEvent() {
                grid->hpinfo->medical == true) {
 
                 applied_params = make_pair(grid, held);
-                applied.emit();
+                if(applied != NULL)
+                    applied();
 
                 // this is for putting water/whiskey on a wound. A charge is
                 // consumed and we emit a signal that an item was applied.
@@ -2704,7 +2713,10 @@ void GridSystem::gsMouseUpEvent() {
             held->pos.x1 = drop_x;
             held->pos.y1 = drop_y;
             grid->items.push_back(held);
-            change.emit();
+
+            if(change != NULL)
+                change();
+
             addStorageGrid();
 
             char b[60];
@@ -2762,7 +2774,8 @@ void GridSystem::gsMouseUpEvent() {
         }
         held = NULL;
     }
-    change.emit();
+    if(change != NULL)
+        change();
     return;
 }
 
@@ -3190,7 +3203,7 @@ void craftingPrevRecipe(void) {
 
 CraftingUI::CraftingUI() {
     craftGrids = new CraftingGridSystem;
-    craftGrids->change.connect(ptr_fun(updateCraftingOutput));
+    craftGrids->change = updateCraftingOutput;
 
     button_prev_recipe = new Button;
     button_prev_recipe->pos.x1 = 500;
@@ -3199,7 +3212,7 @@ CraftingUI::CraftingUI() {
     button_prev_recipe->pos.y2 = 45;
     button_prev_recipe->up = g.bitmaps[33];
     button_prev_recipe->down = NULL;
-    button_prev_recipe->onMouseDown.connect(ptr_fun(craftingPrevRecipe));
+    button_prev_recipe->onMouseDown = craftingPrevRecipe;
 
     button_confirm = new Button;
     button_confirm->pos.x1 = 580;
@@ -3208,7 +3221,7 @@ CraftingUI::CraftingUI() {
     button_confirm->pos.y2 = 45;
     button_confirm->up = g.bitmaps[33];
     button_confirm->down = NULL;
-    button_confirm->onMouseDown.connect(ptr_fun(runCrafting));
+    button_confirm->onMouseDown = runCrafting;
 
     button_next_recipe = new Button;
     button_next_recipe->pos.x1 = 660;
@@ -3217,7 +3230,7 @@ CraftingUI::CraftingUI() {
     button_next_recipe->pos.y2 = 45;
     button_next_recipe->up = g.bitmaps[33];
     button_next_recipe->down = NULL;
-    button_next_recipe->onMouseDown.connect(ptr_fun(craftingNextRecipe));
+    button_next_recipe->onMouseDown = craftingNextRecipe;
 
     current_recipe = 0;
     setup();
@@ -3355,7 +3368,7 @@ EncounterUI::EncounterUI() {
     button_confirm->pos.y2 = 45;
     button_confirm->up = g.bitmaps[33];
     button_confirm->down = NULL;
-    button_confirm->onMouseDown.connect(ptr_fun(runEncounterStep));
+    button_confirm->onMouseDown = runEncounterStep;
 }
 
 void button_MainMap_press(void);
@@ -3529,7 +3542,7 @@ ScavengeUI::ScavengeUI() {
     button_confirm->pos.y2 = 45;
     button_confirm->up = g.bitmaps[33];
     button_confirm->down = NULL;
-    button_confirm->onMouseDown.connect(ptr_fun(runScavenging));
+    button_confirm->onMouseDown = runScavenging;
 }
 
 ScavengeUI::~ScavengeUI() { }
@@ -3783,7 +3796,7 @@ InventoryGridSystem::InventoryGridSystem() {
 ConditionGridSystem::ConditionGridSystem() {
     auto_move_to_ground = true;
     current_ground_page = 0;
-    applied.connect(ptr_fun(appliedCB));
+    applied = appliedCB;
     reset();
 }
 
@@ -3885,7 +3898,7 @@ VehicleUI::VehicleUI() {
     ground_next_page->pos.y2 = 20;
     ground_next_page->up = g.bitmaps[29];
     ground_next_page->down = NULL;
-    ground_next_page->onMouseDown.connect(ptr_fun(VehicleNextGroundPage));
+    ground_next_page->onMouseDown = VehicleNextGroundPage;
 
     ground_prev_page = new Button;
     ground_prev_page->pos.x1 = 465;
@@ -3894,7 +3907,7 @@ VehicleUI::VehicleUI() {
     ground_prev_page->pos.y2 = 20;
     ground_prev_page->up = g.bitmaps[30];
     ground_prev_page->down = NULL;
-    ground_prev_page->onMouseDown.connect(ptr_fun(VehiclePrevGroundPage));
+    ground_prev_page->onMouseDown = VehiclePrevGroundPage;
 
     widgets.push_back(gridsystem);
     widgets.push_back(g.log);
@@ -3922,7 +3935,7 @@ CampUI::CampUI() {
     ground_next_page->pos.y2 = 20;
     ground_next_page->up = g.bitmaps[29];
     ground_next_page->down = NULL;
-    ground_next_page->onMouseDown.connect(ptr_fun(CampNextGroundPage));
+    ground_next_page->onMouseDown = CampNextGroundPage;
 
     ground_prev_page = new Button;
     ground_prev_page->pos.x1 = 465;
@@ -3931,7 +3944,7 @@ CampUI::CampUI() {
     ground_prev_page->pos.y2 = 20;
     ground_prev_page->up = g.bitmaps[30];
     ground_prev_page->down = NULL;
-    ground_prev_page->onMouseDown.connect(ptr_fun(CampPrevGroundPage));
+    ground_prev_page->onMouseDown = CampPrevGroundPage;
 
     widgets.push_back(gridsystem);
     widgets.push_back(g.log);
@@ -3967,7 +3980,7 @@ ItemsUI::ItemsUI() {
     ground_next_page->pos.y2 = 20;
     ground_next_page->up = g.bitmaps[29];
     ground_next_page->down = NULL;
-    ground_next_page->onMouseDown.connect(ptr_fun(InventoryNextGroundPage));
+    ground_next_page->onMouseDown = InventoryNextGroundPage;
 
     ground_prev_page = new Button;
     ground_prev_page->pos.x1 = 465;
@@ -3976,7 +3989,7 @@ ItemsUI::ItemsUI() {
     ground_prev_page->pos.y2 = 20;
     ground_prev_page->up = g.bitmaps[30];
     ground_prev_page->down = NULL;
-    ground_prev_page->onMouseDown.connect(ptr_fun(InventoryPrevGroundPage));
+    ground_prev_page->onMouseDown = InventoryPrevGroundPage;
 
     widgets.push_back(gridsystem);
     widgets.push_back(g.log);
@@ -4004,7 +4017,7 @@ ConditionUI::ConditionUI() {
     ground_next_page->pos.y2 = 20;
     ground_next_page->up = g.bitmaps[29];
     ground_next_page->down = NULL;
-    ground_next_page->onMouseDown.connect(ptr_fun(ConditionNextGroundPage));
+    ground_next_page->onMouseDown = ConditionNextGroundPage;
 
     ground_prev_page = new Button;
     ground_prev_page->pos.x1 = 465;
@@ -4013,7 +4026,7 @@ ConditionUI::ConditionUI() {
     ground_prev_page->pos.y2 = 20;
     ground_prev_page->up = g.bitmaps[30];
     ground_prev_page->down = NULL;
-    ground_prev_page->onMouseDown.connect(ptr_fun(ConditionPrevGroundPage));
+    ground_prev_page->onMouseDown = ConditionPrevGroundPage;
 
     widgets.push_back(gridsystem);
     widgets.push_back(g.log);
@@ -4171,6 +4184,7 @@ void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
     (*multigrid).push_back(new_grid);
 }
 
+// resolve tile to location_info index
 int tile_to_locations_index(const Tile t) {
     return 0;
 }
@@ -4560,7 +4574,7 @@ void init_buttons(void) {
     g.button_MainMap->pos.y2 = 60;
     g.button_MainMap->up = g.bitmaps[0];
     g.button_MainMap->down = g.bitmaps[1];
-    g.button_MainMap->onMouseDown.connect(ptr_fun(button_MainMap_press));
+    g.button_MainMap->onMouseDown = button_MainMap_press;
 
     g.button_MiniMap->pos.x1 = 0;
     g.button_MiniMap->pos.y1 = 540;
@@ -4568,7 +4582,7 @@ void init_buttons(void) {
     g.button_MiniMap->pos.y2 = 60;
     g.button_MiniMap->up = g.bitmaps[2];
     g.button_MiniMap->down = g.bitmaps[3];
-    g.button_MiniMap->onMouseDown.connect(ptr_fun(button_MiniMap_press));
+    g.button_MiniMap->onMouseDown = button_MiniMap_press;
 
     g.button_Skills->pos.x1 = 0;
     g.button_Skills->pos.y1 = 600;
@@ -4576,7 +4590,7 @@ void init_buttons(void) {
     g.button_Skills->pos.y2 = 60;
     g.button_Skills->up = g.bitmaps[4];
     g.button_Skills->down = g.bitmaps[5];
-    g.button_Skills->onMouseDown.connect(ptr_fun(button_Skills_press));
+    g.button_Skills->onMouseDown = button_Skills_press;
 
     g.button_Crafting->pos.x1 = 0;
     g.button_Crafting->pos.y1 = 660;
@@ -4584,7 +4598,7 @@ void init_buttons(void) {
     g.button_Crafting->pos.y2 = 60;
     g.button_Crafting->up = g.bitmaps[6];
     g.button_Crafting->down = g.bitmaps[7];
-    g.button_Crafting->onMouseDown.connect(ptr_fun(button_Crafting_press));
+    g.button_Crafting->onMouseDown = button_Crafting_press;
 
     // right
     g.button_Items->pos.x1 = 1180;
@@ -4593,7 +4607,7 @@ void init_buttons(void) {
     g.button_Items->pos.y2 = 60;
     g.button_Items->up = g.bitmaps[8];
     g.button_Items->down = g.bitmaps[9];
-    g.button_Items->onMouseDown.connect(ptr_fun(button_Items_press));
+    g.button_Items->onMouseDown = button_Items_press;
 
     g.button_Condition->pos.x1 = 1180;
     g.button_Condition->pos.y1 = 340;
@@ -4601,7 +4615,7 @@ void init_buttons(void) {
     g.button_Condition->pos.y2 = 60;
     g.button_Condition->up = g.bitmaps[10];
     g.button_Condition->down = g.bitmaps[11];
-    g.button_Condition->onMouseDown.connect(ptr_fun(button_Condition_press));
+    g.button_Condition->onMouseDown = button_Condition_press;
 
     g.button_Camp->pos.x1 = 1180;
     g.button_Camp->pos.y1 = 400;
@@ -4609,7 +4623,7 @@ void init_buttons(void) {
     g.button_Camp->pos.y2 = 60;
     g.button_Camp->up = g.bitmaps[12];
     g.button_Camp->down = g.bitmaps[13];
-    g.button_Camp->onMouseDown.connect(ptr_fun(button_Camp_press));
+    g.button_Camp->onMouseDown = button_Camp_press;
 
     g.button_Vehicle->pos.x1 = 1180;
     g.button_Vehicle->pos.y1 = 460;
@@ -4617,7 +4631,7 @@ void init_buttons(void) {
     g.button_Vehicle->pos.y2 = 60;
     g.button_Vehicle->up = g.bitmaps[14];
     g.button_Vehicle->down = g.bitmaps[15];
-    g.button_Vehicle->onMouseDown.connect(ptr_fun(button_Vehicle_press));
+    g.button_Vehicle->onMouseDown = button_Vehicle_press;
 
     g.button_endturn->pos.x1 = 1180;
     g.button_endturn->pos.y1 = 0;
@@ -4625,7 +4639,7 @@ void init_buttons(void) {
     g.button_endturn->pos.y2 = 30;
     g.button_endturn->up = g.bitmaps[25];
     g.button_endturn->down = NULL;
-    g.button_endturn->onMouseDown.connect(ptr_fun(button_endturn_press));
+    g.button_endturn->onMouseDown = button_endturn_press;
 
     g.button_scavenge->pos.x1 = 1180;
     g.button_scavenge->pos.y1 = 30;
@@ -4633,7 +4647,7 @@ void init_buttons(void) {
     g.button_scavenge->pos.y2 = 30;
     g.button_scavenge->up = g.bitmaps[44];
     g.button_scavenge->down = NULL;
-    g.button_scavenge->onMouseDown.connect(ptr_fun(button_Scavenge_press));
+    g.button_scavenge->onMouseDown = button_Scavenge_press;
 
     g.main_buttons.insert(g.button_MainMap);
     g.main_buttons.insert(g.button_MiniMap);
