@@ -126,6 +126,8 @@ struct Game {
     EncounterUI *ui_Encounter;
     ScavengeUI *ui_Scavenge;
 
+    bool encounterInterrupt;
+
     MessageLog *log;
 
     Item *skills[64];
@@ -1380,9 +1382,25 @@ void Character::move(int new_n) {
     if(good_index(new_n) == true) {
         n = new_n;
         g.map->updateCharsByPos();
-        if(this != g.map->player &&
-           n == g.map->player->n) {
+
+        /*
+          TODO: How does this work if three npcs move into the same position?
+          Encounters should "stack", and be run in sequence.
+        */
+        // start an encounter if
+        if(this == g.map->player &&
+           g.encounterInterrupt == false) {
+            // this character is the player and there's more than
+            // one character on that tile
+            if(g.map->charsByPos.count(this->n) > 1) {
+                runEncounter();
+            }
+        } else if(this->n == g.map->player->n) {
+            // or if this npc moved into the player's position
             runEncounter();
+        } else if(g.map->charsByPos.count(this->n) > 1) {
+            // or if there are two npcs at the same position
+            // aiEncounter(this->n);
         }
     }
     else {
@@ -2156,7 +2174,7 @@ void UI::keyDownEvent(void) {
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) { 
+           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->keyDown();
             if(widget->onKeyDown != NULL)
                 widget->onKeyDown();
@@ -2292,8 +2310,8 @@ void TileMap::generate(void) {
         tiles[i].ground_items = NULL;
         tiles[i].locations = NULL;
     }
-    mkRingM(4 * size_x + 5, 1);
-    mkRingM(5 * size_x + 3, 3);
+    // mkRingM(4 * size_x + 5, 1);
+    // mkRingM(5 * size_x + 3, 3);
     info("Finished generating map");
 }
 
@@ -2925,13 +2943,16 @@ Character *next(void) {
 
 void end_turn() {
     Character *c;
-    // process characters until it's the player's turn again
-    while((c = next()) != g.map->player) {
+    // process characters until it's the player's turn again or we get
+    // an encounter interrupt
+    while((c = next()) != g.map->player &&
+          g.encounterInterrupt == false) {
         cout << c << ": " << c->nextMove << endl;
         c->randomMove();
     }
 
-    cout << "turn ends with " << (int)g.map->characters.size() << " characters" << endl; g.AddMessage("Turn ends.");
+    cout << "turn ends with " << (int)g.map->characters.size() << " characters. Int: " << g.encounterInterrupt << endl;
+    g.AddMessage("Turn ends.");
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -3376,6 +3397,13 @@ void button_MainMap_press(void);
 void runEncounter(void) {
     g.ui_Encounter->setup();
     g.ui = g.ui_Encounter;
+    g.encounterInterrupt = true;
+}
+
+void endEncounter(void) {
+    g.encounterInterrupt = false;
+    end_turn();
+    button_MainMap_press();
 }
 
 // runs one step of the encounter after the player pressed the
@@ -3397,7 +3425,7 @@ void runEncounterStep(void) {
         g.AddMessage("You successfully flee from the encounter.");
         g.AddMessage("Encounter ends.");
 
-        button_MainMap_press();
+        endEncounter();
     }
     else if(action1 == "Single attack") {
 
@@ -3407,7 +3435,7 @@ void runEncounterStep(void) {
         g.map->removeCharacter(npc);
         g.map->updateCharsByPos();
 
-        button_MainMap_press();
+        endEncounter();
     } else {
 
     }
@@ -4670,7 +4698,7 @@ void init_messagelog(void) {
 }
 
 void init_tilemap(void) {
-    g.map = new TileMap (10, 10, 16, 16);
+    g.map = new TileMap (50, 50, 16, 16);
 
     TileInfo i;
     // grass
@@ -4736,7 +4764,7 @@ MiniMapUI::~MiniMapUI(void) {
 // creates the player and npcs
 // must be called after init_tilemap();
 void init_characters(void) {
-    for(int i = 0; i < 5; i++) {
+    for(int i = 0; i < 15; i++) {
         int n = rand() % g.map->max_t;
 
         Character *c = new Character;
