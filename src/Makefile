@@ -1,37 +1,21 @@
-SANITIZE = -fsanitize=address -fsanitize=leak -fsanitize=undefined
-override CXXFLAGS+= -g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned-char
+SANITIZE=-fsanitize=address -fsanitize=leak -fsanitize=undefined
+override CXXFLAGS+=-g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned-char
 
 INCLUDES=
+
+### Linux
 LIBS=`pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_color-5.0 allegro_image-5.0 allegro_font-5.0`
 
-STRIP=
-ifeq (,$(findstring -g,$(CXXFLAGS)))
-ifeq (,$(findstring -pg,$(CXXFLAGS)))
-	STRIP=strip
-endif
-endif
+### Windows
+# LIBS=-lallegro-5.0.10-mt -lallegro_primitives-5.0.10-mt -lallegro_color-5.0.10-mt -lallegro_image-5.0.10-mt -lallegro_font-5.0.10-mt
 
 OBJS= \
 	main.o util.o
 
-PCH=
-
 default: all
 
-$(OBJS): CXXFLAGS+= $(INCLUDES)
-$(PCH): %.h.gch: %.h
-	$(CXX) $(CXXFLAGS) -x c++-header -o $@.tmp $<
-	$(MV) $@.tmp $@
-
 all: $(OBJS)
-	$(CXX) $(CXXFLAGS) -o ../project_x $(OBJS) $(LIBS)
-ifneq (,$(STRIP))
-	$(STRIP) ../project_x
-endif
+	$(CXX) $(CXXFLAGS) -o ../project_x $(OBJS) $(LDFLAGS) $(LIBS)
 
 clean:
-	-$(RM) $(OBJS) $(PCH) ../project_x
-
-depend:
-	makedepend -Y $(subst .o,.cpp,$(OBJS))
-	makedepend -a -o.h.gch -Y $(PCH:.h.gch=.h)
+	-$(RM) $(OBJS) ../project_x
