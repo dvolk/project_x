@@ -1087,7 +1087,7 @@ struct Character {
     void addInventoryHardpoints(GridSystem *gs);
     void addVehicleHardpoint(GridSystem *gs);
 
-    void do_AI_map_turn(void);
+    void do_AI(void);
     void die(void);
     void drop_all_items(void);
     void randomMove(void);
@@ -1350,7 +1350,7 @@ void TileMap::removeCharacter(Character *to_kill) {
 }
 
 void TileMap::updateCharsByPos(void) {
-    cout << "updateCharsByPos" << endl;
+    // cout << "updateCharsByPos" << endl;
     charsByPos.clear();
 
     charsByPos.emplace(player->n, player);
@@ -1362,7 +1362,8 @@ void TileMap::updateCharsByPos(void) {
 }
 
 // do stuff on the map
-void Character::do_AI_map_turn(void) {
+void Character::do_AI(void) {
+    randomMove();
 }
 
 void Character::randomMove(void) {
@@ -1388,16 +1389,16 @@ void Character::move(int new_n) {
           Encounters should "stack", and be run in sequence.
         */
         // start an encounter if
-        if(this == g.map->player &&
-           g.encounterInterrupt == false) {
+        if(this == g.map->player) {
             // this character is the player and there's more than
             // one character on that tile
             if(g.map->charsByPos.count(this->n) > 1) {
-                runEncounter();
+                g.encounterInterrupt = true;
             }
         } else if(this->n == g.map->player->n) {
             // or if this npc moved into the player's position
-            runEncounter();
+            g.encounterInterrupt = true;
+
         } else if(g.map->charsByPos.count(this->n) > 1) {
             // or if there are two npcs at the same position
             // aiEncounter(this->n);
@@ -1939,7 +1940,7 @@ void Character::update_visibility(void) {
             currently_seeing.push_back(n4);
             g.map->tiles[n4].visible = true;
         }
-        cout << "added " << (int)currently_seeing.size() << " tiles" << endl;
+        cout << "update_visibility(): Added " << (int)currently_seeing.size() << " tiles" << endl;
         return;
     }
 }
@@ -2695,6 +2696,10 @@ void GridSystem::gsMouseUpEvent() {
             else if(grid->hpinfo->maxItems < (int)grid->items.size() + held->cur_stack) {
                 // too many items on the hardpoint
                 goto blocked;
+            } else {
+                // if it's a hardpoint, we always drop at 0, 0
+                drop_x = 0;
+                drop_y = 0;
             }
 
             // is this item compatible with the grid?
@@ -2738,8 +2743,8 @@ void GridSystem::gsMouseUpEvent() {
             addStorageGrid();
 
             char b[60];
-            snprintf(b, sizeof(b), "Moved %s onto grid %d",
-                     g.item_info[held->info_index].name.c_str(), i);
+            snprintf(b, sizeof(b), "Moved %s onto grid %d at %d, %d",
+                     g.item_info[held->info_index].name.c_str(), i, drop_x, drop_y);
             g.AddMessage(b);
             // the item is placed. we're done
             held = NULL;
@@ -2945,14 +2950,18 @@ void end_turn() {
     Character *c;
     // process characters until it's the player's turn again or we get
     // an encounter interrupt
-    while((c = next()) != g.map->player &&
-          g.encounterInterrupt == false) {
-        cout << c << ": " << c->nextMove << endl;
-        c->randomMove();
+    while((c = next()) != g.map->player && g.encounterInterrupt == false)
+        {
+            cout << "AI " << c << " (" << c->nextMove << ") " << c->n;
+            c->do_AI();
+            cout << " -> " << c->n << endl;
+        }
+
+    if(g.encounterInterrupt == true) {
+        runEncounter();
     }
 
-    cout << "turn ends with " << (int)g.map->characters.size() << " characters. Int: " << g.encounterInterrupt << endl;
-    g.AddMessage("Turn ends.");
+    cout << "\"turn\" ends with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -3318,11 +3327,8 @@ void runCrafting(void) {
     Grid *in = g.ui_Crafting->craftGrids->ingredients;
     int selected_recipe = g.ui_Crafting->current_recipe;
 
-    cout << "hello" << endl;
-
     vector<Recipe *> rs = find_craftable_recipe(in);
     if(!rs.empty()) {
-        cout << "created something" << endl;
         create_results(rs.at(selected_recipe));
         g.AddMessage("Crafted " + rs.at(selected_recipe)->name);
     }
@@ -3397,13 +3403,21 @@ void button_MainMap_press(void);
 void runEncounter(void) {
     g.ui_Encounter->setup();
     g.ui = g.ui_Encounter;
-    g.encounterInterrupt = true;
 }
 
 void endEncounter(void) {
-    g.encounterInterrupt = false;
-    end_turn();
-    button_MainMap_press();
+    int num_there = g.map->charsByPos.count(g.map->player->n);
+
+    if(num_there > 1) {
+        cout << "There are more encounters here: " << num_there - 1 << endl;
+        runEncounter();
+    } else {
+        g.encounterInterrupt = false;
+        cout << "All encounters ended" << endl;
+        button_MainMap_press();
+        g.map->player->update_visibility();
+        end_turn();
+    }
 }
 
 // runs one step of the encounter after the player pressed the
@@ -3422,6 +3436,7 @@ void runEncounterStep(void) {
     if(action1 == "Flee") {
 
         g.map->player->randomMove();
+        end_turn();
         g.AddMessage("You successfully flee from the encounter.");
         g.AddMessage("Encounter ends.");
 
@@ -3464,7 +3479,7 @@ void EncounterUI::setup(void) {
     g.map->updateCharsByPos();
     npc = g.map->charsByPos.equal_range(player->n).first->second;
 
-    cout << "running encounter at: " << player->n << ' ' << npc->n << endl;
+    cout << "Running encounter at: " << player->n << " with AI " << npc << endl;
 }
 
 struct ScavengeGridSystem : public GridSystem {
@@ -3524,7 +3539,7 @@ ScavengeGridSystem::~ScavengeGridSystem() {
 
 void runScavenging(void) {
     int *stage = &g.ui_Scavenge->current_stage;
-    cout << *stage << endl;
+    cout << "runScavenging() stage: " << *stage << endl;
 
     vector<Item *> *selected = &g.ui_Scavenge->gridsystem->selected->items;
 
@@ -3830,7 +3845,6 @@ ConditionGridSystem::ConditionGridSystem() {
 
 // holy duplication
 void ConditionPrevGroundPage(void) {
-    cout << "prev" << endl;
     if(g.ui_Condition->gridsystem->current_ground_page > 0) {
         g.ui_Condition->gridsystem->current_ground_page--;
         g.ui_Condition->gridsystem->reset();
@@ -3838,7 +3852,6 @@ void ConditionPrevGroundPage(void) {
 }
 
 void ConditionNextGroundPage(void) {
-    cout << "next" << endl;
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Condition->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Condition->gridsystem->current_ground_page++;
@@ -3847,7 +3860,6 @@ void ConditionNextGroundPage(void) {
 }
 
 void CampPrevGroundPage(void) {
-    cout << "prev" << endl;
     if(g.ui_Camp->gridsystem->current_ground_page > 0) {
         g.ui_Camp->gridsystem->current_ground_page--;
         g.ui_Camp->gridsystem->reset();
@@ -3855,7 +3867,6 @@ void CampPrevGroundPage(void) {
 }
 
 void CampNextGroundPage(void) {
-    cout << "next" << endl;
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Camp->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Camp->gridsystem->current_ground_page++;
@@ -3864,7 +3875,6 @@ void CampNextGroundPage(void) {
 }
 
 void InventoryNextGroundPage(void) {
-    cout << "next" << endl;
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Items->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Items->gridsystem->current_ground_page++;
@@ -3873,7 +3883,6 @@ void InventoryNextGroundPage(void) {
 }
 
 void InventoryPrevGroundPage(void) {
-    cout << "prev" << endl;
     if(g.ui_Items->gridsystem->current_ground_page > 0) {
         g.ui_Items->gridsystem->current_ground_page--;
         g.ui_Items->gridsystem->reset();
@@ -3881,7 +3890,6 @@ void InventoryPrevGroundPage(void) {
 }
 
 void VehicleNextGroundPage(void) {
-    cout << "next" << endl;
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Vehicle->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Vehicle->gridsystem->current_ground_page++;
@@ -3890,7 +3898,6 @@ void VehicleNextGroundPage(void) {
 }
 
 void VehiclePrevGroundPage(void) {
-    cout << "prev" << endl;
     if(g.ui_Vehicle->gridsystem->current_ground_page > 0) {
         g.ui_Vehicle->gridsystem->current_ground_page--;
         g.ui_Vehicle->gridsystem->reset();
