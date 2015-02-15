@@ -15,7 +15,7 @@ OBJS= \
 default: all
 
 all: $(OBJS)
-	$(CXX) $(CXXFLAGS) -o ../project_x $(OBJS) $(LDFLAGS) $(LIBS)
+	$(CXX) $(SANITIZE) -o ../project_x $(OBJS) $(LDFLAGS) $(LIBS)
 
 clean:
 	-$(RM) $(OBJS) ../project_x
