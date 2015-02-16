@@ -53,6 +53,9 @@ struct Game {
     ALLEGRO_DISPLAY *display;
     ALLEGRO_FONT *font;
 
+    // global random number god
+    mt19937 *rng;
+
     ALLEGRO_COLOR color_white;
     ALLEGRO_COLOR color_black;
     ALLEGRO_COLOR color_grey;
@@ -1317,14 +1320,21 @@ int dir_transform(int n, int dir);
 
 void TileMap::addRandomCharacter(void) {
     Character *new_char = new Character;
-    new_char->move(rand() % (max_t - 1));
+
+    uniform_int_distribution<> position_dist(0, max_t);
+    new_char->move( position_dist(*g.rng) );
+
+    uniform_int_distribution<> delay_dist(-500,500);
+    new_char->nextMove = characters.front()->nextMove + delay_dist(*g.rng);
+
     Item *pill_bottle = new Item("Pill bottle");
     Item *shopping_trolley = new Item("Shopping trolley");
     Item *first_aid_kit = new Item("First aid kit");
+
     new_char->left_hand_hold->PlaceItem(pill_bottle);
     new_char->vehicle->PlaceItem(shopping_trolley);
     new_char->right_hand_hold->PlaceItem(first_aid_kit);
-    new_char->nextMove = characters.front()->nextMove + rand() % 1234;
+
     characters.push_back(new_char);
 }
 
@@ -1368,9 +1378,10 @@ void Character::do_AI(void) {
 
 void Character::randomMove(void) {
     int new_n;
+    uniform_int_distribution<> dist(1, 6);
 
     do {
-        new_n = dir_transform(n, 1 + rand() % 5);
+        new_n = dir_transform(n, dist(*g.rng));
     } while(good_index(new_n) == false ||
             g.map->tile_info[g.map->tiles[new_n].info_index].blocks_movement == true);
 
@@ -1407,7 +1418,9 @@ void Character::move(int new_n) {
     else {
         info("WARNING: tried to Character::move() to invalid index");
     }
-    nextMove += 1000 + rand() % 100;
+
+    uniform_int_distribution<> dist(-100, 100);
+    nextMove += 1000 + dist(*g.rng);
 }
 
 void Character::die(void) {
@@ -2303,11 +2316,13 @@ void mkRingM(int n, int m) {
 }
 
 void TileMap::generate(void) {
+    uniform_int_distribution<> tile_type_dist(0, bitmaps.size() - 1);
+
     tiles.reserve(size_x * size_y);
-    int up_to = bitmaps.size();
+
     for(int i = 0; i <= max_t; i++) {
         tiles[i].visible = false;
-        tiles[i].info_index = rand() % up_to;
+        tiles[i].info_index = tile_type_dist(*g.rng);
         tiles[i].ground_items = NULL;
         tiles[i].locations = NULL;
     }
@@ -2852,7 +2867,10 @@ void Item::draw(void) {
             // draw number of stacked items
             char buf[4];
             sprintf(buf, "%d", cur_stack);
-            al_draw_text(g.font, g.color_black, x2 - 9, y2 - 9, 0, buf);
+            if(cur_stack > 9)
+                al_draw_text(g.font, g.color_black, x2 - 17, y2 - 9, 0, buf);
+            else
+                al_draw_text(g.font, g.color_black, x2 - 9, y2 - 9, 0, buf);
         }
     } else {
         // we're held by the mouse
@@ -3741,7 +3759,7 @@ struct CampGridSystem : public GridSystem {
     void reset(void);
     void draw(void) override {
         al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-        al_draw_text(g.font, g.color_white, 600, 10, 0, "Current campsite::");
+        al_draw_text(g.font, g.color_white, 600, 10, 0, "Current campsite:");
         al_draw_text(g.font, g.color_white, 950, 10, 0, "Available campsites:");
         GridSystem::draw();
     }
@@ -4704,8 +4722,8 @@ void init_messagelog(void) {
     g.log->font = g.font;
 }
 
-void init_tilemap(void) {
-    g.map = new TileMap (50, 50, 16, 16);
+void init_tilemap(int sx, int sy) {
+    g.map = new TileMap (sx, sy, 16, 16);
 
     TileInfo i;
     // grass
@@ -4771,8 +4789,10 @@ MiniMapUI::~MiniMapUI(void) {
 // creates the player and npcs
 // must be called after init_tilemap();
 void init_characters(void) {
+    uniform_int_distribution<> dist(0, g.map->max_t);
+
     for(int i = 0; i < 15; i++) {
-        int n = rand() % g.map->max_t;
+        int n = dist(*g.rng);
 
         Character *c = new Character;
 
@@ -4887,10 +4907,54 @@ void allegro_init(void) {
         errorQuit("failed to load builtin font.");
     else
         info("Loaded builtin font.");
-
 }
 
-int main(void) {
+void init_rng(int seed) {
+    if(seed != -1) {
+        info("Using seed: " + to_string(seed));
+        g.rng = new mt19937(seed);
+    }
+    else {
+        random_device rd;
+        g.rng = new mt19937(rd());
+    }
+
+    if(g.rng == NULL)
+        errorQuit("Failed to initialize random number generator");
+}
+
+void init_args(int argc, char **argv,
+               int *seed, int *tilemap_sx, int *tilemap_sy) {
+
+    if(argc >= 2) {
+        try {
+            *seed = std::stoi(argv[1]);
+        }
+        catch (exception &e) {
+            info("WARNING: couldn't parse seed argument");
+            *seed = -1;
+        }
+    } else {
+        *seed = -1;
+    }
+    if(argc >= 4) {
+        try {
+            *tilemap_sx = std::stoi(argv[2]);
+            *tilemap_sy = std::stoi(argv[3]);
+        }
+        catch (exception &e) {
+            info("WARNING: couldn't parse tilemap dimension arguments");
+            *tilemap_sx = 50;
+            *tilemap_sy = 50;
+        }
+    } else {
+        *tilemap_sx = 50;
+        *tilemap_sy = 50;
+    }
+}
+
+
+int main(int argc, char **argv) {
     allegro_init();
 
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
@@ -4916,10 +4980,16 @@ int main(void) {
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
+    int seed;
+    int tilemap_sx;
+    int tilemap_sy;
+    init_args(argc, argv, &seed, &tilemap_sx, &tilemap_sy);
+
     load_bitmaps();
+    init_rng( seed );
     init_colors();
     init_iteminfo();
-    init_tilemap();
+    init_tilemap( tilemap_sx, tilemap_sy );
     init_hardpointinfo();
     init_characters();
     init_buttons();
