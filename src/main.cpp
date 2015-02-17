@@ -43,6 +43,7 @@ struct HardpointInfo;
 struct ItemInfo;
 struct LocationInfo;
 struct Item;
+struct BarIndicator;
 
 // global state
 struct Game {
@@ -113,6 +114,14 @@ struct Game {
     HardpointInfo *medical_right_upper_arm;
     HardpointInfo *medical_left_lower_arm;
     HardpointInfo *medical_right_lower_arm;
+
+    BarIndicator *health_indicator;
+    BarIndicator *pain_indicator;
+    BarIndicator *temperature_indicator;
+    BarIndicator *fatigue_indicator;
+    BarIndicator *hydration_indicator;
+    BarIndicator *satiety_indicator;
+    BarIndicator *burden_indicator;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -219,8 +228,8 @@ void init_iteminfo(void) {
 
     /* 01 */
     tmp.name = "Backpack";
-    tmp.grid_size_x = 7;
-    tmp.grid_size_y = 7;
+    tmp.grid_size_x = 6;
+    tmp.grid_size_y = 6;
     tmp.maxStack = 1;
     tmp.weight = 1000;
     tmp.sprite = g.bitmaps[24];
@@ -236,15 +245,15 @@ void init_iteminfo(void) {
 
     /* 02 */
     tmp.name = "First aid kit";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 6;
+    tmp.grid_size_x = 4;
+    tmp.grid_size_y = 4;
     tmp.maxStack = 1;
     tmp.weight = 750;
     tmp.sprite = g.bitmaps[22];
     tmp.isVehicle = false;
     tmp.isContainer = true;
-    tmp.container_size_x = 5;
-    tmp.container_size_y = 5;
+    tmp.container_size_x = 4;
+    tmp.container_size_y = 4;
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
@@ -441,7 +450,7 @@ void init_iteminfo(void) {
     /* 14 */
     tmp.name = "Whiskey";
     tmp.grid_size_x = 1;
-    tmp.grid_size_y = 2;
+    tmp.grid_size_y = 3;
     tmp.maxStack = 5;
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[40];
@@ -692,6 +701,38 @@ struct Button : public Widget {
     void draw(void);
     void update(void);
 };
+
+struct BarIndicator : public Widget {
+    float *quantity;
+    ALLEGRO_BITMAP *up;
+    ALLEGRO_BITMAP *bars;
+    const char *indicator_name;
+
+    BarIndicator();
+    ~BarIndicator() { };
+
+    void mouseDown(void) { };
+    void mouseUp(void) { };
+    void keyDown(void) { };
+    void hoverOver(void) { };
+
+    void press(void) { };
+    void draw(void);
+    void update(void) { };
+};
+
+BarIndicator::BarIndicator() {
+    up = NULL;
+    quantity = NULL;
+}
+
+void BarIndicator::draw(void) {
+    if(up != NULL && quantity != NULL && bars != NULL) {
+        al_draw_text(g.font, g.color_white, pos.x1 + 2, pos.y1 + 1, 0, indicator_name);
+        al_draw_bitmap(up, pos.x1, pos.y1 + 10, 0);
+        al_draw_bitmap_region(bars, 0, 0, *quantity * pos.x2, pos.y2, pos.x1, pos.y1 + 10, 0);
+    }
+}
 
 struct GridSortButton : public Widget {
     ALLEGRO_BITMAP *up;
@@ -1057,6 +1098,15 @@ struct Character {
     Grid *medical_left_lower_arm;
     Grid *medical_right_lower_arm;
 
+    // allowed range: 0 - 1
+    float health;
+    float pain;
+    float temperature;
+    float fatigue;
+    float hydration;
+    float satiety;
+    float burden;
+
     vector<Grid *> inventory_hardpoints;
 
     ALLEGRO_BITMAP *sprite;
@@ -1183,6 +1233,14 @@ Character::Character(void) {
     nextMove = 1000;
 
     skills = 0;
+
+    health = 1.0;
+    pain = 0.95;
+    temperature = 0.22;
+    fatigue = 0.87;
+    hydration = 0.43;
+    satiety = 0.72;
+    burden = 0.9;
 
     info("Character()");
 }
@@ -1421,6 +1479,7 @@ void Character::move(int new_n) {
 
     uniform_int_distribution<> dist(-100, 100);
     nextMove += 1000 + dist(*g.rng);
+    fatigue -= 0.01;
 }
 
 void Character::die(void) {
@@ -2145,7 +2204,18 @@ struct UI {
     virtual void draw(void);
 
     void toggleMessageLog(void);
+    void addIndicatorWidgets(void);
 };
+
+void UI::addIndicatorWidgets(void) {
+    widgets.push_back(g.health_indicator);
+    widgets.push_back(g.pain_indicator);
+    widgets.push_back(g.temperature_indicator);
+    widgets.push_back(g.fatigue_indicator);
+    widgets.push_back(g.hydration_indicator);
+    widgets.push_back(g.satiety_indicator);
+    widgets.push_back(g.burden_indicator);
+}
 
 void UI::update(void) {
     for(auto& widget : widgets)
@@ -2945,6 +3015,11 @@ Item *Grid::grab_item(int x, int y) {
     return NULL;
 }
 
+/*
+  TODO: replace this by changing characters to std::priority_queue ?
+  vector: O(n) search, O(1) insert
+  priority_queue: O(1) search, O(log(n)) insert
+*/
 // find the next character that gets to move: it's the character
 // with the lowest nextMove value.
 Character *next(void) {
@@ -3395,6 +3470,7 @@ EncounterGridSystem::EncounterGridSystem() {
 }
 
 EncounterGridSystem::~EncounterGridSystem() {
+    info("~EncounterGridSystem()");
     delete options;
     delete selected;
 }
@@ -3453,9 +3529,10 @@ void runEncounterStep(void) {
 
     if(action1 == "Flee") {
 
+        g.map->player->health -= 0.05;
         g.map->player->randomMove();
         end_turn();
-        g.AddMessage("You successfully flee from the encounter.");
+        g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
         g.AddMessage("Encounter ends.");
 
         endEncounter();
@@ -3809,9 +3886,9 @@ struct InventoryGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) {
-        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-
         GridSystem::draw();
+        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+        al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
     }
 
     void keyDown(void) override;
@@ -4058,6 +4135,7 @@ ItemsUI::ItemsUI() {
     widgets.push_back(g.button_scavenge);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
+    addIndicatorWidgets();
 }
 
 ConditionUI::ConditionUI() {
@@ -4095,6 +4173,7 @@ ConditionUI::ConditionUI() {
     widgets.push_back(g.button_scavenge);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
+    addIndicatorWidgets();
 }
 
 ItemsUI::~ItemsUI() {
@@ -4592,6 +4671,9 @@ void load_bitmaps(void) {
     /* 42 */ filenames.push_back("media/items/locations/factory.png");
     /* 43 */ filenames.push_back("media/items/locations/wood_shack.png");
     /* 44 */ filenames.push_back("media/buttons/scavenge.png");
+    /* 45 */ filenames.push_back("media/backgrounds/body.png");
+    /* 46 */ filenames.push_back("media/indicators/background.png");
+    /* 47 */ filenames.push_back("media/indicators/green_bar.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -4710,6 +4792,82 @@ void init_buttons(void) {
     g.main_buttons.insert(g.button_Condition);
     g.main_buttons.insert(g.button_Camp);
     g.main_buttons.insert(g.button_Vehicle);
+}
+
+void init_indicators(void) {
+    int off_y = 10;
+    int space_y = 3;
+
+    g.health_indicator = new BarIndicator;
+    g.health_indicator->indicator_name = "Health:";
+    g.health_indicator->pos.x1 = 0;
+    g.health_indicator->pos.y1 = off_y;
+    g.health_indicator->pos.x2 = 100;
+    g.health_indicator->pos.y2 = 25;
+    g.health_indicator->quantity = &g.map->player->health;
+    g.health_indicator->up = g.bitmaps[46];
+    g.health_indicator->bars = g.bitmaps[47];
+
+    g.pain_indicator = new BarIndicator;
+    g.pain_indicator->indicator_name = "Pain:";
+    g.pain_indicator->pos.x1 = 0;
+    g.pain_indicator->pos.y1 = off_y + 25 + space_y * 1;
+    g.pain_indicator->pos.x2 = 100;
+    g.pain_indicator->pos.y2 = 25;
+    g.pain_indicator->quantity = &g.map->player->pain;
+    g.pain_indicator->up = g.bitmaps[46];
+    g.pain_indicator->bars = g.bitmaps[47];
+
+    g.temperature_indicator = new BarIndicator;
+    g.temperature_indicator->indicator_name = "Temperature:";
+    g.temperature_indicator->pos.x1 = 0;
+    g.temperature_indicator->pos.y1 = off_y + 50 + space_y * 2;
+    g.temperature_indicator->pos.x2 = 100;
+    g.temperature_indicator->pos.y2 = 25;
+    g.temperature_indicator->quantity = &g.map->player->temperature;
+    g.temperature_indicator->up = g.bitmaps[46];
+    g.temperature_indicator->bars = g.bitmaps[47];
+
+    g.fatigue_indicator = new BarIndicator;
+    g.fatigue_indicator->indicator_name = "Fatigue:";
+    g.fatigue_indicator->pos.x1 = 0;
+    g.fatigue_indicator->pos.y1 = off_y + 75 + space_y * 2;
+    g.fatigue_indicator->pos.x2 = 100;
+    g.fatigue_indicator->pos.y2 = 25;
+    g.fatigue_indicator->quantity = &g.map->player->fatigue;
+    g.fatigue_indicator->up = g.bitmaps[46];
+    g.fatigue_indicator->bars = g.bitmaps[47];
+
+    g.hydration_indicator = new BarIndicator;
+    g.hydration_indicator->indicator_name = "Hydration:";
+    g.hydration_indicator->pos.x1 = 0;
+    g.hydration_indicator->pos.y1 = off_y + 100 + space_y * 3;
+    g.hydration_indicator->pos.x2 = 100;
+    g.hydration_indicator->pos.y2 = 25;
+    g.hydration_indicator->quantity = &g.map->player->hydration;
+    g.hydration_indicator->up = g.bitmaps[46];
+    g.hydration_indicator->bars = g.bitmaps[47];
+
+    g.satiety_indicator = new BarIndicator;
+    g.satiety_indicator->indicator_name = "Satiety:";
+    g.satiety_indicator->pos.x1 = 0;
+    g.satiety_indicator->pos.y1 = off_y + 125 + space_y * 4;
+    g.satiety_indicator->pos.x2 = 100;
+    g.satiety_indicator->pos.y2 = 25;
+    g.satiety_indicator->quantity = &g.map->player->satiety;
+    g.satiety_indicator->up = g.bitmaps[46];
+    g.satiety_indicator->bars = g.bitmaps[47];
+
+    g.burden_indicator = new BarIndicator;
+    g.burden_indicator->indicator_name = "Burden:";
+    g.burden_indicator->pos.x1 = 0;
+    g.burden_indicator->pos.y1 = off_y + 150 + space_y * 5;
+    g.burden_indicator->pos.x2 = 100;
+    g.burden_indicator->pos.y2 = 25;
+    g.burden_indicator->quantity = &g.map->player->burden;
+    g.burden_indicator->up = g.bitmaps[46];
+    g.burden_indicator->bars = g.bitmaps[47];
+
 }
 
 void init_messagelog(void) {
@@ -4842,6 +5000,7 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_scavenge);
     widgets.push_back(g.button_endturn);
+    addIndicatorWidgets();
 }
 
 MainMapUI::~MainMapUI(void) {
@@ -4998,6 +5157,7 @@ int main(int argc, char **argv) {
     init_recipes();
     init_skills();
     init_locationdata();
+    init_indicators();
 
     {
         g.ui_MainMap   = new MainMapUI;
@@ -5045,9 +5205,7 @@ int main(int argc, char **argv) {
             // mouse up event
             was_mouse_down = false;
         } else {
-            // if(i % 10 == 0) {
-            //     g.ui->hoverOverEvent();
-            // }
+            // hover event
         }
 
         al_wait_for_event(event_queue, &ev);
@@ -5064,9 +5222,6 @@ int main(int argc, char **argv) {
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
-                // if(i < 1000) {
-                //     end_turn();
-                // }
                 g.ui->update();
             }
             redraw = true;
