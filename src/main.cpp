@@ -1115,6 +1115,8 @@ struct Character {
     // 1 - sees immediate neighbours
     // etc
     int current_los_distance;
+
+    int dt;
     int nextMove;
 
     uint64_t skills;
@@ -1151,12 +1153,30 @@ struct Character {
     void disableSkill(int n);
 
     void useItem(Item *i);
+
+    void spendTime(int _dt);
+    void update(void);
+
+    void print_stats(void);
+    void hurt(float amount);
 };
+
+void Character::hurt(float amount) {
+    health -= min(health, amount);
+    pain -= amount * 3;
+}
+
+void Character::spendTime(int _dt) {
+    this->dt += _dt;
+    this->nextMove += _dt;
+}
 
 void Character::useItem(Item *i) {
     if(i->isConsumedOnUse()) {
         i->parent->RemoveItem(i);
         delete i;
+        hydration = min(1.0, hydration + 0.2);
+        satiety = min(1.0, satiety + 0.1);
     }
     cout << "used " << i << endl;
 }
@@ -1231,6 +1251,7 @@ Character::Character(void) {
     current_los_distance = 3;
     currently_seeing.reserve(50);
     nextMove = 1000;
+    dt = 0;
 
     skills = 0;
 
@@ -1434,6 +1455,37 @@ void Character::do_AI(void) {
     randomMove();
 }
 
+void Character::update(void) {
+    // heal 0.5% over 1000 time units
+    float healChange = 0.005 * 0.001 * dt;
+    health = min((float)1.0, health + healChange);
+
+    // increase fatigue by 3% per 1000 time units
+    float fatigueChange = 0.03 * 0.001 * dt;
+    fatigue = max((float)0.0, fatigue - fatigueChange);
+
+    // decrease pain by 6% per 1000 time units
+    float painChange = 0.06 * 0.001 * dt;
+    pain = min((float)1.0, pain + painChange);
+    pain = min(health, pain);
+
+    // increase hydration by 4% per 1000 time units
+    float hydrationChange = 0.04 * 0.001 * dt;
+    hydration = max((float)0.0, hydration - hydrationChange);
+
+    // increase satiety by 2% per 1000 time units
+    float satietyChange = 0.02 * 0.001 * dt;
+    satiety = max((float)0.0, satiety - satietyChange);
+
+    dt = 0;
+}
+
+void Character::print_stats(void) {
+    cout << " H: " << health << " P: " << pain << " F: " << fatigue
+         << " Hy: " << hydration << " S: " << satiety << " B: " << burden
+         << endl;;
+}
+
 void Character::randomMove(void) {
     int new_n;
     uniform_int_distribution<> dist(1, 6);
@@ -1478,8 +1530,7 @@ void Character::move(int new_n) {
     }
 
     uniform_int_distribution<> dist(-100, 100);
-    nextMove += 1000 + dist(*g.rng);
-    fatigue -= 0.01;
+    spendTime( 1000 + dist(*g.rng) );
 }
 
 void Character::die(void) {
@@ -3046,15 +3097,21 @@ void end_turn() {
     while((c = next()) != g.map->player && g.encounterInterrupt == false)
         {
             cout << "AI " << c << " (" << c->nextMove << ") " << c->n;
+            c->update();
             c->do_AI();
-            cout << " -> " << c->n << endl;
+            cout << " -> " << c->n;
+            c->print_stats();
+            cout << endl;
         }
+
+    g.map->player->update();
+    g.map->player->print_stats();
 
     if(g.encounterInterrupt == true) {
         runEncounter();
     }
 
-    cout << "\"turn\" ends with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
+    cout << "\"turn\" ends \"" << g.map->player->nextMove << "\"with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -3510,7 +3567,6 @@ void endEncounter(void) {
         cout << "All encounters ended" << endl;
         button_MainMap_press();
         g.map->player->update_visibility();
-        end_turn();
     }
 }
 
@@ -3529,13 +3585,13 @@ void runEncounterStep(void) {
 
     if(action1 == "Flee") {
 
-        g.map->player->health -= 0.05;
+        g.map->player->hurt(0.1);
         g.map->player->randomMove();
-        end_turn();
         g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
         g.AddMessage("Encounter ends.");
 
         endEncounter();
+
     }
     else if(action1 == "Single attack") {
 
@@ -4620,7 +4676,7 @@ void button_Crafting_press(void) {
 }
 
 void button_endturn_press(void) {
-    g.map->player->nextMove += 1000;
+    g.map->player->spendTime(1000);
     end_turn();
 }
 
@@ -4831,7 +4887,7 @@ void init_indicators(void) {
     g.fatigue_indicator = new BarIndicator;
     g.fatigue_indicator->indicator_name = "Fatigue:";
     g.fatigue_indicator->pos.x1 = 0;
-    g.fatigue_indicator->pos.y1 = off_y + 75 + space_y * 2;
+    g.fatigue_indicator->pos.y1 = off_y + 75 + space_y * 3;
     g.fatigue_indicator->pos.x2 = 100;
     g.fatigue_indicator->pos.y2 = 25;
     g.fatigue_indicator->quantity = &g.map->player->fatigue;
@@ -4841,7 +4897,7 @@ void init_indicators(void) {
     g.hydration_indicator = new BarIndicator;
     g.hydration_indicator->indicator_name = "Hydration:";
     g.hydration_indicator->pos.x1 = 0;
-    g.hydration_indicator->pos.y1 = off_y + 100 + space_y * 3;
+    g.hydration_indicator->pos.y1 = off_y + 100 + space_y * 4;
     g.hydration_indicator->pos.x2 = 100;
     g.hydration_indicator->pos.y2 = 25;
     g.hydration_indicator->quantity = &g.map->player->hydration;
@@ -4851,7 +4907,7 @@ void init_indicators(void) {
     g.satiety_indicator = new BarIndicator;
     g.satiety_indicator->indicator_name = "Satiety:";
     g.satiety_indicator->pos.x1 = 0;
-    g.satiety_indicator->pos.y1 = off_y + 125 + space_y * 4;
+    g.satiety_indicator->pos.y1 = off_y + 125 + space_y * 5;
     g.satiety_indicator->pos.x2 = 100;
     g.satiety_indicator->pos.y2 = 25;
     g.satiety_indicator->quantity = &g.map->player->satiety;
@@ -4861,7 +4917,7 @@ void init_indicators(void) {
     g.burden_indicator = new BarIndicator;
     g.burden_indicator->indicator_name = "Burden:";
     g.burden_indicator->pos.x1 = 0;
-    g.burden_indicator->pos.y1 = off_y + 150 + space_y * 5;
+    g.burden_indicator->pos.y1 = off_y + 150 + space_y * 6;
     g.burden_indicator->pos.x2 = 100;
     g.burden_indicator->pos.y2 = 25;
     g.burden_indicator->quantity = &g.map->player->burden;
