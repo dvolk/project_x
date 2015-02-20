@@ -44,6 +44,7 @@ struct ItemInfo;
 struct LocationInfo;
 struct Item;
 struct BarIndicator;
+struct TimeDisplay;
 
 // global state
 struct Game {
@@ -77,6 +78,7 @@ struct Game {
     Button *button_Vehicle;
     Button *button_endturn;
     Button *button_scavenge;
+    Button *button_sleep;
 
     TileMap *map;
     MiniMap *minimap;
@@ -122,6 +124,8 @@ struct Game {
     BarIndicator *hydration_indicator;
     BarIndicator *satiety_indicator;
     BarIndicator *burden_indicator;
+
+    TimeDisplay *time_display;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -1069,6 +1073,16 @@ void Item::resetHardpointPos(void) {
     }
 }
 
+enum ActivityKind {
+    ACTIVITY_NONE,
+    ACTIVITY_WAIT,
+    ACTIVITY_SLEEP,
+    ACTIVITY_MOVE,
+    ACTIVITY_HURT,
+    ACTIVITY_USE,
+    ACTIVITY_COMBAT
+};
+
 struct Character {
     int n; // position by offset
 
@@ -1096,6 +1110,7 @@ struct Character {
     Grid *medical_left_upper_arm;
     Grid *medical_right_upper_arm;
     Grid *medical_left_lower_arm;
+
     Grid *medical_right_lower_arm;
 
     // allowed range: 0 - 1
@@ -1107,6 +1122,8 @@ struct Character {
     float satiety;
     float burden;
 
+    ActivityKind activity;
+
     vector<Grid *> inventory_hardpoints;
 
     ALLEGRO_BITMAP *sprite;
@@ -1117,6 +1134,8 @@ struct Character {
     int current_los_distance;
 
     int dt;
+    static int lastMove;
+    int myLastMove;
     int nextMove;
 
     uint64_t skills;
@@ -1156,17 +1175,37 @@ struct Character {
 
     void spendTime(int _dt);
     void update(void);
+    void post_update(void);
 
     void print_stats(void);
     void hurt(float amount);
+    void sleep(void);
+    void wait(void);
 };
+
+int Character::lastMove = 0;
+
+void Character::sleep(void) {
+    g.AddMessage("You go to sleep...");
+    activity = ACTIVITY_SLEEP;
+    spendTime(10000);
+}
+
+void Character::wait(void) {
+    g.AddMessage("You play with yourself for a while...");
+    activity = ACTIVITY_WAIT;
+    spendTime(1000);
+}
 
 void Character::hurt(float amount) {
     health -= min(health, amount);
-    pain -= amount * 3;
+    pain -= min(pain, amount * 3);
+    activity = ACTIVITY_COMBAT;
+    spendTime(10);
 }
 
 void Character::spendTime(int _dt) {
+    //    this->myLastMove = nextMove;
     this->dt += _dt;
     this->nextMove += _dt;
 }
@@ -1179,6 +1218,11 @@ void Character::useItem(Item *i) {
         satiety = min(1.0, satiety + 0.1);
     }
     cout << "used " << i << endl;
+    /*
+      TODO: spent time should be item specific
+    */
+    activity = ACTIVITY_USE;
+    spendTime(10);
 }
 
 bool Character::hasSkill(int n) {
@@ -1262,6 +1306,8 @@ Character::Character(void) {
     hydration = 0.43;
     satiety = 0.72;
     burden = 0.9;
+
+    activity = ACTIVITY_MOVE;
 
     info("Character()");
 }
@@ -1452,38 +1498,79 @@ void TileMap::updateCharsByPos(void) {
 
 // do stuff on the map
 void Character::do_AI(void) {
+    if(health < 0.01) {
+        this->die();
+        return;
+    }
+    update();
     randomMove();
+    post_update();
+}
+
+void Character::post_update(void) {
+    if(health < 0.01) {
+        this->die();
+        return;
+    }
 }
 
 void Character::update(void) {
+    int _dt = nextMove - lastMove;
+    lastMove = myLastMove;
+    if(_dt < dt)
+        cout << this << " was interrupted!" << endl;
+
+    cout << "dt : " << dt << " _dt: " << _dt << endl;
+
+    // assert(activity != ACTIVITY_NONE || g.encounterInterrupt == true);
+
     // heal 0.5% over 1000 time units
     float healChange = 0.005 * 0.001 * dt;
     health = min((float)1.0, health + healChange);
 
-    // increase fatigue by 3% per 1000 time units
+    // increase fatigue by 3% per 1000 time units by default
     float fatigueChange = 0.03 * 0.001 * dt;
-    fatigue = max((float)0.0, fatigue - fatigueChange);
+    if(activity == ACTIVITY_MOVE)
+        fatigue = max((float)0.0, fatigue - fatigueChange);
 
-    // decrease pain by 6% per 1000 time units
+    // else recover 3% per 1000 time units if we're sleeping
+    // or waiting
+    if(activity == ACTIVITY_SLEEP ||
+       activity == ACTIVITY_WAIT)
+        fatigue = min((float)1.0, fatigue + fatigueChange);
+
+    // increase pain stat by 6% per 1000 time units
     float painChange = 0.06 * 0.001 * dt;
     pain = min((float)1.0, pain + painChange);
     pain = min(health, pain);
 
-    // increase hydration by 4% per 1000 time units
+    // decrease hydration by 4% per 1000 time units
     float hydrationChange = 0.04 * 0.001 * dt;
     hydration = max((float)0.0, hydration - hydrationChange);
 
-    // increase satiety by 2% per 1000 time units
+    // decrease satiety by 2% per 1000 time units
     float satietyChange = 0.02 * 0.001 * dt;
     satiety = max((float)0.0, satiety - satietyChange);
 
+    // set line of sight distance based on time of day
+    int tod = nextMove % 24000;
+    if(tod > 0 && tod <= 6000)
+        current_los_distance = 2;
+    else if(tod > 6000 && tod <= 12000)
+        current_los_distance = 2;
+    else if(tod > 12000 && tod <= 18000)
+        current_los_distance = 2;
+    else if(tod > 18000 && tod <= 24000)
+        current_los_distance = 0;
+
     dt = 0;
+    activity = ACTIVITY_NONE;
 }
 
 void Character::print_stats(void) {
     cout << " H: " << health << " P: " << pain << " F: " << fatigue
          << " Hy: " << hydration << " S: " << satiety << " B: " << burden
-         << endl;;
+         << endl;
 }
 
 void Character::randomMove(void) {
@@ -1529,6 +1616,7 @@ void Character::move(int new_n) {
         info("WARNING: tried to Character::move() to invalid index");
     }
 
+    activity = ACTIVITY_MOVE;
     uniform_int_distribution<> dist(-100, 100);
     spendTime( 1000 + dist(*g.rng) );
 }
@@ -1559,6 +1647,40 @@ Button::Button() {
     pressed = false;
     up = NULL;
     down = NULL;
+}
+
+struct TimeDisplay : public Widget {
+    int tod;
+
+    TimeDisplay() { };
+    ~TimeDisplay() { };
+
+    void mouseDown(void) { };
+    void mouseUp(void) { };
+    void keyDown(void) { };
+    void hoverOver(void) { };
+
+    void press(void) { };
+    void draw(void);
+    void update(void) { };
+    void calculate_tod(void);
+};
+
+void TimeDisplay::calculate_tod(void) {
+    tod = g.map->player->nextMove % 24000;
+}
+
+void TimeDisplay::draw(void) {
+    calculate_tod();
+
+    if(tod > 0 && tod <= 6000)
+        al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, "It's morning.");
+    else if(tod > 6000 && tod <= 12000)
+        al_draw_text(g.font, g.color_white, pos.x1, pos.y1, 0, "It's midday.");
+    else if(tod > 12000 && tod <= 18000)
+        al_draw_text(g.font, g.color_grey2, pos.x1, pos.y1, 0, "It's the afternoon.");
+    else if(tod > 18000 && tod <= 24000)
+        al_draw_text(g.font, g.color_grey3, pos.x1, pos.y1, 0, "It's nighttime.");
 }
 
 struct GridSystem : public Widget {
@@ -2224,8 +2346,10 @@ void TileMap::handleKeyDown(void) {
         else
             g.log->visible = true;
     }
-    if(g.key == ALLEGRO_KEY_SPACE)
+    if(g.key == ALLEGRO_KEY_SPACE) {
         end_turn();
+        player->wait();
+    }
 
     char buf[35];
     snprintf(buf, sizeof(buf),
@@ -3090,28 +3214,53 @@ Character *next(void) {
         return g.map->player;
 }
 
+void do_encounter_messages(void) {
+    if(g.map->player->activity == ACTIVITY_SLEEP)
+        g.AddMessage("Your sleep is interrupted and you become aware of an interloper!");
+    else if(g.map->player->activity == ACTIVITY_WAIT)
+        g.AddMessage("An interloper enters the vicinity!");
+    else
+        g.AddMessage("There's someone in the vicinity!");
+}
+
+void chr_debug_print(Character *c) {
+            cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
+}
+
+void end_turn_debug_print(void) {
+    cout << "\"turn\" ends (" << g.map->player->nextMove << ") with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
+    g.map->player->print_stats();
+}
+
+// process AI's without caring about encounter interrupts.
+// used when already in an encounter.
+void processAI(void) {
+    Character *c;
+    while((c = next()) != g.map->player)
+        {
+            c->do_AI();
+        }
+}
+
 void end_turn() {
     Character *c;
+
     // process characters until it's the player's turn again or we get
     // an encounter interrupt
     while((c = next()) != g.map->player && g.encounterInterrupt == false)
         {
-            cout << "AI " << c << " (" << c->nextMove << ") " << c->n;
-            c->update();
             c->do_AI();
-            cout << " -> " << c->n;
-            c->print_stats();
-            cout << endl;
+        }
+
+    if(g.encounterInterrupt == true &&
+       g.ui != (UI*)g.ui_Encounter /* <-- TODO: still needed? */)
+        {
+            do_encounter_messages();
+            runEncounter();
         }
 
     g.map->player->update();
-    g.map->player->print_stats();
-
-    if(g.encounterInterrupt == true) {
-        runEncounter();
-    }
-
-    cout << "\"turn\" ends \"" << g.map->player->nextMove << "\"with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
+    end_turn_debug_print();
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -3465,6 +3614,7 @@ void CraftingUI::setup(void) {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
     widgets.push_back(g.button_endturn);
 
     craftGrids->reset();
@@ -3557,17 +3707,21 @@ void runEncounter(void) {
 }
 
 void endEncounter(void) {
+    Character *npc = g.ui_Encounter->npc;
+    g.encounterInterrupt = false;
+    npc->do_AI();
+    processAI();
     int num_there = g.map->charsByPos.count(g.map->player->n);
 
     if(num_there > 1) {
         cout << "There are more encounters here: " << num_there - 1 << endl;
         runEncounter();
     } else {
-        g.encounterInterrupt = false;
         cout << "All encounters ended" << endl;
         button_MainMap_press();
         g.map->player->update_visibility();
     }
+    end_turn();
 }
 
 // runs one step of the encounter after the player pressed the
@@ -3586,6 +3740,7 @@ void runEncounterStep(void) {
     if(action1 == "Flee") {
 
         g.map->player->hurt(0.1);
+        npc->hurt(0.6);
         g.map->player->randomMove();
         g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
         g.AddMessage("Encounter ends.");
@@ -3598,7 +3753,7 @@ void runEncounterStep(void) {
         g.AddMessage("KA-POW!");
         g.AddMessage("The adversary succumbs to their wounds.");
         g.AddMessage("Encounter ends.");
-        g.map->removeCharacter(npc);
+        npc->hurt(1.0);
         g.map->updateCharsByPos();
 
         endEncounter();
@@ -3786,6 +3941,7 @@ void ScavengeUI::setup(void) {
     widgets.push_back(g.button_Camp);
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
     widgets.push_back(g.button_endturn);
     widgets.push_back(gridsystem);
 }
@@ -4107,6 +4263,7 @@ VehicleUI::VehicleUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -4144,6 +4301,7 @@ CampUI::CampUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -4189,6 +4347,7 @@ ItemsUI::ItemsUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
     addIndicatorWidgets();
@@ -4227,6 +4386,7 @@ ConditionUI::ConditionUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
     addIndicatorWidgets();
@@ -4334,6 +4494,7 @@ SkillsUI::SkillsUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
 }
 
 SkillsUI::~SkillsUI() {
@@ -4676,7 +4837,12 @@ void button_Crafting_press(void) {
 }
 
 void button_endturn_press(void) {
-    g.map->player->spendTime(1000);
+    g.map->player->wait();
+    end_turn();
+}
+
+void button_Sleep_press(void) {
+    g.map->player->sleep();
     end_turn();
 }
 
@@ -4730,6 +4896,7 @@ void load_bitmaps(void) {
     /* 45 */ filenames.push_back("media/backgrounds/body.png");
     /* 46 */ filenames.push_back("media/indicators/background.png");
     /* 47 */ filenames.push_back("media/indicators/green_bar.png");
+    /* 48 */ filenames.push_back("media/buttons/sleep_up.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -4757,69 +4924,72 @@ void init_buttons(void) {
     g.button_Vehicle   = new Button;
     g.button_endturn   = new Button;
     g.button_scavenge  = new Button;
+    g.button_sleep     = new Button;
 
+    int off_y = 175;
+    int step = 45;
     // left
     g.button_MainMap->pos.x1 = 0;
-    g.button_MainMap->pos.y1 = 480;
+    g.button_MainMap->pos.y1 = off_y + 1 * step;
     g.button_MainMap->pos.x2 = 100;
-    g.button_MainMap->pos.y2 = 60;
+    g.button_MainMap->pos.y2 = 45;
     g.button_MainMap->up = g.bitmaps[0];
     g.button_MainMap->down = g.bitmaps[1];
     g.button_MainMap->onMouseDown = button_MainMap_press;
 
     g.button_MiniMap->pos.x1 = 0;
-    g.button_MiniMap->pos.y1 = 540;
+    g.button_MiniMap->pos.y1 = off_y + 2 * step;
     g.button_MiniMap->pos.x2 = 100;
-    g.button_MiniMap->pos.y2 = 60;
+    g.button_MiniMap->pos.y2 = 45;
     g.button_MiniMap->up = g.bitmaps[2];
     g.button_MiniMap->down = g.bitmaps[3];
     g.button_MiniMap->onMouseDown = button_MiniMap_press;
 
     g.button_Skills->pos.x1 = 0;
-    g.button_Skills->pos.y1 = 600;
+    g.button_Skills->pos.y1 = off_y + 3 * step;
     g.button_Skills->pos.x2 = 100;
-    g.button_Skills->pos.y2 = 60;
+    g.button_Skills->pos.y2 = 45;
     g.button_Skills->up = g.bitmaps[4];
     g.button_Skills->down = g.bitmaps[5];
     g.button_Skills->onMouseDown = button_Skills_press;
 
     g.button_Crafting->pos.x1 = 0;
-    g.button_Crafting->pos.y1 = 660;
+    g.button_Crafting->pos.y1 = off_y + 4 * step;
     g.button_Crafting->pos.x2 = 100;
-    g.button_Crafting->pos.y2 = 60;
+    g.button_Crafting->pos.y2 = 45;
     g.button_Crafting->up = g.bitmaps[6];
     g.button_Crafting->down = g.bitmaps[7];
     g.button_Crafting->onMouseDown = button_Crafting_press;
 
     // right
-    g.button_Items->pos.x1 = 1180;
-    g.button_Items->pos.y1 = 280;
+    g.button_Items->pos.x1 = 0;
+    g.button_Items->pos.y1 = off_y + 5 * step;
     g.button_Items->pos.x2 = 100;
-    g.button_Items->pos.y2 = 60;
+    g.button_Items->pos.y2 = 45;
     g.button_Items->up = g.bitmaps[8];
     g.button_Items->down = g.bitmaps[9];
     g.button_Items->onMouseDown = button_Items_press;
 
-    g.button_Condition->pos.x1 = 1180;
-    g.button_Condition->pos.y1 = 340;
+    g.button_Condition->pos.x1 = 0;
+    g.button_Condition->pos.y1 = off_y + 6 * step;
     g.button_Condition->pos.x2 = 100;
-    g.button_Condition->pos.y2 = 60;
+    g.button_Condition->pos.y2 = 45;
     g.button_Condition->up = g.bitmaps[10];
     g.button_Condition->down = g.bitmaps[11];
     g.button_Condition->onMouseDown = button_Condition_press;
 
-    g.button_Camp->pos.x1 = 1180;
-    g.button_Camp->pos.y1 = 400;
+    g.button_Camp->pos.x1 = 0;
+    g.button_Camp->pos.y1 = off_y + 7 * step;
     g.button_Camp->pos.x2 = 100;
-    g.button_Camp->pos.y2 = 60;
+    g.button_Camp->pos.y2 = 45;
     g.button_Camp->up = g.bitmaps[12];
     g.button_Camp->down = g.bitmaps[13];
     g.button_Camp->onMouseDown = button_Camp_press;
 
-    g.button_Vehicle->pos.x1 = 1180;
-    g.button_Vehicle->pos.y1 = 460;
+    g.button_Vehicle->pos.x1 = 0;
+    g.button_Vehicle->pos.y1 = off_y + 8 * step;
     g.button_Vehicle->pos.x2 = 100;
-    g.button_Vehicle->pos.y2 = 60;
+    g.button_Vehicle->pos.y2 = 45;
     g.button_Vehicle->up = g.bitmaps[14];
     g.button_Vehicle->down = g.bitmaps[15];
     g.button_Vehicle->onMouseDown = button_Vehicle_press;
@@ -4840,6 +5010,14 @@ void init_buttons(void) {
     g.button_scavenge->down = NULL;
     g.button_scavenge->onMouseDown = button_Scavenge_press;
 
+    g.button_sleep->pos.x1 = 1180;
+    g.button_sleep->pos.y1 = 60;
+    g.button_sleep->pos.x2 = 100;
+    g.button_sleep->pos.y2 = 30;
+    g.button_sleep->up = g.bitmaps[48];
+    g.button_sleep->down = NULL;
+    g.button_sleep->onMouseDown = button_Sleep_press;
+
     g.main_buttons.insert(g.button_MainMap);
     g.main_buttons.insert(g.button_MiniMap);
     g.main_buttons.insert(g.button_Skills);
@@ -4850,8 +5028,16 @@ void init_buttons(void) {
     g.main_buttons.insert(g.button_Vehicle);
 }
 
+void init_timedisplay(void) {
+    g.time_display = new TimeDisplay;
+    g.time_display->pos.x1 = 2;
+    g.time_display->pos.y1 = 205;
+    g.time_display->pos.x2 = 100;
+    g.time_display->pos.y2 = 25;
+}
+
 void init_indicators(void) {
-    int off_y = 10;
+    int off_y = 3;
     int space_y = 3;
 
     g.health_indicator = new BarIndicator;
@@ -4994,6 +5180,7 @@ MiniMapUI::MiniMapUI(void) {
     widgets.push_back(g.minimap);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_sleep);
 }
 
 MiniMapUI::~MiniMapUI(void) {
@@ -5056,6 +5243,8 @@ MainMapUI::MainMapUI() {
     widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.button_scavenge);
     widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_sleep);
+    widgets.push_back(g.time_display);
     addIndicatorWidgets();
 }
 
@@ -5214,6 +5403,7 @@ int main(int argc, char **argv) {
     init_skills();
     init_locationdata();
     init_indicators();
+    init_timedisplay();
 
     {
         g.ui_MainMap   = new MainMapUI;
