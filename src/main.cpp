@@ -1408,8 +1408,6 @@ struct TileMap : public Widget {
     vector<TileInfo> tile_info;
     vector<ALLEGRO_BITMAP *>bitmaps;
 
-    int pos_to_kill;
-
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
 
@@ -1515,13 +1513,6 @@ void Character::post_update(void) {
 }
 
 void Character::update(void) {
-    int _dt = nextMove - lastMove;
-    lastMove = myLastMove;
-    if(_dt < dt)
-        cout << this << " was interrupted!" << endl;
-
-    cout << "dt : " << dt << " _dt: " << _dt << endl;
-
     // assert(activity != ACTIVITY_NONE || g.encounterInterrupt == true);
 
     // heal 0.5% over 1000 time units
@@ -1551,17 +1542,6 @@ void Character::update(void) {
     // decrease satiety by 2% per 1000 time units
     float satietyChange = 0.02 * 0.001 * dt;
     satiety = max((float)0.0, satiety - satietyChange);
-
-    // set line of sight distance based on time of day
-    int tod = nextMove % 24000;
-    if(tod > 0 && tod <= 6000)
-        current_los_distance = 2;
-    else if(tod > 6000 && tod <= 12000)
-        current_los_distance = 2;
-    else if(tod > 12000 && tod <= 18000)
-        current_los_distance = 2;
-    else if(tod > 18000 && tod <= 24000)
-        current_los_distance = 0;
 
     dt = 0;
     activity = ACTIVITY_NONE;
@@ -2129,6 +2109,17 @@ constexpr int lines3[18][3] =
 // updates which tiles the player is currently seeing and marks
 // those tiles as known to the player.
 void Character::update_visibility(void) {
+    // set line of sight distance based on time of day
+    int tod = nextMove % 24000;
+    if(tod > 5000 && tod <= 8000)
+        current_los_distance = 1;
+    else if(tod > 8000 && tod <= 18000)
+        current_los_distance = 2;
+    else if(tod > 18000 && tod <= 22000)
+        current_los_distance = 1;
+    else
+        current_los_distance = 0;
+
     currently_seeing.clear();
     currently_seeing.push_back(n);
     g.map->tiles[n].visible = true;
@@ -3214,15 +3205,6 @@ Character *next(void) {
         return g.map->player;
 }
 
-void do_encounter_messages(void) {
-    if(g.map->player->activity == ACTIVITY_SLEEP)
-        g.AddMessage("Your sleep is interrupted and you become aware of an interloper!");
-    else if(g.map->player->activity == ACTIVITY_WAIT)
-        g.AddMessage("An interloper enters the vicinity!");
-    else
-        g.AddMessage("There's someone in the vicinity!");
-}
-
 void chr_debug_print(Character *c) {
             cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
 }
@@ -3252,10 +3234,11 @@ void end_turn() {
             c->do_AI();
         }
 
+    g.map->player->update_visibility();
+
     if(g.encounterInterrupt == true &&
        g.ui != (UI*)g.ui_Encounter /* <-- TODO: still needed? */)
         {
-            do_encounter_messages();
             runEncounter();
         }
 
@@ -3701,15 +3684,25 @@ EncounterUI::EncounterUI() {
 
 void button_MainMap_press(void);
 
+void do_encounter_messages(void) {
+    if(g.map->player->activity == ACTIVITY_SLEEP)
+        g.AddMessage("Your sleep is interrupted and you become aware of an interloper!");
+    else if(g.map->player->activity == ACTIVITY_WAIT)
+        g.AddMessage("An interloper enters the vicinity!");
+    else
+        g.AddMessage("There's someone in the vicinity!");
+}
+
 void runEncounter(void) {
     g.ui_Encounter->setup();
+    do_encounter_messages();
     g.ui = g.ui_Encounter;
 }
 
 void endEncounter(void) {
     Character *npc = g.ui_Encounter->npc;
     g.encounterInterrupt = false;
-    npc->do_AI();
+    npc->do_AI(); // this removes the npc if they're dead
     processAI();
     int num_there = g.map->charsByPos.count(g.map->player->n);
 
@@ -3721,13 +3714,33 @@ void endEncounter(void) {
         button_MainMap_press();
         g.map->player->update_visibility();
     }
-    end_turn();
 }
+
+// character c1's turn against character c2
+void npcEncounterStep(Character *c1, Character *c2) {
+    if(c1->health > 0.4) {
+        g.AddMessage("The adversary smashes you with their bits!");
+        c2->hurt(0.2);
+    }
+}
+
+bool isEncounterNPCdead(Character *npc) {
+    if(npc->health < 0.01) {
+        g.AddMessage("The adversary succumbs to their wounds.");
+        g.AddMessage("Encounter ends.");
+        // g.map->updateCharsByPos();
+        endEncounter();
+        return true;
+    }
+    return false;
+}
+
 
 // runs one step of the encounter after the player pressed the
 // confirm button. Could in theory accept multiple actions
 void runEncounterStep(void) {
     Character *npc = g.ui_Encounter->npc;
+    Character *player = g.map->player;
     vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
 
     if(actions->empty()) {
@@ -3738,28 +3751,33 @@ void runEncounterStep(void) {
     string action1 = g.item_info[actions->front()->info_index].name;
 
     if(action1 == "Flee") {
+        player->hurt(0.1);
 
-        g.map->player->hurt(0.1);
-        npc->hurt(0.6);
-        g.map->player->randomMove();
-        g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
-        g.AddMessage("Encounter ends.");
+        uniform_int_distribution<> fled_dist(0, 2);
+        bool successfully_fled = fled_dist(*g.rng) > 0;
 
-        endEncounter();
+        if(successfully_fled == true) {
+            g.map->player->randomMove();
+            g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
+            g.AddMessage("Encounter ends.");
+            endEncounter();
+            return;
+        } else {
+            g.AddMessage("You try to get away but your adversary prevents you!");
+        }
+    } else if(action1 == "Single attack") {
+        g.AddMessage("Your smash your adversary with your bits!");
 
-    }
-    else if(action1 == "Single attack") {
+        npc->hurt(0.4);
+        if(isEncounterNPCdead(npc) == true) return;
+        npcEncounterStep(npc, player);
 
-        g.AddMessage("KA-POW!");
-        g.AddMessage("The adversary succumbs to their wounds.");
-        g.AddMessage("Encounter ends.");
-        npc->hurt(1.0);
-        g.map->updateCharsByPos();
-
-        endEncounter();
     } else {
 
     }
+
+    if(isEncounterNPCdead(npc) == true) return;
+    g.ui_Encounter->setup();
 }
 
 void EncounterUI::setup(void) {
