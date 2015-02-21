@@ -454,7 +454,7 @@ void init_iteminfo(void) {
     /* 14 */
     tmp.name = "Whiskey";
     tmp.grid_size_x = 1;
-    tmp.grid_size_y = 3;
+    tmp.grid_size_y = 2;
     tmp.maxStack = 5;
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[40];
@@ -513,6 +513,23 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    g.item_info.push_back(tmp);
+
+    /* 18 */
+    tmp.name = "Water bottle";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 4;
+    tmp.maxStack = 1;
+    tmp.weight = 100;
+    tmp.sprite = g.bitmaps[49];
+    tmp.isVehicle = false;
+    tmp.isContainer = true;
+    tmp.container_size_x = 1;
+    tmp.container_size_y = 2;
     tmp.skill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
@@ -1252,14 +1269,14 @@ Character::Character(void) {
 
     neck = new Grid (off_x, off_y - 75, 2, 2, g.neck);
     head = new Grid (off_x, off_y - 15, 2, 3, g.head);
-    right_shoulder = new Grid (off_x - 53, off_y + 10, 2, 2, g.right_shoulder);
-    left_shoulder = new Grid (off_x + 53, off_y + 10, 2, 2, g.left_shoulder);
-    torso = new Grid (off_x - 22, off_y + 50, 5, 9, g.torso);
-    right_hand = new Grid (off_x - 75, off_y + 190, 2, 2, g.right_hand_hold);
-    left_hand = new Grid (off_x + 85, off_y + 190, 2, 2, g.left_hand_hold);
-    legs = new Grid (off_x - 12, off_y + 220, 4, 11, g.legs);
+    right_shoulder = new Grid (off_x - 53, off_y + 28, 2, 2, g.right_shoulder);
+    left_shoulder = new Grid (off_x + 53, off_y + 28, 2, 2, g.left_shoulder);
+    torso = new Grid (off_x - 27, off_y + 68, 5, 8, g.torso);
+    right_hand = new Grid (off_x - 75, off_y + 230, 2, 2, g.right_hand_hold);
+    left_hand = new Grid (off_x + 75, off_y + 230, 2, 2, g.left_hand_hold);
+    legs = new Grid (off_x - 15, off_y + 220, 4, 11, g.legs);
     right_foot = new Grid (off_x - 25, off_y + 430, 2, 2, g.right_foot);
-    left_foot = new Grid (off_x + 30, off_y + 430, 2, 2, g.left_foot);
+    left_foot = new Grid (off_x + 35, off_y + 430, 2, 2, g.left_foot);
 
     back = new Grid(680, 10, 2, 2, g.back);
     right_hand_hold = new Grid (680, 195, 2, 2, g.right_hand_hold);
@@ -1294,7 +1311,7 @@ Character::Character(void) {
 
     current_los_distance = 3;
     currently_seeing.reserve(50);
-    nextMove = 1000;
+    nextMove = 9000;
     dt = 0;
 
     skills = 0;
@@ -3891,6 +3908,8 @@ void runScavenging(void) {
         // take location and options, generate items scavenged,
         // and show results ("found something"/"found nothing")
         PlaceItemOnMultiGrid(ground_at_player(), new Item ("Crowbar"));
+        PlaceItemOnMultiGrid(ground_at_player(), new Item ("Water bottle"));
+        PlaceItemOnMultiGrid(ground_at_player(), new Item ("Water bottle"));
         location->last_looted = g.map->player->nextMove;
         (*stage)++;
         g.ui_Scavenge->setup();
@@ -4915,6 +4934,7 @@ void load_bitmaps(void) {
     /* 46 */ filenames.push_back("media/indicators/background.png");
     /* 47 */ filenames.push_back("media/indicators/green_bar.png");
     /* 48 */ filenames.push_back("media/buttons/sleep_up.png");
+    /* 49 */ filenames.push_back("media/items/water_bottle.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
