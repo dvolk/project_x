@@ -191,6 +191,19 @@ void Rect::print(void) {
     printf("x1: %f y1: %f x2: %f y2: %f\n", x1, y1, x2, y2);
 }
 
+enum ItemSlot {
+    SLOT_NONE,
+    ARMOR_HEAD,
+    ARMOR_TORSO,
+    ARMOR_LEGS,
+    ARMOR_LEFT_SHOE,
+    ARMOR_RIGHT_SHOE,
+    ARMOR_LEFT_HAND,
+    ARMOR_RIGHT_HAND,
+    ARMOR_BACK,
+    WATER_BOTTLE
+};
+
 struct ItemInfo {
     string name;
     int grid_size_x;
@@ -198,10 +211,13 @@ struct ItemInfo {
     int maxStack;
     int weight; // [g]
     bool isVehicle;
-    float condition;
+    /*
+      TODO: a lot of this could be replaced with a vector of (string?) tags
+    */
     bool isContainer;
     int container_size_x;
     int container_size_y;
+    ItemSlot slot;
     bool skill;
     // can it be applied to a body part (i.e. bandages and disinfectants)?
     bool apply_to_body;
@@ -210,6 +226,7 @@ struct ItemInfo {
     // when used, is it consumed (i.e. food, water, medicine)?
     bool consumed_on_use;
     ALLEGRO_BITMAP *sprite;
+    ALLEGRO_BITMAP *sprite_on_hp;
 };
 
 void init_iteminfo(void) {
@@ -220,6 +237,7 @@ void init_iteminfo(void) {
     tmp.grid_size_y = 1;
     tmp.maxStack = 1;
     tmp.sprite = NULL;
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -228,6 +246,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 01 */
@@ -237,6 +256,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = 1000;
     tmp.sprite = g.bitmaps[24];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 10;
@@ -245,6 +265,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_BACK;
     g.item_info.push_back(tmp);
 
     /* 02 */
@@ -254,6 +275,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = 750;
     tmp.sprite = g.bitmaps[22];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 4;
@@ -262,6 +284,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 03 */
@@ -271,6 +294,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = 2500;
     tmp.sprite = g.bitmaps[20];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -279,6 +303,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 04 */
@@ -288,6 +313,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = 5000;
     tmp.sprite = g.bitmaps[26];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = true;
     tmp.isContainer = true;
     tmp.container_size_x = 20;
@@ -296,6 +322,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 05 */
@@ -305,6 +332,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[27];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 1;
@@ -313,6 +341,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 06 */
@@ -322,6 +351,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[31];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -330,6 +360,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 07 */
@@ -339,6 +370,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[32];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -347,6 +379,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 08 */
@@ -356,6 +389,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 5;
     tmp.weight = 5;
     tmp.sprite = g.bitmaps[34];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -364,6 +398,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 09 */
@@ -373,6 +408,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 5;
     tmp.weight = 75;
     tmp.sprite = g.bitmaps[35];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -381,6 +417,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 10 */
@@ -390,6 +427,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[36];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -398,6 +436,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 11 */
@@ -407,6 +446,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[37];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -415,6 +455,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 12 */
@@ -424,6 +465,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[38];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -432,6 +474,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 13 */
@@ -441,6 +484,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[39];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -449,6 +493,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 14 */
@@ -458,6 +503,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 5;
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[40];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -466,6 +512,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = true;
     tmp.consumed_on_application = true;
     tmp.consumed_on_use = true;
+    tmp.slot = WATER_BOTTLE;
     g.item_info.push_back(tmp);
 
     /* 14 */
@@ -475,6 +522,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 10;
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[41];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -483,6 +531,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = true;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 16 */
@@ -492,6 +541,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[42];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -500,6 +550,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 17 */
@@ -509,6 +560,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[43];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -517,6 +569,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
     /* 18 */
@@ -526,6 +579,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.weight = 100;
     tmp.sprite = g.bitmaps[49];
+    tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 1;
@@ -534,10 +588,142 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
+
+    /* 19 */
+    tmp.name = "Red shirt";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = g.bitmaps[50];
+    tmp.sprite = g.bitmaps[51];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_TORSO;
+    g.item_info.push_back(tmp);
+
+    /* 20 */
+    tmp.name = "Blue pants";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = g.bitmaps[52];
+    tmp.sprite = g.bitmaps[53];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_LEGS;
+    g.item_info.push_back(tmp);
+
+    /* 21 */
+    tmp.name = "Ski mask";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = g.bitmaps[54];
+    tmp.sprite = g.bitmaps[55];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_HEAD;
+    g.item_info.push_back(tmp);
+
+    /* 21 */
+    tmp.name = "Right glove";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[56];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_RIGHT_HAND;
+    g.item_info.push_back(tmp);
+
+    /* 21 */
+    tmp.name = "Left glove";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[57];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_LEFT_HAND;
+    g.item_info.push_back(tmp);
+
+    /* 21 */
+    tmp.name = "Right shoe";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[58];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_RIGHT_SHOE;
+    g.item_info.push_back(tmp);
+
+    /* 21 */
+    tmp.name = "Left shoe";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[59];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = ARMOR_LEFT_SHOE;
     g.item_info.push_back(tmp);
 }
-
-
 
 struct Item {
     // position and size of the item on the grid
@@ -604,6 +790,9 @@ struct Item {
     bool isConsumedOnUse(void) {
         return g.item_info[info_index].consumed_on_use;
     }
+    ItemSlot getItemSlot(void) {
+        return g.item_info[info_index].slot;
+    }
 };
 
 struct Widget {
@@ -655,12 +844,14 @@ struct HardpointInfo {
     int maxItems;
     bool vehiclepoint;
     bool medical;
+    bool visible;
 
     HardpointInfo() {
         vehiclepoint = false;
         maxItems = 1;
         sprite = NULL;
         medical = false;
+        visible = true;
     }
 };
 
@@ -693,16 +884,24 @@ void init_hardpointinfo(void) {
 
     g.medical_upper_torso->medical = true;
     g.medical_lower_torso->medical = true;
-    g.medical_left_upper_leg->medical = true;;
-    g.medical_right_upper_leg->medical = true;;
-    g.medical_left_lower_leg->medical = true;;
-    g.medical_right_lower_leg->medical = true;;
-    g.medical_left_upper_arm->medical = true;;
-    g.medical_right_upper_arm->medical = true;;
-    g.medical_left_lower_arm->medical = true;;
-    g.medical_right_lower_arm->medical = true;;
+    g.medical_left_upper_leg->medical = true;
+    g.medical_right_upper_leg->medical = true;
+    g.medical_left_lower_leg->medical = true;
+    g.medical_right_lower_leg->medical = true;
+    g.medical_left_upper_arm->medical = true;
+    g.medical_right_upper_arm->medical = true;
+    g.medical_left_lower_arm->medical = true;
+    g.medical_right_lower_arm->medical = true;
     g.torso->maxItems = 3;
     g.vehicle->vehiclepoint = true;
+
+    g.torso->visible = false;
+    g.legs->visible = false;
+    g.head->visible = false;
+    g.right_hand->visible = false;
+    g.left_hand->visible = false;
+    g.right_foot->visible = false;
+    g.left_foot->visible = false;
 }
 
 struct Button : public Widget {
@@ -1055,6 +1254,23 @@ bool Grid::item_compatible(Item *i) {
     if(hpinfo == NULL)
         return true;
 
+    ItemSlot slot = i->getItemSlot();
+    
+    if(hpinfo == g.back && slot != ARMOR_BACK)
+        return false;
+    if(hpinfo == g.head && slot != ARMOR_HEAD)
+        return false;
+    if(hpinfo == g.legs && slot != ARMOR_LEGS)
+        return false;
+    if(hpinfo == g.right_foot && slot != ARMOR_RIGHT_SHOE)
+        return false;
+    if(hpinfo == g.left_foot && slot != ARMOR_LEFT_SHOE)
+        return false;
+    if(hpinfo == g.right_hand && slot != ARMOR_RIGHT_HAND)
+        return false;
+    if(hpinfo == g.left_hand && slot != ARMOR_LEFT_HAND)
+        return false;
+
     // can't place/use non-medical items on body parts
     if(hpinfo->medical == true &&
        i->isMedical() == false)
@@ -1268,15 +1484,15 @@ Character::Character(void) {
     const int off_y = 85;
 
     neck = new Grid (off_x, off_y - 75, 2, 2, g.neck);
-    head = new Grid (off_x, off_y - 15, 2, 3, g.head);
+    head = new Grid (off_x - 18, off_y - 18, 4, 5, g.head);
     right_shoulder = new Grid (off_x - 53, off_y + 28, 2, 2, g.right_shoulder);
     left_shoulder = new Grid (off_x + 53, off_y + 28, 2, 2, g.left_shoulder);
-    torso = new Grid (off_x - 27, off_y + 68, 5, 8, g.torso);
-    right_hand = new Grid (off_x - 75, off_y + 230, 2, 2, g.right_hand_hold);
-    left_hand = new Grid (off_x + 75, off_y + 230, 2, 2, g.left_hand_hold);
-    legs = new Grid (off_x - 15, off_y + 220, 4, 11, g.legs);
-    right_foot = new Grid (off_x - 25, off_y + 430, 2, 2, g.right_foot);
-    left_foot = new Grid (off_x + 35, off_y + 430, 2, 2, g.left_foot);
+    torso = new Grid (off_x - 66, off_y + 68, 9, 9, g.torso);
+    right_hand = new Grid (off_x - 85, off_y + 223, 3, 3, g.right_hand);
+    left_hand = new Grid (off_x + 67, off_y + 215, 3, 3, g.left_hand);
+    legs = new Grid (off_x - 33, off_y + 220, 6, 11, g.legs);
+    right_foot = new Grid (off_x - 35, off_y + 415, 3, 3, g.right_foot);
+    left_foot = new Grid (off_x + 25, off_y + 415, 3, 3, g.left_foot);
 
     back = new Grid(680, 10, 2, 2, g.back);
     right_hand_hold = new Grid (680, 195, 2, 2, g.right_hand_hold);
@@ -3071,6 +3287,9 @@ void GridSystem::gsMouseUpEvent() {
 }
 
 void Grid::draw(void) {
+    if(hpinfo != NULL && hpinfo->visible == false)
+        goto draw_items;
+
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
 
     if(hpinfo == NULL) {
@@ -3085,6 +3304,7 @@ void Grid::draw(void) {
     if(gsb_displayed == true)
         gsb->draw();
 
+ draw_items:
     for (auto& i : items)
         i->draw();
 }
@@ -3101,6 +3321,7 @@ void Grid::drawAt(float x, float y) {
 
 void Item::draw(void) {
     ALLEGRO_BITMAP *sprite = g.item_info[info_index].sprite;
+    ALLEGRO_BITMAP *sprite_on_hp = g.item_info[info_index].sprite_on_hp;
 
     if(parent != NULL) {
         // we're on a grid
@@ -3113,8 +3334,13 @@ void Item::draw(void) {
             al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
             al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
         }
-        else
-            al_draw_bitmap(sprite, x1, y1, 0);
+        else {
+            if(parent->hpinfo != NULL && sprite_on_hp != NULL) {
+                al_draw_bitmap(sprite_on_hp, x1, y1, 0);
+            } else {
+                al_draw_bitmap(sprite, x1, y1, 0);
+            }
+        }
 
         if(cur_stack > 1) {
             // draw number of stacked items
@@ -3909,7 +4135,6 @@ void runScavenging(void) {
         // and show results ("found something"/"found nothing")
         PlaceItemOnMultiGrid(ground_at_player(), new Item ("Crowbar"));
         PlaceItemOnMultiGrid(ground_at_player(), new Item ("Water bottle"));
-        PlaceItemOnMultiGrid(ground_at_player(), new Item ("Water bottle"));
         location->last_looted = g.map->player->nextMove;
         (*stage)++;
         g.ui_Scavenge->setup();
@@ -4135,9 +4360,9 @@ struct InventoryGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) {
+        al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
         GridSystem::draw();
         al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-        al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
     }
 
     void keyDown(void) override;
@@ -4623,20 +4848,21 @@ vector<Grid *> *ground_at_character(Character *character) {
         assert(ground_grid != NULL);
         ground->push_back(ground_grid);
         // test items
-        Item *crowbar = new Item("Crowbar");
-        Item *shopping_trolley1 = new Item("Shopping trolley");
-        Item *pill_bottle = new Item("Pill bottle");
-        Item *arrows1 = new Item("Arrow", 4);
-        Item *arrows2 = new Item("Arrow", 3);
-        Item *whiskey = new Item("Whiskey", 10);
-        Item *clean_rag = new Item("Clean rag", 30);
-        ground_grid->PlaceItem(crowbar);
-        ground_grid->PlaceItem(shopping_trolley1);
-        ground_grid->PlaceItem(pill_bottle);
-        ground_grid->PlaceItem(arrows1);
-        ground_grid->PlaceItem(arrows2);
-        ground_grid->PlaceItem(whiskey);
-        ground_grid->PlaceItem(clean_rag);
+        ground_grid->PlaceItem(new Item("Crowbar"));
+        ground_grid->PlaceItem(new Item("Shopping trolley"));
+        ground_grid->PlaceItem(new Item("Pill bottle"));
+        ground_grid->PlaceItem(new Item("Arrow", 4));
+        ground_grid->PlaceItem(new Item("Arrow", 3));
+        ground_grid->PlaceItem(new Item("Whiskey", 10));
+        ground_grid->PlaceItem(new Item("Clean rag", 30));
+        ground_grid->PlaceItem(new Item ("Water bottle"));
+        ground_grid->PlaceItem(new Item ("Red shirt"));
+        ground_grid->PlaceItem(new Item ("Blue pants"));
+        ground_grid->PlaceItem(new Item ("Ski mask"));
+        ground_grid->PlaceItem(new Item ("Right glove"));
+        ground_grid->PlaceItem(new Item ("Left glove"));
+        ground_grid->PlaceItem(new Item ("Right shoe"));
+        ground_grid->PlaceItem(new Item ("Left shoe"));
     }
     g.map->tiles[character->n].ground_items = ground;
     return ground;
@@ -4935,6 +5161,16 @@ void load_bitmaps(void) {
     /* 47 */ filenames.push_back("media/indicators/green_bar.png");
     /* 48 */ filenames.push_back("media/buttons/sleep_up.png");
     /* 49 */ filenames.push_back("media/items/water_bottle.png");
+    /* 50 */ filenames.push_back("media/items/red_shirt.png");
+    /* 51 */ filenames.push_back("media/items/red_shirt_grid.png");
+    /* 52 */ filenames.push_back("media/items/blue_pants.png");
+    /* 53 */ filenames.push_back("media/items/blue_pants_grid.png");
+    /* 54 */ filenames.push_back("media/items/head_mask.png");
+    /* 55 */ filenames.push_back("media/items/head_mask_grid.png");
+    /* 55 */ filenames.push_back("media/items/right_hand_glove.png");
+    /* 55 */ filenames.push_back("media/items/left_hand_glove.png");
+    /* 55 */ filenames.push_back("media/items/right_shoe.png");
+    /* 55 */ filenames.push_back("media/items/left_shoe.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
