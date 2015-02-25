@@ -515,7 +515,7 @@ void init_iteminfo(void) {
     tmp.slot = WATER_BOTTLE;
     g.item_info.push_back(tmp);
 
-    /* 14 */
+    /* 15 */
     tmp.name = "Clean rag";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
@@ -631,8 +631,8 @@ void init_iteminfo(void) {
 
     /* 21 */
     tmp.name = "Ski mask";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
     tmp.maxStack = 1;
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[54];
@@ -1316,6 +1316,16 @@ enum ActivityKind {
     ACTIVITY_COMBAT
 };
 
+struct Wound {
+    int severity;
+
+    Wound();
+};
+
+Wound::Wound() {
+    severity = 0;
+}
+
 struct Character {
     int n; // position by offset
 
@@ -1343,8 +1353,18 @@ struct Character {
     Grid *medical_left_upper_arm;
     Grid *medical_right_upper_arm;
     Grid *medical_left_lower_arm;
-
     Grid *medical_right_lower_arm;
+
+    Wound wound_upper_torso;
+    Wound wound_lower_torso;
+    Wound wound_left_upper_leg;
+    Wound wound_right_upper_leg;
+    Wound wound_left_lower_leg;
+    Wound wound_right_lower_leg;
+    Wound wound_left_upper_arm;
+    Wound wound_right_upper_arm;
+    Wound wound_left_lower_arm;
+    Wound wound_right_lower_arm;
 
     // allowed range: 0 - 1
     float health;
@@ -1361,27 +1381,19 @@ struct Character {
 
     ALLEGRO_BITMAP *sprite;
     vector<int> currently_seeing;
+
     // 0 - sees only tile they're on
     // 1 - sees immediate neighbours
     // etc
     int current_los_distance;
 
     int dt;
-    static int lastMove;
-    int myLastMove;
     int nextMove;
 
     uint64_t skills;
 
     Character();
-
-    ~Character() {
-        for(auto& hardpoint : inventory_hardpoints) {
-            delete hardpoint;
-        }
-        delete vehicle;
-        info("~Character()");
-    };
+    ~Character();
 
     void update_visibility(void);
 
@@ -1416,7 +1428,25 @@ struct Character {
     void wait(void);
 };
 
-int Character::lastMove = 0;
+Character::~Character() {
+    for(auto& hardpoint : inventory_hardpoints) {
+        delete hardpoint;
+    }
+
+    delete medical_upper_torso;
+    delete medical_lower_torso;
+    delete medical_left_upper_leg;
+    delete medical_right_upper_leg;
+    delete medical_left_lower_leg;
+    delete medical_right_lower_leg;
+    delete medical_left_upper_arm;
+    delete medical_right_upper_arm;
+    delete medical_left_lower_arm;
+    delete medical_right_lower_arm;
+
+    delete vehicle;
+    info("~Character()");
+}
 
 void Character::sleep(void) {
     g.AddMessage("You go to sleep...");
@@ -1500,16 +1530,16 @@ Character::Character(void) {
 
     vehicle = new Grid(500, 150, 2, 2, g.vehicle);
 
-    medical_upper_torso = new Grid(off_x - 22, off_y + 50, 5, 4, g.medical_upper_torso);
-    medical_lower_torso = new Grid(off_x - 22, off_y + 132, 5, 4, g.medical_lower_torso);
-    medical_left_upper_leg = new Grid(off_x - 22, off_y + 214, 2, 5, g.medical_left_upper_leg);
-    medical_right_upper_leg = new Grid(off_x + 32, off_y + 214, 2, 5, g.medical_right_upper_leg);
-    medical_left_lower_leg = new Grid(off_x - 22, off_y + 314, 2, 6, g.medical_left_lower_leg);
-    medical_right_lower_leg = new Grid(off_x + 32, off_y + 314, 2, 6, g.medical_left_lower_leg);
-    medical_left_upper_arm = new Grid(off_x - 62, off_y + 50, 2, 4, g.medical_upper_torso);
-    medical_right_upper_arm = new Grid(off_x + 72, off_y + 50, 2, 4, g.medical_upper_torso);
-    medical_left_lower_arm = new Grid(off_x - 62, off_y + 132, 2, 5, g.medical_upper_torso);
-    medical_right_lower_arm = new Grid(off_x + 72, off_y + 132, 2, 5, g.medical_upper_torso);
+    medical_upper_torso = new Grid(off_x - 19, off_y + 90, 3, 4, g.medical_upper_torso);
+    medical_lower_torso = new Grid(off_x - 19, off_y + 172, 4, 4, g.medical_lower_torso);
+    medical_left_upper_leg = new Grid(off_x - 17, off_y + 280, 2, 4, g.medical_left_upper_leg);
+    medical_right_upper_leg = new Grid(off_x + 27, off_y + 280, 2, 4, g.medical_right_upper_leg);
+    medical_left_lower_leg = new Grid(off_x - 22, off_y + 360, 2, 3, g.medical_left_lower_leg);
+    medical_right_lower_leg = new Grid(off_x + 32, off_y + 360, 2, 3, g.medical_right_lower_leg);
+    medical_left_upper_arm = new Grid(off_x - 52, off_y + 120, 2, 2, g.medical_left_upper_arm);
+    medical_right_upper_arm = new Grid(off_x + 52, off_y + 120, 2, 2, g.medical_right_upper_arm);
+    medical_left_lower_arm = new Grid(off_x - 60, off_y + 172, 2, 2, g.medical_left_lower_arm);
+    medical_right_lower_arm = new Grid(off_x + 60, off_y + 172, 2, 2, g.medical_right_lower_arm);
 
     inventory_hardpoints.push_back(right_hand_hold);
     inventory_hardpoints.push_back(left_hand_hold);
@@ -1541,6 +1571,18 @@ Character::Character(void) {
     burden = 0.9;
 
     activity = ACTIVITY_MOVE;
+
+    wound_upper_torso.severity = 1;
+    wound_upper_torso.severity = 1;
+    wound_lower_torso.severity = 1;
+    wound_left_upper_leg.severity = 1;
+    wound_right_upper_leg.severity = 1;
+    wound_left_lower_leg.severity = 1;
+    wound_right_lower_leg.severity = 1;
+    wound_left_upper_arm.severity = 1;
+    wound_right_upper_arm.severity = 1;
+    wound_left_lower_arm.severity = 1;
+    wound_right_lower_arm.severity = 1;
 
     info("Character()");
 }
@@ -1746,7 +1788,7 @@ void Character::post_update(void) {
 }
 
 void Character::update(void) {
-    // assert(activity != ACTIVITY_NONE || g.encounterInterrupt == true);
+    assert(activity != ACTIVITY_NONE || g.encounterInterrupt == true);
 
     // heal 0.5% over 1000 time units
     float healChange = 0.005 * 0.001 * dt;
@@ -1800,6 +1842,14 @@ void Character::randomMove(void) {
 
 void runEncounter(void);
 
+// character c1 interrupts c2.
+void chInterruptsPlayer(Character *c1) {
+    cout << c1 << " interrupted player " << g.map->player->nextMove << " -> " << c1->nextMove << endl;
+
+    g.map->player->nextMove = c1->nextMove;
+    g.map->player->update();
+}
+
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
         n = new_n;
@@ -1815,14 +1865,21 @@ void Character::move(int new_n) {
             // one character on that tile
             if(g.map->charsByPos.count(this->n) > 1) {
                 g.encounterInterrupt = true;
+                /*
+                  TODO: the player interrupts the npc(s)
+                */
             }
         } else if(this->n == g.map->player->n) {
             // or if this npc moved into the player's position
             g.encounterInterrupt = true;
+            // the npc interrupts the player
+            chInterruptsPlayer(this);
 
         } else if(g.map->charsByPos.count(this->n) > 1) {
             // or if there are two npcs at the same position
-            // aiEncounter(this->n);
+            /*
+              TODO: aiEncounter(this->n);
+            */
         }
     }
     else {
@@ -3449,7 +3506,7 @@ Character *next(void) {
 }
 
 void chr_debug_print(Character *c) {
-            cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
+    cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
 }
 
 void end_turn_debug_print(void) {
@@ -4372,20 +4429,111 @@ struct ConditionGridSystem : public GridSystem {
     int current_ground_page;
 
     ConditionGridSystem();
-    ~ConditionGridSystem() {
-        info("~ConditionGridSystem()");
-    };
+    ~ConditionGridSystem();
 
+    void draw(void) override;
+    void keyDown(void) override;
+
+    void draw_medical_hardpoint(Grid *grid);
     void reset(void);
-    void draw(void) {
-        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-        al_draw_filled_rectangle(1000, 50, 1175, 500, g.color_white);
-        al_draw_text(g.font, g.color_black, 1008, 58, 0, "Current conditions:");
-        GridSystem::draw();
+};
+
+ConditionGridSystem::~ConditionGridSystem() {
+    info("~ConditionGridSystem()");
+}
+
+void ConditionGridSystem::draw(void) {
+    al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
+    al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+    al_draw_filled_rectangle(1000, 50, 1175, 500, g.color_white);
+    al_draw_text(g.font, g.color_black, 1008, 58, 0, "Current conditions:");
+
+    for (auto& g : grids) {
+        // skip medical hardpoints
+        if(g->hpinfo == NULL || g->hpinfo->medical == false) {
+            g->draw();
+        }
     }
 
-    void keyDown(void) override;
-};
+    draw_medical_hardpoint(g.map->player->medical_upper_torso);
+    draw_medical_hardpoint(g.map->player->medical_lower_torso);
+    draw_medical_hardpoint(g.map->player->medical_left_upper_leg);
+    draw_medical_hardpoint(g.map->player->medical_right_upper_leg);
+    draw_medical_hardpoint(g.map->player->medical_left_lower_leg);
+    draw_medical_hardpoint(g.map->player->medical_right_lower_leg);
+    draw_medical_hardpoint(g.map->player->medical_left_upper_arm);
+    draw_medical_hardpoint(g.map->player->medical_left_lower_arm);
+    draw_medical_hardpoint(g.map->player->medical_right_upper_arm);
+    draw_medical_hardpoint(g.map->player->medical_right_lower_arm);
+    // GridSystem::draw();
+
+    if(held != NULL)
+        held->draw();
+    else {
+        drawItemTooltip();
+    }
+}
+
+void ConditionGridSystem::draw_medical_hardpoint(Grid *grid) {
+    if(grid->items.size() == 0) {
+        // TODO: draw wound if we're injured
+        if(grid->hpinfo == g.medical_upper_torso
+           && g.map->player->wound_upper_torso.severity >= 1)
+            al_draw_bitmap(g.bitmaps[70], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_lower_leg
+                && g.map->player->wound_left_lower_leg.severity >= 1)
+            al_draw_bitmap(g.bitmaps[71], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_lower_leg
+                && g.map->player->wound_right_lower_leg.severity >= 1)
+            al_draw_bitmap(g.bitmaps[72], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_upper_leg
+                && g.map->player->wound_right_upper_leg.severity >= 1)
+            al_draw_bitmap(g.bitmaps[73], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_upper_leg
+                && g.map->player->wound_left_upper_leg.severity >= 1)
+            al_draw_bitmap(g.bitmaps[74], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_lower_arm
+                && g.map->player->wound_right_lower_arm.severity >= 1)
+            al_draw_bitmap(g.bitmaps[75], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_upper_arm
+                && g.map->player->wound_right_upper_arm.severity >= 1)
+            al_draw_bitmap(g.bitmaps[76], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_lower_torso
+                && g.map->player->wound_lower_torso.severity >= 1)
+            al_draw_bitmap(g.bitmaps[77], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_lower_arm
+                && g.map->player->wound_left_lower_arm.severity >= 1)
+            al_draw_bitmap(g.bitmaps[78], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_upper_arm
+                && g.map->player->wound_left_upper_arm.severity >= 1)
+            al_draw_bitmap(g.bitmaps[79], grid->pos.x1, grid->pos.y1, 0);
+        return;
+    }
+
+    if(grid->items.front()->info_index == 15) {
+        // clean rag applied to body part
+        if(grid->hpinfo == g.medical_upper_torso)
+            al_draw_bitmap(g.bitmaps[60], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_lower_leg)
+            al_draw_bitmap(g.bitmaps[61], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_lower_leg)
+            al_draw_bitmap(g.bitmaps[62], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_upper_leg)
+            al_draw_bitmap(g.bitmaps[63], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_upper_leg)
+            al_draw_bitmap(g.bitmaps[64], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_lower_arm)
+            al_draw_bitmap(g.bitmaps[65], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_right_upper_arm)
+            al_draw_bitmap(g.bitmaps[66], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_lower_torso)
+            al_draw_bitmap(g.bitmaps[67], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_lower_arm)
+            al_draw_bitmap(g.bitmaps[68], grid->pos.x1, grid->pos.y1, 0);
+        else if(grid->hpinfo == g.medical_left_upper_arm)
+            al_draw_bitmap(g.bitmaps[69], grid->pos.x1, grid->pos.y1, 0);
+    }
+}
 
 void appliedCB(void) {
     Grid *applied_to = g.ui_Condition->gridsystem->applied_params.first;
@@ -4854,7 +5002,8 @@ vector<Grid *> *ground_at_character(Character *character) {
         ground_grid->PlaceItem(new Item("Arrow", 4));
         ground_grid->PlaceItem(new Item("Arrow", 3));
         ground_grid->PlaceItem(new Item("Whiskey", 10));
-        ground_grid->PlaceItem(new Item("Clean rag", 30));
+        ground_grid->PlaceItem(new Item("Clean rag", 10));
+        ground_grid->PlaceItem(new Item("Clean rag", 10));
         ground_grid->PlaceItem(new Item ("Water bottle"));
         ground_grid->PlaceItem(new Item ("Red shirt"));
         ground_grid->PlaceItem(new Item ("Blue pants"));
@@ -5167,10 +5316,31 @@ void load_bitmaps(void) {
     /* 53 */ filenames.push_back("media/items/blue_pants_grid.png");
     /* 54 */ filenames.push_back("media/items/head_mask.png");
     /* 55 */ filenames.push_back("media/items/head_mask_grid.png");
-    /* 55 */ filenames.push_back("media/items/right_hand_glove.png");
-    /* 55 */ filenames.push_back("media/items/left_hand_glove.png");
-    /* 55 */ filenames.push_back("media/items/right_shoe.png");
-    /* 55 */ filenames.push_back("media/items/left_shoe.png");
+    /* 56 */ filenames.push_back("media/items/right_hand_glove.png");
+    /* 57 */ filenames.push_back("media/items/left_hand_glove.png");
+    /* 58 */ filenames.push_back("media/items/right_shoe.png");
+    /* 59 */ filenames.push_back("media/items/left_shoe.png");
+    /* 60 */ filenames.push_back("media/items/upper_torso_clean_rag.png");
+    /* 61 */ filenames.push_back("media/items/lower_left_leg_clean_rag.png");
+    /* 62 */ filenames.push_back("media/items/lower_right_leg_clean_rag.png");
+    /* 63 */ filenames.push_back("media/items/upper_right_leg_clean_rag.png");
+    /* 64 */ filenames.push_back("media/items/upper_left_leg_clean_rag.png");
+    /* 65 */ filenames.push_back("media/items/lower_right_arm_clean_rag.png");
+    /* 66 */ filenames.push_back("media/items/upper_right_arm_clean_rag.png");
+    /* 67 */ filenames.push_back("media/items/lower_torso_clean_rag.png");
+    /* 68 */ filenames.push_back("media/items/lower_left_arm_clean_rag.png");
+    /* 69 */ filenames.push_back("media/items/upper_left_arm_clean_rag.png");
+    /* 70 */ filenames.push_back("media/backgrounds/upper_torso_wound.png");
+    /* 71 */ filenames.push_back("media/backgrounds/lower_left_leg_wound.png");
+    /* 72 */ filenames.push_back("media/backgrounds/lower_right_leg_wound.png");
+    /* 73 */ filenames.push_back("media/backgrounds/upper_right_leg_wound.png");
+    /* 74 */ filenames.push_back("media/backgrounds/upper_left_leg_wound.png");
+    /* 75 */ filenames.push_back("media/backgrounds/lower_right_arm_wound.png");
+    /* 76 */ filenames.push_back("media/backgrounds/upper_right_arm_wound.png");
+    /* 77 */ filenames.push_back("media/backgrounds/lower_torso_wound.png");
+    /* 78 */ filenames.push_back("media/backgrounds/lower_left_arm_wound.png");
+    /* 79 */ filenames.push_back("media/backgrounds/upper_left_arm_wound.png");
+
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
