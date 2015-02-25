@@ -12,6 +12,6 @@ A currently unnamed GPL3 open-world survival roguelikelike game written in C++
 
 #### Screenshots
 
-<img src="https://i.imgur.com/KNAyCN1.png">
-<img src="https://i.imgur.com/HxvfX7y.png">
+<img src="https://i.imgur.com/h86F6b6.png">
+<img src="https://i.imgur.com/ZOVQjol.png">
 
