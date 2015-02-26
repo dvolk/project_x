@@ -45,6 +45,7 @@ struct LocationInfo;
 struct Item;
 struct BarIndicator;
 struct TimeDisplay;
+struct WeaponSwitcher;
 
 // global state
 struct Game {
@@ -126,6 +127,7 @@ struct Game {
     BarIndicator *burden_indicator;
 
     TimeDisplay *time_display;
+    WeaponSwitcher *weapon_switcher;
 
     vector<ALLEGRO_BITMAP *> bitmaps;
 
@@ -732,9 +734,11 @@ struct Item {
     Rect pos;
     // index into g.item_info, which contains
     // information that's common to the item
-    int info_index;
+    int8_t info_index;
     // items can stack onto one item
     int cur_stack;
+    // items can be rotated
+    bool rotated;
     // items can have their own storage space e.g.
     // a backpack. NULL if they don't
     Grid *storage;
@@ -759,6 +763,7 @@ struct Item {
         this->parent = i.parent;
         this->old_parent = i.old_parent;
         this->storage = i.storage;
+        this->rotated = i.rotated;
     }
     Item(int info_index);
     Item(string item_name);
@@ -770,6 +775,18 @@ struct Item {
     void resetHardpointPos(void);
 
     void draw(void);
+
+    ALLEGRO_BITMAP *get_sprite() {
+        return g.item_info[info_index].sprite;
+    }
+
+    int get_grid_size_x(void) {
+        return g.item_info[info_index].grid_size_x;
+    }
+
+    int get_grid_size_y(void) {
+        return g.item_info[info_index].grid_size_y;
+    }
 
     const char *getName(void) {
         return g.item_info[info_index].name.c_str();
@@ -832,7 +849,7 @@ struct MessageLog : public Widget {
     MessageLog() { }
     ~MessageLog();
 
-    void mouseDown(void) { }
+    void mouseDown(void) override;
     void mouseUp(void) { }
     void keyDown(void) { }
 
@@ -1087,6 +1104,7 @@ void Item::init(int info_index) {
     old_parent = NULL;
     cur_stack = 1;
     storage = NULL;
+    this->rotated = false;
     this->info_index = info_index;
     if(g.item_info[info_index].isContainer == true)
         storage = new Grid(0,
@@ -1255,7 +1273,7 @@ bool Grid::item_compatible(Item *i) {
         return true;
 
     ItemSlot slot = i->getItemSlot();
-    
+
     if(hpinfo == g.back && slot != ARMOR_BACK)
         return false;
     if(hpinfo == g.head && slot != ARMOR_HEAD)
@@ -1392,6 +1410,8 @@ struct Character {
 
     uint64_t skills;
 
+    int8_t selected_weapon_slot;
+
     Character();
     ~Character();
 
@@ -1426,7 +1446,33 @@ struct Character {
     void hurt(float amount);
     void sleep(void);
     void wait(void);
+
+    void switchWeaponHand(void);
+    Item *getSelectedWeapon(void);
 };
+
+void Character::switchWeaponHand(void) {
+    selected_weapon_slot = selected_weapon_slot == 0 ? 1 : 0;
+}
+
+Item *Character::getSelectedWeapon(void) {
+    vector<Item *> *w;
+
+    if(selected_weapon_slot == 0) {
+        w = &right_hand_hold->items;
+    } else {
+        w = &left_hand_hold->items;
+    }
+
+    if(w->empty() == false) {
+        return w->front();
+    } else {
+        /*
+          TODO: return fist
+        */
+        return NULL;
+    }
+}
 
 Character::~Character() {
     for(auto& hardpoint : inventory_hardpoints) {
@@ -1583,6 +1629,8 @@ Character::Character(void) {
     wound_right_upper_arm.severity = 1;
     wound_left_lower_arm.severity = 1;
     wound_right_lower_arm.severity = 1;
+
+    selected_weapon_slot = 0;
 
     info("Character()");
 }
@@ -1919,6 +1967,40 @@ Button::Button() {
     down = NULL;
 }
 
+struct WeaponSwitcher : public Widget {
+    WeaponSwitcher() { };
+    ~WeaponSwitcher() { };
+
+    void mouseDown(void) { };
+    void mouseUp(void) { };
+    void keyDown(void) { };
+    void hoverOver(void) { };
+
+    void press(void) { };
+    void draw(void) override;
+    void update(void) { };
+};
+
+void WeaponSwitcher::draw(void) {
+    Item *w = g.map->player->getSelectedWeapon();
+
+    if(w == NULL)
+        return;
+
+    // could be cached...
+    float weapon_x = pos.x1 + (pos.x2 - w->get_grid_size_x() * Grid::grid_px_x) / 2;
+    float weapon_y = pos.y1 + (pos.y2 - w->get_grid_size_y() * Grid::grid_px_y) / 2;
+
+    al_draw_bitmap(w->get_sprite(), weapon_x, weapon_y, 0);
+    al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 8, 0, w->getName());
+}
+
+void MessageLog::mouseDown(void) {
+    if(g.mouse_x < g.weapon_switcher->pos.x1 + g.weapon_switcher->pos.x2) {
+        g.map->player->switchWeaponHand();
+    }
+}
+
 struct TimeDisplay : public Widget {
     int tod;
 
@@ -1962,6 +2044,10 @@ struct GridSystem : public Widget {
     Item *held;
     bool auto_move_to_ground;
     Grid *auto_target;
+
+    // when placing an item back if the dropped position is blocked, we need
+    // to know if it was originally rotated
+    bool was_rotated;
 
     // fires when an item -may- have been placed or removed
     // used to recompute crafting output
@@ -2030,6 +2116,16 @@ struct GridSystem : public Widget {
 vector<Grid *> *ground_at_player(void);
 
 void GridSystem::keyDown(void) {
+    if(g.key == ALLEGRO_KEY_R) {
+        if(held != NULL) {
+            held->rotated = held->rotated == true ? false : true; // toggle
+            float tmp = held->pos.x2;
+            held->pos.x2 = held->pos.y2;
+            held->pos.y2 = tmp;
+            g.hold_off_x = 0;
+            g.hold_off_y = 0;
+        }
+    }
 }
 
 void GridSystem::AutoMoveItem(Item *item, Grid *from, Grid *to) {
@@ -2622,10 +2718,13 @@ void TileMap::handleKeyDown(void) {
     if(g.key == ALLEGRO_KEY_C)
         g.map->focusOnPlayer();
     if(g.key == ALLEGRO_KEY_M) {
-        if(g.log->visible)
+        if(g.log->visible) {
             g.log->visible = false;
-        else
+            g.weapon_switcher->visible = false;
+        } else {
             g.log->visible = true;
+            g.weapon_switcher->visible = true;
+        }
     }
     if(g.key == ALLEGRO_KEY_SPACE) {
         end_turn();
@@ -2635,7 +2734,8 @@ void TileMap::handleKeyDown(void) {
     char buf[35];
     snprintf(buf, sizeof(buf),
              "Tile map view: x = %d, y = %d", view_x, view_y);
-    g.AddMessage(buf);
+    cout << buf << endl;
+    // g.AddMessage(buf);
 }
 
 struct UI {
@@ -2786,8 +2886,18 @@ void GridSortButton::draw(void) {
 }
 
 void Game::AddMessage(string str) {
-    if(log != NULL)
-        log->lines.push_back(str);
+    if(log == NULL)
+        return;
+
+    const size_t max_line_len = 99;
+
+    /*
+      TODO: proper word wrap
+    */
+    do {
+        log->lines.push_back(str.substr(0, max_line_len));
+        str.erase(0, max_line_len);
+    } while(str.empty() != true);
 }
 
 void Button::press(void) {
@@ -2815,6 +2925,9 @@ void MessageLog::draw(void) {
         al_draw_text(font, g.color_grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
         off_y = off_y + 8;
     }
+
+    // ...
+    g.weapon_switcher->draw();
 }
 
 void Button::draw(void) {
@@ -3093,6 +3206,8 @@ void GridSystem::GrabItem() {
 
  got_it:
     held = i;
+    was_rotated = i->rotated;
+    cout << was_rotated << endl;
     g.hold_off_x =
         g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
     g.hold_off_y =
@@ -3297,6 +3412,13 @@ void GridSystem::gsMouseUpEvent() {
  blocked:
     // couldn't place it anywhere. send it back to where
     // it was before we picked it up
+    if(was_rotated != held->rotated) {
+        // rotate back to original orientation
+        float tmp = held->pos.x2;
+        held->pos.x2 = held->pos.y2;
+        held->pos.y2 = tmp;
+        held->rotated = held->rotated == true ? false : true; // toggle
+    }
     held->parent = held->old_parent;
     held->old_parent->items.push_back(held);
 
@@ -3395,7 +3517,12 @@ void Item::draw(void) {
             if(parent->hpinfo != NULL && sprite_on_hp != NULL) {
                 al_draw_bitmap(sprite_on_hp, x1, y1, 0);
             } else {
-                al_draw_bitmap(sprite, x1, y1, 0);
+                if(rotated == true) {
+                    float h = al_get_bitmap_height(sprite);
+                    al_draw_rotated_bitmap(sprite, 0, 0, x1+h, y1, ALLEGRO_PI / 2, 0);
+                } else {
+                    al_draw_bitmap(sprite, x1, y1, 0);
+                }
             }
         }
 
@@ -3419,8 +3546,14 @@ void Item::draw(void) {
             al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
             al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
         }
-        else
-            al_draw_bitmap(sprite, x1, y1, 0);
+        else {
+            if(rotated == true) {
+                float h = al_get_bitmap_height(sprite);
+                al_draw_rotated_bitmap(sprite, 0, 0, x1+h, y1, ALLEGRO_PI / 2, 0);
+            } else {
+                al_draw_bitmap(sprite, x1, y1, 0);
+            }
+        }
     }
 }
 /*
@@ -4389,6 +4522,7 @@ void VehicleGridSystem::keyDown(void) {
             reset();
         }
     }
+    GridSystem::keyDown();
 }
 
 void CampGridSystem::keyDown(void) {
@@ -4405,6 +4539,7 @@ void CampGridSystem::keyDown(void) {
             reset();
         }
     }
+    GridSystem::keyDown();
 }
 
 struct InventoryGridSystem : public GridSystem {
@@ -4629,6 +4764,7 @@ void InventoryGridSystem::keyDown(void) {
     if(g.key == ALLEGRO_KEY_N) {
         InventoryPrevGroundPage();
     }
+    GridSystem::keyDown();
 }
 
 void ConditionGridSystem::keyDown(void) {
@@ -4638,6 +4774,7 @@ void ConditionGridSystem::keyDown(void) {
     if(g.key == ALLEGRO_KEY_N) {
         InventoryPrevGroundPage();
     }
+    GridSystem::keyDown();
 }
 
 VehicleUI::VehicleUI() {
@@ -5472,6 +5609,14 @@ void init_buttons(void) {
     g.main_buttons.insert(g.button_Vehicle);
 }
 
+void init_weaponswitcher(void) {
+    g.weapon_switcher = new WeaponSwitcher;
+    g.weapon_switcher->pos.x1 = 910;
+    g.weapon_switcher->pos.y1 = 570;
+    g.weapon_switcher->pos.x2 = 270;
+    g.weapon_switcher->pos.y2 = 150;
+}
+
 void init_timedisplay(void) {
     g.time_display = new TimeDisplay;
     g.time_display->pos.x1 = 2;
@@ -5580,7 +5725,7 @@ void init_tilemap(int sx, int sy) {
     // tree
     i.minimap_color = al_map_rgb(0, 150, 0);
     i.bitmap_index = 1;
-    i.blocks_los = false;
+    i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
     g.map->tile_info.push_back(i);
@@ -5840,6 +5985,7 @@ int main(int argc, char **argv) {
     init_tilemap( tilemap_sx, tilemap_sy );
     init_hardpointinfo();
     init_characters();
+    init_weaponswitcher();
     init_buttons();
     init_messagelog();
     init_minimap();
