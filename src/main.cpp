@@ -779,6 +779,9 @@ struct Item {
     bool isConsumedOnApplication(void);
     bool isUsable(void);
     bool isConsumedOnUse(void);
+
+    void rotate(void);
+    int get_weight(void);
 };
 
 Item::Item(const Item& i) {
@@ -831,6 +834,11 @@ bool Item::isConsumedOnUse(void) {
 
 ItemSlot Item::getItemSlot(void) {
     return g.item_info[info_index].slot;
+}
+
+void Item::rotate(void) {
+    rotated = rotated ? false : true;
+    swap(pos.x2, pos.y2);
 }
 
 struct Widget {
@@ -1172,6 +1180,17 @@ void Item::init_from_name(string item_name) {
     errorQuit(buf);
 }
 
+int Item::get_weight(void) {
+    int total = g.item_info[info_index].weight * cur_stack;
+
+    if(storage != NULL) {
+        for(auto& item : storage->items) {
+            total += item->get_weight();
+        }
+    }
+    return total;
+}
+
 void Grid::AddItem(Item *item) {
     item->old_parent = item->parent;
     item->parent = this;
@@ -1403,6 +1422,8 @@ struct Character {
     Grid *medical_left_lower_arm;
     Grid *medical_right_lower_arm;
 
+    int carry_weight;
+    
     Wound wound_upper_torso;
     Wound wound_lower_torso;
     Wound wound_left_upper_leg;
@@ -1423,6 +1444,8 @@ struct Character {
     float satiety;
     float burden;
 
+    int maxBurden; // maximum carry weight in grams
+    
     ActivityKind activity;
 
     vector<Grid *> inventory_hardpoints;
@@ -1479,7 +1502,29 @@ struct Character {
 
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
+
+    void recomputeCarryWeight(void);
 };
+
+void Character::recomputeWarmth(void) {
+    /*
+      TODO: add warmth to items, calculate clothing warmth
+     */
+    temperature = 0.5;
+}
+
+void Character::recomputeCarryWeight(void) {
+    carry_weight = 0;
+
+    for(auto& grid : inventory_hardpoints) {
+        for(auto& item : grid->items) {
+            carry_weight += item->get_weight();
+        }
+    }
+    cout << "playing is carrying " << carry_weight << 'g' << endl;
+
+    burden = 1.0 - (float)carry_weight / maxBurden;
+}
 
 void Character::switchWeaponHand(void) {
     selected_weapon_slot = selected_weapon_slot == 0 ? 1 : 0;
@@ -1645,6 +1690,8 @@ Character::Character(void) {
     hydration = 0.43;
     satiety = 0.72;
     burden = 0.9;
+
+    maxBurden = 10000;
 
     activity = ACTIVITY_MOVE;
 
@@ -2026,7 +2073,7 @@ void WeaponSwitcher::draw(void) {
 }
 
 void MessageLog::mouseDown(void) {
-    if(g.mouse_x < g.weapon_switcher->pos.x1 + g.weapon_switcher->pos.x2) {
+    if(g.mouse_x > g.weapon_switcher->pos.x1) {
         g.map->player->switchWeaponHand();
     }
 }
@@ -2080,7 +2127,7 @@ struct GridSystem : public Widget {
     bool was_rotated;
 
     // fires when an item -may- have been placed or removed
-    // used to recompute crafting output
+    // used to recompute... stuff
     void (*change)(void);
 
     // fires when an item is applied to/removed from a hardpoint (used for
@@ -2093,37 +2140,14 @@ struct GridSystem : public Widget {
     */
     pair<Grid*, Item*> applied_params;
 
-    GridSystem(void) {
-        auto_move_to_ground = false;
-        auto_target = NULL;
-        held = NULL;
-        change = NULL;
-        applied = NULL;
-        removed = NULL;
-    }
-    ~GridSystem(void) {
-        delete held;
-        info("~GridSystem()");
-    }
+    GridSystem(void);
+    ~GridSystem(void);
 
     // resets the visibility of the grid sort buttons
-    virtual void reset(void) {
-        for(auto& grid : grids) {
-            for(auto& item : grid->items) {
-                if(item->storage != NULL &&
-                   item->parent->hpinfo != NULL) {
-                    item->storage->gsb_displayed = true;
-                }
-            }
-        }
-    }
+    virtual void reset(void);
 
-    void mouseDown(void) {
-        gsMouseDownEvent();
-    }
-    void mouseUp(void) {
-        gsMouseUpEvent();
-    }
+    void mouseDown(void);
+    void mouseUp(void);
     void keyDown(void);
     void hoverOver(void);
 
@@ -2143,19 +2167,51 @@ struct GridSystem : public Widget {
     void MouseAutoMoveItemToTarget();
 };
 
+GridSystem::GridSystem(void) {
+    auto_move_to_ground = false;
+    auto_target = NULL;
+    held = NULL;
+    change = NULL;
+    applied = NULL;
+    removed = NULL;
+}
+
+GridSystem::~GridSystem(void) {
+    delete held;
+    info("~GridSystem()");
+}
+
+void GridSystem::reset(void) {
+    for(auto& grid : grids) {
+        for(auto& item : grid->items) {
+            if(item->storage != NULL &&
+               item->parent->hpinfo != NULL) {
+                item->storage->gsb_displayed = true;
+            }
+        }
+    }
+}
+
 vector<Grid *> *ground_at_player(void);
 
 void GridSystem::keyDown(void) {
     if(g.key == ALLEGRO_KEY_R) {
         if(held != NULL) {
-            held->rotated = held->rotated == true ? false : true; // toggle
-            float tmp = held->pos.x2;
-            held->pos.x2 = held->pos.y2;
-            held->pos.y2 = tmp;
+            held->rotate();
             g.hold_off_x = 0;
             g.hold_off_y = 0;
         }
     }
+}
+
+void GridSystem::mouseDown(void) {
+    gsMouseDownEvent();
+    if(change != NULL) change();
+}
+
+void GridSystem::mouseUp(void) {
+    gsMouseUpEvent();
+    if(change != NULL) change();
 }
 
 void GridSystem::AutoMoveItem(Item *item, Grid *from, Grid *to) {
@@ -2732,31 +2788,35 @@ void Character::drawOffset(int offset_x, int offset_y) {
     }
 }
 
-void TileMap::handleKeyDown(void) {
-    if(g.key == ALLEGRO_KEY_UP)
-        if(view_y > 0)
-            view_y--;
-    if(g.key == ALLEGRO_KEY_LEFT)
-        if(view_x > 0)
-            view_x--;
-    if(g.key == ALLEGRO_KEY_DOWN)
-        if(view_y < size_y - rows)
-            view_y++;
-    if(g.key == ALLEGRO_KEY_RIGHT)
-        if(view_x < size_x - cols)
-            view_x++;
-    if(g.key == ALLEGRO_KEY_C)
-        g.map->focusOnPlayer();
-    if(g.key == ALLEGRO_KEY_M) {
-        if(g.log->visible) {
-            g.log->visible = false;
-            g.weapon_switcher->visible = false;
-        } else {
-            g.log->visible = true;
-            g.weapon_switcher->visible = true;
-        }
+void toggleMsgLogVisibility(void) {
+    if(g.log->visible) {
+        g.log->visible = false;
+        g.weapon_switcher->visible = false;
+    } else {
+        g.log->visible = true;
+        g.weapon_switcher->visible = true;
     }
-    if(g.key == ALLEGRO_KEY_SPACE) {
+}
+
+void TileMap::handleKeyDown(void) {
+    if(g.key == ALLEGRO_KEY_UP) {
+        if(view_y > 0) { view_y--; }
+    }
+    else if(g.key == ALLEGRO_KEY_LEFT) {
+        if(view_x > 0) { view_x--; }
+    }
+    else if(g.key == ALLEGRO_KEY_DOWN) {
+        if(view_y < size_y - rows) { view_y++; }
+    }
+    else if(g.key == ALLEGRO_KEY_RIGHT) {
+        if(view_x < size_x - cols) { view_x++; }
+    } else if(g.key == ALLEGRO_KEY_C) {
+        g.map->focusOnPlayer();
+    }
+    else if(g.key == ALLEGRO_KEY_M) {
+        toggleMsgLogVisibility();
+    }
+    else if(g.key == ALLEGRO_KEY_SPACE) {
         end_turn();
         player->wait();
     }
@@ -3245,9 +3305,6 @@ void GridSystem::GrabItem() {
     held->old_parent = held->parent;
     held->parent = NULL;
 
-    if(change != NULL)
-        change();
-
     if(held->storage != NULL) {
         // if this item was on a hardpoint, we need to remove
         // the grid from the gridsystem
@@ -3386,6 +3443,8 @@ void GridSystem::gsMouseUpEvent() {
                 // if it's a hardpoint, we always drop at 0, 0
                 drop_x = 0;
                 drop_y = 0;
+                // and un-rotate it
+                if(held->rotated == true) held->rotate();
             }
 
             // is this item compatible with the grid?
@@ -3423,9 +3482,6 @@ void GridSystem::gsMouseUpEvent() {
             held->pos.y1 = drop_y;
             grid->items.push_back(held);
 
-            if(change != NULL)
-                change();
-
             addStorageGrid();
 
             char b[60];
@@ -3444,10 +3500,7 @@ void GridSystem::gsMouseUpEvent() {
     // it was before we picked it up
     if(was_rotated != held->rotated) {
         // rotate back to original orientation
-        float tmp = held->pos.x2;
-        held->pos.x2 = held->pos.y2;
-        held->pos.y2 = tmp;
-        held->rotated = held->rotated == true ? false : true; // toggle
+        held->rotate();
     }
     held->parent = held->old_parent;
     held->old_parent->items.push_back(held);
@@ -3490,8 +3543,6 @@ void GridSystem::gsMouseUpEvent() {
         }
         held = NULL;
     }
-    if(change != NULL)
-        change();
     return;
 }
 
@@ -4891,8 +4942,14 @@ CampUI::~CampUI() {
     info("~CampUI()");
 }
 
+void InventoryChangeCallback(void) {
+    g.map->player->recomputeCarryWeight();
+    g.map->player->recomputeWarmth();
+}
+
 ItemsUI::ItemsUI() {
     gridsystem  = new InventoryGridSystem;
+    gridsystem->change = InventoryChangeCallback;
 
     ground_next_page = new Button;
     ground_next_page->pos.x1 = 485;
@@ -5847,6 +5904,7 @@ void init_characters(void) {
     g.map->player->enableSkill(1);
     g.map->player->enableSkill(32);
     g.map->player->enableSkill(33);
+    g.map->player->recomputeCarryWeight();
 }
 
 MainMapUI::MainMapUI() {
