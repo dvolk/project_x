@@ -1504,6 +1504,7 @@ struct Character {
     Item *getSelectedWeapon(void);
 
     void recomputeCarryWeight(void);
+    void recomputeWarmth(void);
 };
 
 void Character::recomputeWarmth(void) {
