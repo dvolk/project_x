@@ -754,17 +754,9 @@ struct Item {
     // each turn, and seperately when the item is used, so all items
     // should be checked at the end of the turn, and individual items
     // when they're used float condition;
-    // float condition;
+    float condition;
 
-    Item(const Item& i) {
-        this->pos = i.pos;
-        this->cur_stack = i.cur_stack;
-        this->info_index = i.info_index;
-        this->parent = i.parent;
-        this->old_parent = i.old_parent;
-        this->storage = i.storage;
-        this->rotated = i.rotated;
-    }
+    Item(const Item& i);
     Item(int info_index);
     Item(string item_name);
     Item(string item_name, int num_stack);
@@ -776,41 +768,70 @@ struct Item {
 
     void draw(void);
 
-    ALLEGRO_BITMAP *get_sprite() {
-        return g.item_info[info_index].sprite;
-    }
+    ALLEGRO_BITMAP *get_sprite();
+    int get_grid_size_x(void);
+    int get_grid_size_y(void);
+    const char *getName(void);
+    ItemSlot getItemSlot(void);
 
-    int get_grid_size_x(void) {
-        return g.item_info[info_index].grid_size_x;
-    }
-
-    int get_grid_size_y(void) {
-        return g.item_info[info_index].grid_size_y;
-    }
-
-    const char *getName(void) {
-        return g.item_info[info_index].name.c_str();
-    }
-    bool isVehicle(void) {
-        return g.item_info[info_index].isVehicle;
-    }
-    bool isMedical(void) {
-        return g.item_info[info_index].apply_to_body;
-    }
-    bool isConsumedOnApplication(void) {
-        return g.item_info[info_index].consumed_on_application;
-    }
-    bool isUsable(void) {
-        return
-            storage == NULL;
-    }
-    bool isConsumedOnUse(void) {
-        return g.item_info[info_index].consumed_on_use;
-    }
-    ItemSlot getItemSlot(void) {
-        return g.item_info[info_index].slot;
-    }
+    bool isVehicle(void);
+    bool isMedical(void);
+    bool isConsumedOnApplication(void);
+    bool isUsable(void);
+    bool isConsumedOnUse(void);
 };
+
+Item::Item(const Item& i) {
+    this->pos = i.pos;
+    this->cur_stack = i.cur_stack;
+    this->info_index = i.info_index;
+    this->parent = i.parent;
+    this->old_parent = i.old_parent;
+    this->storage = i.storage;
+    this->rotated = i.rotated;
+    this->condition = i.condition;
+}
+
+ALLEGRO_BITMAP *Item::get_sprite() {
+    return g.item_info[info_index].sprite;
+}
+
+int Item::get_grid_size_x(void) {
+    return g.item_info[info_index].grid_size_x;
+}
+
+int Item::get_grid_size_y(void) {
+    return g.item_info[info_index].grid_size_y;
+}
+
+const char *Item::getName(void) {
+    return g.item_info[info_index].name.c_str();
+}
+
+bool Item::isVehicle(void) {
+    return g.item_info[info_index].isVehicle;
+}
+
+bool Item::isMedical(void) {
+    return g.item_info[info_index].apply_to_body;
+}
+
+bool Item::isConsumedOnApplication(void) {
+    return g.item_info[info_index].consumed_on_application;
+}
+
+bool Item::isUsable(void) {
+    return
+        storage == NULL;
+}
+
+bool Item::isConsumedOnUse(void) {
+    return g.item_info[info_index].consumed_on_use;
+}
+
+ItemSlot Item::getItemSlot(void) {
+    return g.item_info[info_index].slot;
+}
 
 struct Widget {
     Rect pos;
@@ -825,21 +846,24 @@ struct Widget {
     virtual void keyDown(void) = 0;
     virtual void hoverOver(void) { };
 
-    Widget() {
-        visible = true;
-        onMouseDown = NULL;
-        onMouseUp = NULL;
-        onKeyDown = NULL;
-        g.all_widgets.insert(this);
-    }
-
-    virtual ~Widget() {
-        // info("~Widget()");
-    };
+    Widget();
+    virtual ~Widget();
 
     virtual void draw(void) = 0;
     virtual void update() { };
 };
+
+Widget::Widget() {
+    visible = true;
+    onMouseDown = NULL;
+    onMouseUp = NULL;
+    onKeyDown = NULL;
+    g.all_widgets.insert(this);
+}
+
+Widget::~Widget() {
+    // info("~Widget()");
+}
 
 struct MessageLog : public Widget {
     ALLEGRO_BITMAP *background;
@@ -1012,25 +1036,8 @@ struct Grid {
 
     static bool PlaceItemWantsStacking;
 
-    Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h) {
-        hpinfo = h;
-        grid_size_x = size_x;
-        grid_size_y = size_y;
-        pos.x1 = w_pos_x;
-        pos.y1 = w_pos_y;
-        resetPos();
-        gsb = NULL;
-        if(hpinfo == NULL)
-            gsb = new GridSortButton (this);
-        gsb_displayed = false;
-    }
-
-    ~Grid() {
-        // info("~Grid()");
-        // a grid owns its items
-        for(auto &item : items)
-            delete item;
-    }
+    Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h);
+    ~Grid();
 
     void draw(void);
     void drawAt(float x, float y);
@@ -1041,15 +1048,37 @@ struct Grid {
     void Sort(void);
     void Sort(bool (*comp)(Item *l, Item *r));
 
-    void resetPos(void) {
-        pos.x2 = pos.x1 + grid_size_x * grid_px_x;
-        pos.y2 = pos.y1 + grid_size_y * grid_px_y;
-    }
+    void resetPos(void);
     Item *grab_item(int x, int y); // get item at screen position
     void unstack_item(int x, int y); // unstack item at screen position
 
     bool item_compatible(Item *i);
 };
+
+Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h) {
+    hpinfo = h;
+    grid_size_x = size_x;
+    grid_size_y = size_y;
+    pos.x1 = w_pos_x;
+    pos.y1 = w_pos_y;
+    resetPos();
+    gsb = NULL;
+    if(hpinfo == NULL)
+        gsb = new GridSortButton (this);
+    gsb_displayed = false;
+}
+
+Grid::~Grid() {
+    // info("~Grid()");
+    // a grid owns its items
+    for(auto &item : items)
+        delete item;
+}
+
+void Grid::resetPos(void) {
+    pos.x2 = pos.x1 + grid_size_x * grid_px_x;
+    pos.y2 = pos.y1 + grid_size_y * grid_px_y;
+}
 
 bool Grid::PlaceItemWantsStacking = true;
 
@@ -1112,6 +1141,7 @@ void Item::init(int info_index) {
                            g.item_info[info_index].container_size_x,
                            g.item_info[info_index].container_size_y,
                            NULL);
+    this->condition = 1.0;
 }
 
 Item::Item(int info_index) {
@@ -5081,7 +5111,7 @@ void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
 }
 
 // resolve tile to location_info index
-int tile_to_locations_index(const Tile t) {
+int tile_to_locations_index(__attribute__ ((unused)) Tile t) {
     return 0;
 }
 
