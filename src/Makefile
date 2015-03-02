@@ -10,7 +10,7 @@ LIBS=`pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_color-5.0 all
 # LIBS=-lallegro-5.0.10-mt -lallegro_primitives-5.0.10-mt -lallegro_color-5.0.10-mt -lallegro_image-5.0.10-mt -lallegro_font-5.0.10-mt
 
 OBJS= \
-	main.o util.o
+	util.o rect.o widget.o main.o
 
 default: all
 
