@@ -15,6 +15,8 @@
 #include <algorithm>
 
 #include "./util.h"
+#include "./rect.h"
+#include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
 
@@ -170,15 +172,6 @@ struct Game {
 
 Game g;
 
-struct Rect {
-    float x1;
-    float y1;
-    float x2;
-    float y2;
-
-    void print(void);
-};
-
 __attribute__ ((const))
 bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
                    int b_x, int b_y, int b_width, int b_height) {
@@ -187,10 +180,6 @@ bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
           || b_x + b_width <= a_x
           || b_y >= a_y + a_height
           || b_y + b_height <= a_y);
-}
-
-void Rect::print(void) {
-    printf("x1: %f y1: %f x2: %f y2: %f\n", x1, y1, x2, y2);
 }
 
 enum ItemSlot {
@@ -227,6 +216,7 @@ struct ItemInfo {
     bool consumed_on_application;
     // when used, is it consumed (i.e. food, water, medicine)?
     bool consumed_on_use;
+    float warmth;
     ALLEGRO_BITMAP *sprite;
     ALLEGRO_BITMAP *sprite_on_hp;
 };
@@ -249,6 +239,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.warmth = 0;
     g.item_info.push_back(tmp);
 
     /* 01 */
@@ -268,6 +259,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_BACK;
+    tmp.warmth = 0.05;
     g.item_info.push_back(tmp);
 
     /* 02 */
@@ -287,6 +279,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.warmth = 0;
     g.item_info.push_back(tmp);
 
     /* 03 */
@@ -610,6 +603,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_TORSO;
+    tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
     /* 20 */
@@ -629,6 +623,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_LEGS;
+    tmp.warmth = 0.5;
     g.item_info.push_back(tmp);
 
     /* 21 */
@@ -648,6 +643,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_HEAD;
+    tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
     /* 21 */
@@ -667,6 +663,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_RIGHT_HAND;
+    tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
     /* 21 */
@@ -686,6 +683,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_LEFT_HAND;
+    tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
     /* 21 */
@@ -705,6 +703,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_RIGHT_SHOE;
+    tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
     /* 21 */
@@ -724,6 +723,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_LEFT_SHOE;
+    tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 }
 
@@ -782,6 +782,7 @@ struct Item {
 
     void rotate(void);
     int get_weight(void);
+    float get_warmth(void);
 };
 
 Item::Item(const Item& i) {
@@ -797,6 +798,10 @@ Item::Item(const Item& i) {
 
 ALLEGRO_BITMAP *Item::get_sprite() {
     return g.item_info[info_index].sprite;
+}
+
+float Item::get_warmth(void) {
+    return g.item_info[info_index].warmth;
 }
 
 int Item::get_grid_size_x(void) {
@@ -839,38 +844,6 @@ ItemSlot Item::getItemSlot(void) {
 void Item::rotate(void) {
     rotated = rotated ? false : true;
     swap(pos.x2, pos.y2);
-}
-
-struct Widget {
-    Rect pos;
-    bool visible;
-
-    void (*onMouseDown)(void);
-    void (*onMouseUp)(void);
-    void (*onKeyDown)(void);
-
-    virtual void mouseDown(void) = 0;
-    virtual void mouseUp(void) = 0;
-    virtual void keyDown(void) = 0;
-    virtual void hoverOver(void) { };
-
-    Widget();
-    virtual ~Widget();
-
-    virtual void draw(void) = 0;
-    virtual void update() { };
-};
-
-Widget::Widget() {
-    visible = true;
-    onMouseDown = NULL;
-    onMouseUp = NULL;
-    onKeyDown = NULL;
-    g.all_widgets.insert(this);
-}
-
-Widget::~Widget() {
-    // info("~Widget()");
 }
 
 struct MessageLog : public Widget {
@@ -1325,6 +1298,8 @@ bool Grid::item_compatible(Item *i) {
 
     if(hpinfo == g.back && slot != ARMOR_BACK)
         return false;
+    if(hpinfo == g.torso && slot != ARMOR_TORSO)
+        return false;
     if(hpinfo == g.head && slot != ARMOR_HEAD)
         return false;
     if(hpinfo == g.legs && slot != ARMOR_LEGS)
@@ -1423,7 +1398,7 @@ struct Character {
     Grid *medical_right_lower_arm;
 
     int carry_weight;
-    
+
     Wound wound_upper_torso;
     Wound wound_lower_torso;
     Wound wound_left_upper_leg;
@@ -1445,10 +1420,11 @@ struct Character {
     float burden;
 
     int maxBurden; // maximum carry weight in grams
-    
+
     ActivityKind activity;
 
     vector<Grid *> inventory_hardpoints;
+    vector<Grid *> clothing;
 
     ALLEGRO_BITMAP *sprite;
     vector<int> currently_seeing;
@@ -1506,26 +1482,6 @@ struct Character {
     void recomputeCarryWeight(void);
     void recomputeWarmth(void);
 };
-
-void Character::recomputeWarmth(void) {
-    /*
-      TODO: add warmth to items, calculate clothing warmth
-     */
-    temperature = 0.5;
-}
-
-void Character::recomputeCarryWeight(void) {
-    carry_weight = 0;
-
-    for(auto& grid : inventory_hardpoints) {
-        for(auto& item : grid->items) {
-            carry_weight += item->get_weight();
-        }
-    }
-    cout << "playing is carrying " << carry_weight << 'g' << endl;
-
-    burden = 1.0 - (float)carry_weight / maxBurden;
-}
 
 void Character::switchWeaponHand(void) {
     selected_weapon_slot = selected_weapon_slot == 0 ? 1 : 0;
@@ -1677,6 +1633,16 @@ Character::Character(void) {
     inventory_hardpoints.push_back(right_foot);
     inventory_hardpoints.push_back(left_foot);
 
+    clothing.push_back(right_hand);
+    clothing.push_back(left_hand);
+    clothing.push_back(back);
+    clothing.push_back(head);
+    clothing.push_back(neck);
+    clothing.push_back(torso);
+    clothing.push_back(legs);
+    clothing.push_back(right_foot);
+    clothing.push_back(left_foot);
+
     current_los_distance = 3;
     currently_seeing.reserve(50);
     nextMove = 9000;
@@ -1692,7 +1658,7 @@ Character::Character(void) {
     satiety = 0.72;
     burden = 0.9;
 
-    maxBurden = 10000;
+    maxBurden = 30000; // 30kg
 
     activity = ACTIVITY_MOVE;
 
@@ -1828,13 +1794,19 @@ struct TileMap : public Widget {
 
     int mouseToTileN(void);
     void focusOnPlayer(void);
-    Character *characterAt(int n); // this is never used?
+    Character *characterAt(int n);
     bool playerSees(int n);
 
     void updateCharsByPos(void);
     void removeCharacter(Character *to_kill);
     void addRandomCharacter(void);
+
+    float getCurrentTemperature(int n);
 };
+
+float TileMap::getCurrentTemperature(__attribute__ ((unused)) int n) {
+    return 0.7;
+}
 
 bool good_index(int n) {
     return n >= 0 && n <= g.map->max_t;
@@ -1911,6 +1883,37 @@ void Character::post_update(void) {
         this->die();
         return;
     }
+}
+
+void Character::recomputeWarmth(void) {
+    float warmth = 0.0;
+    float map_temperature = g.map->getCurrentTemperature(this->n);
+
+    for(auto& point : clothing) {
+        for(auto& cloth : point->items) {
+            warmth += cloth->get_warmth();
+        }
+    }
+
+    this->temperature = 1.0 - (map_temperature - warmth);
+
+    /*
+      TODO: care about overheating?
+    */
+    this->temperature = min((float)1.0, this->temperature);
+}
+
+void Character::recomputeCarryWeight(void) {
+    carry_weight = 0;
+
+    for(auto& grid : inventory_hardpoints) {
+        for(auto& item : grid->items) {
+            carry_weight += item->get_weight();
+        }
+    }
+    cout << "playing is carrying " << carry_weight << 'g' << endl;
+
+    burden = 1.0 - (float)carry_weight / maxBurden;
 }
 
 void Character::update(void) {
@@ -2852,6 +2855,7 @@ struct UI {
 
     void toggleMessageLog(void);
     void addIndicatorWidgets(void);
+    void addLogAndButtons(void);
 };
 
 void UI::addIndicatorWidgets(void) {
@@ -2862,6 +2866,22 @@ void UI::addIndicatorWidgets(void) {
     widgets.push_back(g.hydration_indicator);
     widgets.push_back(g.satiety_indicator);
     widgets.push_back(g.burden_indicator);
+    widgets.push_back(g.time_display);
+}
+
+void UI::addLogAndButtons(void) {
+    widgets.push_back(g.log);
+    widgets.push_back(g.button_MainMap);
+    widgets.push_back(g.button_MiniMap);
+    widgets.push_back(g.button_Skills);
+    widgets.push_back(g.button_Crafting);
+    widgets.push_back(g.button_Items);
+    widgets.push_back(g.button_Condition);
+    widgets.push_back(g.button_Camp);
+    widgets.push_back(g.button_Vehicle);
+    widgets.push_back(g.button_scavenge);
+    widgets.push_back(g.button_endturn);
+    widgets.push_back(g.button_sleep);
 }
 
 void UI::update(void) {
@@ -4102,21 +4122,10 @@ void CraftingUI::setup(void) {
     widgets.push_back(button_prev_recipe);
     widgets.push_back(button_confirm);
     widgets.push_back(button_next_recipe);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
-    widgets.push_back(g.button_endturn);
+    addLogAndButtons();
+    addIndicatorWidgets();
 
     craftGrids->reset();
-
     widgets.push_back(craftGrids);
     craftGrids->exit();
 }
@@ -4301,6 +4310,7 @@ void EncounterUI::setup(void) {
     widgets.clear();
     widgets.push_back(button_confirm);
     widgets.push_back(g.log);
+    addIndicatorWidgets();
 
     encounterGrids->selected->items.clear();
     encounterGrids->options->items.clear();
@@ -4437,7 +4447,6 @@ void ScavengeUI::setup(void) {
 
     widgets.clear();
     widgets.push_back(button_confirm);
-    widgets.push_back(g.log);
 
     gridsystem->selected->items.clear();
     gridsystem->options->items.clear();
@@ -4465,18 +4474,8 @@ void ScavengeUI::setup(void) {
         gridsystem->visible = false;
         // show what we got
     }
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
-    widgets.push_back(g.button_endturn);
+
+    addLogAndButtons();
     widgets.push_back(gridsystem);
 }
 
@@ -4881,18 +4880,8 @@ VehicleUI::VehicleUI() {
     ground_prev_page->onMouseDown = VehiclePrevGroundPage;
 
     widgets.push_back(gridsystem);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
+    addLogAndButtons();
+    addIndicatorWidgets();
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -4919,18 +4908,8 @@ CampUI::CampUI() {
     ground_prev_page->onMouseDown = CampPrevGroundPage;
 
     widgets.push_back(gridsystem);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
+    addLogAndButtons();
+    addIndicatorWidgets();
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -4971,21 +4950,10 @@ ItemsUI::ItemsUI() {
     ground_prev_page->onMouseDown = InventoryPrevGroundPage;
 
     widgets.push_back(gridsystem);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
+    addLogAndButtons();
+    addIndicatorWidgets();
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
-    addIndicatorWidgets();
 }
 
 ConditionUI::ConditionUI() {
@@ -5010,21 +4978,10 @@ ConditionUI::ConditionUI() {
     ground_prev_page->onMouseDown = ConditionPrevGroundPage;
 
     widgets.push_back(gridsystem);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
+    addLogAndButtons();
+    addIndicatorWidgets();
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
-    addIndicatorWidgets();
 }
 
 ItemsUI::~ItemsUI() {
@@ -5118,18 +5075,8 @@ SkillsUI::SkillsUI() {
     skillsGrid = new SkillsGridSystem;
 
     widgets.push_back(skillsGrid);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
+    addLogAndButtons();
+    addIndicatorWidgets();
 }
 
 SkillsUI::~SkillsUI() {
@@ -5845,19 +5792,10 @@ void init_minimap(void) {
 }
 
 MiniMapUI::MiniMapUI(void) {
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
     widgets.push_back(g.minimap);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_sleep);
+
+    addLogAndButtons();
+    addIndicatorWidgets();
 }
 
 MiniMapUI::~MiniMapUI(void) {
@@ -5906,23 +5844,12 @@ void init_characters(void) {
     g.map->player->enableSkill(32);
     g.map->player->enableSkill(33);
     g.map->player->recomputeCarryWeight();
+    g.map->player->recomputeWarmth();
 }
 
 MainMapUI::MainMapUI() {
     widgets.push_back(g.map);
-    widgets.push_back(g.log);
-    widgets.push_back(g.button_MainMap);
-    widgets.push_back(g.button_MiniMap);
-    widgets.push_back(g.button_Skills);
-    widgets.push_back(g.button_Crafting);
-    widgets.push_back(g.button_Items);
-    widgets.push_back(g.button_Condition);
-    widgets.push_back(g.button_Camp);
-    widgets.push_back(g.button_Vehicle);
-    widgets.push_back(g.button_scavenge);
-    widgets.push_back(g.button_endturn);
-    widgets.push_back(g.button_sleep);
-    widgets.push_back(g.time_display);
+    addLogAndButtons();
     addIndicatorWidgets();
 }
 
