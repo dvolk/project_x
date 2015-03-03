@@ -151,6 +151,8 @@ struct Game {
     MessageLog *log;
 
     Item *skills[64];
+    // default weapon
+    Item *hand_combat;
 
     // current mouse state
     int mouse_x;
@@ -197,18 +199,19 @@ enum ItemSlot {
 
 struct ItemInfo {
     string name;
+
+    ItemSlot slot;
+
     int grid_size_x;
     int grid_size_y;
-    int maxStack;
-    int weight; // [g]
-    bool isVehicle;
-    /*
-      TODO: a lot of this could be replaced with a vector of (string?) tags
-    */
-    bool isContainer;
     int container_size_x;
     int container_size_y;
-    ItemSlot slot;
+
+    int maxStack;
+    int weight; // [g]
+
+    bool isVehicle;
+    bool isContainer;
     bool skill;
     // can it be applied to a body part (i.e. bandages and disinfectants)?
     bool apply_to_body;
@@ -216,7 +219,12 @@ struct ItemInfo {
     bool consumed_on_application;
     // when used, is it consumed (i.e. food, water, medicine)?
     bool consumed_on_use;
+
     float warmth;
+
+    float weapon_damage;
+    int weapon_range;
+
     ALLEGRO_BITMAP *sprite;
     ALLEGRO_BITMAP *sprite_on_hp;
 };
@@ -240,6 +248,8 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
     tmp.warmth = 0;
+    tmp.weapon_damage = 0.001;
+    tmp.weapon_range = 1;
     g.item_info.push_back(tmp);
 
     /* 01 */
@@ -299,6 +309,8 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.weapon_damage = 0.05;
+    tmp.weapon_range = 3;
     g.item_info.push_back(tmp);
 
     /* 04 */
@@ -318,6 +330,8 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.weapon_damage = 0.0;
+    tmp.weapon_range = 1;
     g.item_info.push_back(tmp);
 
     /* 05 */
@@ -394,6 +408,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.weapon_damage = 0.001;
     g.item_info.push_back(tmp);
 
     /* 09 */
@@ -413,6 +428,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.weapon_damage = 0.005;
     g.item_info.push_back(tmp);
 
     /* 10 */
@@ -432,6 +448,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.weapon_damage = 0.0;
     g.item_info.push_back(tmp);
 
     /* 11 */
@@ -646,7 +663,7 @@ void init_iteminfo(void) {
     tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
-    /* 21 */
+    /* 22 */
     tmp.name = "Right glove";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
@@ -666,7 +683,7 @@ void init_iteminfo(void) {
     tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
-    /* 21 */
+    /* 23 */
     tmp.name = "Left glove";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
@@ -686,7 +703,7 @@ void init_iteminfo(void) {
     tmp.warmth = 0.1;
     g.item_info.push_back(tmp);
 
-    /* 21 */
+    /* 24 */
     tmp.name = "Right shoe";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
@@ -704,9 +721,10 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_RIGHT_SHOE;
     tmp.warmth = 0.1;
+    tmp.weapon_damage = 0.005;
     g.item_info.push_back(tmp);
 
-    /* 21 */
+    /* 25 */
     tmp.name = "Left shoe";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
@@ -724,6 +742,67 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.slot = ARMOR_LEFT_SHOE;
     tmp.warmth = 0.1;
+    tmp.weapon_damage = 0.005;
+    g.item_info.push_back(tmp);
+
+    /* 26 */
+    tmp.name = "Retreat";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[80];
+    tmp.sprite_on_hp = NULL;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
+
+    /* 27 */
+    tmp.name = "Advance";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[81];
+    tmp.sprite_on_hp = NULL;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
+
+    /* 28 */
+    tmp.name = "fist";
+    tmp.grid_size_x = 3;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 500;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[82];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    tmp.warmth = 0.1;
+    tmp.weapon_damage = 0.1;
+    tmp.weapon_range = 1;
     g.item_info.push_back(tmp);
 }
 
@@ -767,12 +846,13 @@ struct Item {
     void resetHardpointPos(void);
 
     void draw(void);
+    void rotate(void);
 
     ALLEGRO_BITMAP *get_sprite();
+    ItemSlot getItemSlot(void);
+    const char *getName(void);
     int get_grid_size_x(void);
     int get_grid_size_y(void);
-    const char *getName(void);
-    ItemSlot getItemSlot(void);
 
     bool isVehicle(void);
     bool isMedical(void);
@@ -780,7 +860,8 @@ struct Item {
     bool isUsable(void);
     bool isConsumedOnUse(void);
 
-    void rotate(void);
+    int get_weapon_range(void);
+    float get_weapon_damage(void);
     int get_weight(void);
     float get_warmth(void);
 };
@@ -802,6 +883,14 @@ ALLEGRO_BITMAP *Item::get_sprite() {
 
 float Item::get_warmth(void) {
     return g.item_info[info_index].warmth;
+}
+
+float Item::get_weapon_damage(void) {
+    return g.item_info[info_index].weapon_damage;
+}
+
+int Item::get_weapon_range(void) {
+    return g.item_info[info_index].weapon_range;
 }
 
 int Item::get_grid_size_x(void) {
@@ -1252,7 +1341,7 @@ Item *Grid::PlaceItem(Item *to_place) {
     }
  done:
     if(found == true) {
-        cout << "placing " << g.item_info[to_place->info_index].name << " on " << this << endl;
+        // cout << "placing " << g.item_info[to_place->info_index].name << " on " << this << endl;
 
         to_place->pos.x1 = drop_x;
         to_place->pos.y1 = drop_y;
@@ -1499,10 +1588,8 @@ Item *Character::getSelectedWeapon(void) {
     if(w->empty() == false) {
         return w->front();
     } else {
-        /*
-          TODO: return fist
-        */
-        return NULL;
+        /* shrug */
+        return g.hand_combat;
     }
 }
 
@@ -1969,7 +2056,7 @@ void Character::randomMove(void) {
     move(new_n);
 }
 
-void runEncounter(void);
+void runPlayerEncounter(void);
 
 // character c1 interrupts c2.
 void chInterruptsPlayer(Character *c1) {
@@ -2065,8 +2152,7 @@ struct WeaponSwitcher : public Widget {
 void WeaponSwitcher::draw(void) {
     Item *w = g.map->player->getSelectedWeapon();
 
-    if(w == NULL)
-        return;
+    assert(w != NULL);
 
     // could be cached...
     float weapon_x = pos.x1 + (pos.x2 - w->get_grid_size_x() * Grid::grid_px_x) / 2;
@@ -3746,7 +3832,7 @@ void chr_debug_print(Character *c) {
 
 void end_turn_debug_print(void) {
     cout << "\"turn\" ends (" << g.map->player->nextMove << ") with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
-    g.map->player->print_stats();
+    // g.map->player->print_stats();
 }
 
 // process AI's without caring about encounter interrupts.
@@ -3774,7 +3860,7 @@ void end_turn() {
     if(g.encounterInterrupt == true &&
        g.ui != (UI*)g.ui_Encounter /* <-- TODO: still needed? */)
         {
-            runEncounter();
+            runPlayerEncounter();
         }
 
     g.map->player->update();
@@ -4143,6 +4229,41 @@ void runCrafting(void) {
     updateCraftingOutput();
 }
 
+struct Encounter {
+private:
+    bool running;
+
+    Character *c1;
+    Character *c2;
+
+    int range;
+
+public:
+    Encounter(void) { running = false; }
+
+    void setup(Character *c1, Character *c2);
+
+    bool isRunning(void);
+    void endEncounter(void);
+
+    void runPlayerEncounterStep(void);
+    void do_encounter_messages(void);
+    void npcEncounterStep(void);
+    void npcEncounterStep(int n);
+
+    bool isEncounterNPCdead(void);
+    bool isEncounterNPCdead(int n);
+    bool involvesPlayer(void);
+    int getRange(void);
+    Item *weaponUsedBy(Character *c);
+
+    bool playerInRange(void);
+    void advance(int steps);
+    void retreat(int steps);
+
+    ALLEGRO_BITMAP *get_character_sprite(int i);
+};
+
 struct EncounterGridSystem : public GridSystem {
     Grid *options;
     Grid *selected;
@@ -4152,13 +4273,17 @@ struct EncounterGridSystem : public GridSystem {
 };
 
 struct EncounterUI : public UI {
-    Character *player;
-    Character *npc;
+    Encounter *encounter;
+
     EncounterGridSystem *encounterGrids;
+
     ALLEGRO_BITMAP *cur_tile_sprite;
     Button *button_confirm;
+
     Item *flee;
     Item *single_attack;
+    Item *retreat;
+    Item *advance;
 
     EncounterUI();
     ~EncounterUI();
@@ -4167,6 +4292,180 @@ struct EncounterUI : public UI {
 
     void setup(void);
 };
+
+bool Encounter::isRunning(void) { return running; }
+
+int Encounter::getRange(void) { return range; }
+
+bool Encounter::involvesPlayer(void) { return c1 == g.map->player; }
+
+ALLEGRO_BITMAP *Encounter::get_character_sprite(int i) {
+    if(i == 0)
+        return c1->sprite;
+    else
+        return c2->sprite;
+}
+
+bool Encounter::playerInRange(void) {
+    Item *weapon = c1->getSelectedWeapon();
+
+    return weapon->get_weapon_range() >= range;
+}
+
+void Encounter::advance(int steps) {
+    if(steps >= range)
+        range = 1;
+    else
+        range -= steps;
+}
+
+void Encounter::retreat(int steps) {
+    range += steps;
+}
+
+void Encounter::setup(Character *c1, Character *c2) {
+    this->c1 = c1;
+    this->c2 = c2;
+    running = true;
+    range = 10;
+}
+
+void runPlayerEncounter(void) {
+    g.ui_Encounter->setup();
+    g.ui_Encounter->encounter->do_encounter_messages();
+    g.ui = g.ui_Encounter;
+}
+
+void button_MainMap_press(void);
+
+void Encounter::endEncounter(void) {
+    running = false;
+    g.encounterInterrupt = false;
+
+    c2->do_AI(); // this removes the npc if they're dead
+    processAI();
+
+    int num_there = g.map->charsByPos.count(g.map->player->n);
+
+    if(num_there > 1) {
+        cout << "There are more encounters here: " << num_there - 1 << endl;
+        runPlayerEncounter();
+    } else {
+        cout << "All encounters ended" << endl;
+        button_MainMap_press();
+        g.map->player->update_visibility();
+    }
+}
+
+void Encounter::do_encounter_messages(void) {
+    if(g.map->player->activity == ACTIVITY_SLEEP)
+        g.AddMessage("Your sleep is interrupted and you become aware of an interloper!");
+    else if(g.map->player->activity == ACTIVITY_WAIT)
+        g.AddMessage("An interloper enters the vicinity!");
+    else
+        g.AddMessage("There's someone in the vicinity!");
+}
+
+void Encounter::npcEncounterStep(void) {
+    npcEncounterStep(1);
+}
+
+// c2 acts against c1
+void Encounter::npcEncounterStep(int n) {
+    Character *_c1 = n == 0 ? c1 : c2;
+    Character *_c2 = n == 0 ? c2 : c1;
+
+    if(_c2->health > 0.8) {
+        if(range <= 1) {
+            if(involvesPlayer() == true) {
+                g.AddMessage("The adversary smashes you with their bits!");
+            } else {
+                g.AddMessage("%s hits %s with %s");
+            }
+            _c1->hurt(0.05);
+        } else {
+            if(involvesPlayer() == true) {
+                g.AddMessage("The adversary advances on your position!");
+            } else {
+                g.AddMessage("%s advances toward %s!");
+                advance(2);
+            }
+        }
+    } else {
+        if(involvesPlayer() == true) {
+            g.AddMessage("The adversary retreats!");
+        } else {
+            g.AddMessage("%s retreats from %s!");
+            retreat(1);
+        }
+    }
+}
+
+bool Encounter::isEncounterNPCdead(void) {
+    return isEncounterNPCdead(1);
+}
+
+bool Encounter::isEncounterNPCdead(int n) {
+    Character *c = n == 0 ? c1 : c2;
+
+    if(c->health < 0.01) {
+        g.AddMessage("The adversary succumbs to their wounds.");
+        g.AddMessage("Encounter ends.");
+        // g.map->updateCharsByPos();
+        endEncounter();
+        return true;
+    }
+    return false;
+}
+
+// runs one step of the encounter after the player pressed the
+// confirm button. Could in theory accept multiple actions
+void Encounter::runPlayerEncounterStep(void) {
+    vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
+
+    if(actions->empty()) {
+        g.AddMessage("Ah! The old human nightmare: endless varieties of stupidity, endless varieties of suffering, endless varieties of banality.");
+        return;
+    }
+
+    string action1 = g.item_info[actions->front()->info_index].name;
+
+    if(action1 == "Flee") {
+        uniform_int_distribution<> fled_dist(0, 2);
+        bool successfully_fled = fled_dist(*g.rng) > 0;
+
+        if(successfully_fled == true) {
+            c1->hurt(0.1);
+            c1->randomMove();
+            g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
+            g.AddMessage("Encounter ends.");
+            endEncounter();
+            return;
+        } else {
+            g.AddMessage("You try to get away but your adversary prevents you!");
+            npcEncounterStep();
+        }
+    } else if(action1 == "Single attack") {
+        char msg[100];
+        sprintf(msg, "You hit your adversary with the %s!", c1->getSelectedWeapon()->getName());
+        g.AddMessage(msg);
+
+        c2->hurt(0.15);
+        if(isEncounterNPCdead() == true) return;
+        npcEncounterStep();
+    } else if(action1 == "Retreat") {
+        retreat(2);
+        npcEncounterStep();
+    } else if(action1 == "Advance") {
+        advance(2);
+        npcEncounterStep();
+    } else {
+
+    }
+
+    if(isEncounterNPCdead() == true) return;
+    g.ui_Encounter->setup();
+}
 
 EncounterGridSystem::EncounterGridSystem() {
     options = new Grid (105, 300, 16, 10, NULL);
@@ -4189,12 +4488,17 @@ EncounterGridSystem::~EncounterGridSystem() {
     delete selected;
 }
 
-void runEncounterStep(void);
+void runEncounterStepCB(void) {
+    g.ui_Encounter->encounter->runPlayerEncounterStep();
+}
 
 EncounterUI::EncounterUI() {
     encounterGrids = new EncounterGridSystem;
     flee = new Item ("Flee");
     single_attack = new Item ("Single attack");
+    retreat = new Item ("Retreat");
+    advance = new Item ("Advance");
+    encounter = new Encounter;
 
     button_confirm = new Button;
     button_confirm->pos.x1 = 715;
@@ -4203,106 +4507,10 @@ EncounterUI::EncounterUI() {
     button_confirm->pos.y2 = 45;
     button_confirm->up = g.bitmaps[33];
     button_confirm->down = NULL;
-    button_confirm->onMouseDown = runEncounterStep;
+    button_confirm->onMouseDown = runEncounterStepCB;
 }
 
 void button_MainMap_press(void);
-
-void do_encounter_messages(void) {
-    if(g.map->player->activity == ACTIVITY_SLEEP)
-        g.AddMessage("Your sleep is interrupted and you become aware of an interloper!");
-    else if(g.map->player->activity == ACTIVITY_WAIT)
-        g.AddMessage("An interloper enters the vicinity!");
-    else
-        g.AddMessage("There's someone in the vicinity!");
-}
-
-void runEncounter(void) {
-    g.ui_Encounter->setup();
-    do_encounter_messages();
-    g.ui = g.ui_Encounter;
-}
-
-void endEncounter(void) {
-    Character *npc = g.ui_Encounter->npc;
-    g.encounterInterrupt = false;
-    npc->do_AI(); // this removes the npc if they're dead
-    processAI();
-    int num_there = g.map->charsByPos.count(g.map->player->n);
-
-    if(num_there > 1) {
-        cout << "There are more encounters here: " << num_there - 1 << endl;
-        runEncounter();
-    } else {
-        cout << "All encounters ended" << endl;
-        button_MainMap_press();
-        g.map->player->update_visibility();
-    }
-}
-
-// character c1's turn against character c2
-void npcEncounterStep(Character *c1, Character *c2) {
-    if(c1->health > 0.4) {
-        g.AddMessage("The adversary smashes you with their bits!");
-        c2->hurt(0.2);
-    }
-}
-
-bool isEncounterNPCdead(Character *npc) {
-    if(npc->health < 0.01) {
-        g.AddMessage("The adversary succumbs to their wounds.");
-        g.AddMessage("Encounter ends.");
-        // g.map->updateCharsByPos();
-        endEncounter();
-        return true;
-    }
-    return false;
-}
-
-
-// runs one step of the encounter after the player pressed the
-// confirm button. Could in theory accept multiple actions
-void runEncounterStep(void) {
-    Character *npc = g.ui_Encounter->npc;
-    Character *player = g.map->player;
-    vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
-
-    if(actions->empty()) {
-        g.AddMessage("Ah! The old human nightmare: endless varieties of stupidity, endless varieties of suffering, endless varieties of banality.");
-        return;
-    }
-
-    string action1 = g.item_info[actions->front()->info_index].name;
-
-    if(action1 == "Flee") {
-        player->hurt(0.1);
-
-        uniform_int_distribution<> fled_dist(0, 2);
-        bool successfully_fled = fled_dist(*g.rng) > 0;
-
-        if(successfully_fled == true) {
-            g.map->player->randomMove();
-            g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
-            g.AddMessage("Encounter ends.");
-            endEncounter();
-            return;
-        } else {
-            g.AddMessage("You try to get away but your adversary prevents you!");
-        }
-    } else if(action1 == "Single attack") {
-        g.AddMessage("Your smash your adversary with your bits!");
-
-        npc->hurt(0.4);
-        if(isEncounterNPCdead(npc) == true) return;
-        npcEncounterStep(npc, player);
-
-    } else {
-
-    }
-
-    if(isEncounterNPCdead(npc) == true) return;
-    g.ui_Encounter->setup();
-}
 
 void EncounterUI::setup(void) {
     g.color_bg = g.color_grey;
@@ -4312,23 +4520,52 @@ void EncounterUI::setup(void) {
     widgets.push_back(g.log);
     addIndicatorWidgets();
 
+    // the tile sprite
+    cur_tile_sprite = g.map->bitmaps[g.map->tile_info[g.map->tiles[g.map->player->n].info_index].bitmap_index];
+
+    if(encounter->isRunning() == false) {
+        Character *c1 = g.map->player;
+        g.map->updateCharsByPos();
+        Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
+
+        encounter->setup(c1, c2);
+        cout << "Running encounter at: " << c1->n << " with AI " << c2 << endl;
+    }
+
     encounterGrids->selected->items.clear();
     encounterGrids->options->items.clear();
-
-    encounterGrids->options->PlaceItem(flee);
-    encounterGrids->options->PlaceItem(single_attack);
     widgets.push_back(encounterGrids);
 
-    // the player
-    player = g.map->player;
-    // the tile sprite
-    cur_tile_sprite = g.map->bitmaps[g.map->tile_info[g.map->tiles[player->n].info_index].bitmap_index];
+    encounterGrids->options->PlaceItem(flee);
+    if(encounter->playerInRange() == true) {
+        encounterGrids->options->PlaceItem(single_attack);
+    }
+    encounterGrids->options->PlaceItem(retreat);
+    encounterGrids->options->PlaceItem(advance);
 
-    // find the npc
-    g.map->updateCharsByPos();
-    npc = g.map->charsByPos.equal_range(player->n).first->second;
+}
 
-    cout << "Running encounter at: " << player->n << " with AI " << npc << endl;
+void EncounterUI::draw(void) {
+    al_draw_filled_rectangle(105, 25, 405, 295, g.color_grey2);
+    al_draw_filled_rectangle(410, 25, 680, 295, g.color_grey2);
+    al_draw_filled_rectangle(685, 25, 985, 295, g.color_grey2);
+    al_draw_text(g.font, g.color_white, 200, 10, 0,
+                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
+
+    char range_text[20];
+    sprintf(range_text, "range: %d", encounter->getRange());
+    al_draw_text(g.font, g.color_black, 502, 208, 0, range_text);
+
+    al_draw_bitmap(encounter->get_character_sprite(0), 120, 40, 0);
+    al_draw_bitmap(encounter->get_character_sprite(1), 700, 40, 0);
+    al_draw_bitmap(cur_tile_sprite, 490, 120, 0);
+
+    UI::draw();
+}
+
+EncounterUI::~EncounterUI() {
+    delete flee;
+    delete single_attack;
 }
 
 struct ScavengeGridSystem : public GridSystem {
@@ -4477,24 +4714,6 @@ void ScavengeUI::setup(void) {
 
     addLogAndButtons();
     widgets.push_back(gridsystem);
-}
-
-void EncounterUI::draw(void) {
-    al_draw_filled_rectangle(105, 25, 405, 295, g.color_grey2);
-    al_draw_filled_rectangle(410, 25, 680, 295, g.color_grey2);
-    al_draw_filled_rectangle(685, 25, 985, 295, g.color_grey2);
-    al_draw_text(g.font, g.color_white, 200, 10, 0,
-                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
-    al_draw_bitmap(player->sprite, 120, 40, 0);
-    al_draw_bitmap(npc->sprite, 700, 40, 0);
-    al_draw_bitmap(cur_tile_sprite, 490, 200, 0);
-
-    UI::draw();
-}
-
-EncounterUI::~EncounterUI() {
-    delete flee;
-    delete single_attack;
 }
 
 struct InventoryGridSystem;
@@ -5512,7 +5731,9 @@ void load_bitmaps(void) {
     /* 77 */ filenames.push_back("media/backgrounds/lower_torso_wound.png");
     /* 78 */ filenames.push_back("media/backgrounds/lower_left_arm_wound.png");
     /* 79 */ filenames.push_back("media/backgrounds/upper_left_arm_wound.png");
-
+    /* 80 */ filenames.push_back("media/items/abstract/retreat.png");
+    /* 81 */ filenames.push_back("media/items/abstract/advance.png");
+    /* 81 */ filenames.push_back("media/items/hand_combat.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -5869,6 +6090,10 @@ void init_colors(void) {
     g.color_bg = g.color_black;
 }
 
+void init_misc(void) {
+    g.hand_combat = new Item ("Hand-to-hand combat");
+}
+
 void allegro_init(void) {
     int ret = 0;
 
@@ -6010,6 +6235,7 @@ int main(int argc, char **argv) {
     init_locationdata();
     init_indicators();
     init_timedisplay();
+    init_misc();
 
     {
         g.ui_MainMap   = new MainMapUI;
