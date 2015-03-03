@@ -253,7 +253,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 01 */
-    tmp.name = "Backpack";
+    tmp.name = "backpack";
     tmp.grid_size_x = 6;
     tmp.grid_size_y = 6;
     tmp.maxStack = 1;
@@ -273,7 +273,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 02 */
-    tmp.name = "First aid kit";
+    tmp.name = "first aid kit";
     tmp.grid_size_x = 4;
     tmp.grid_size_y = 4;
     tmp.maxStack = 1;
@@ -293,7 +293,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 03 */
-    tmp.name = "Crowbar";
+    tmp.name = "crowbar";
     tmp.grid_size_x = 14;
     tmp.grid_size_y = 2;
     tmp.maxStack = 1;
@@ -314,7 +314,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 04 */
-    tmp.name = "Shopping trolley";
+    tmp.name = "shopping trolley";
     tmp.grid_size_x = 12;
     tmp.grid_size_y = 12;
     tmp.maxStack = 1;
@@ -335,7 +335,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 05 */
-    tmp.name = "Pill bottle";
+    tmp.name = "pill bottle";
     tmp.grid_size_x = 1;
     tmp.grid_size_y = 2;
     tmp.maxStack = 1;
@@ -392,7 +392,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 08 */
-    tmp.name = "Bullet";
+    tmp.name = "bullet";
     tmp.grid_size_x = 1;
     tmp.grid_size_y = 1;
     tmp.maxStack = 5;
@@ -412,7 +412,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 09 */
-    tmp.name = "Arrow";
+    tmp.name = "arrow";
     tmp.grid_size_x = 6;
     tmp.grid_size_y = 1;
     tmp.maxStack = 5;
@@ -509,7 +509,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 14 */
-    tmp.name = "Whiskey";
+    tmp.name = "whiskey";
     tmp.grid_size_x = 1;
     tmp.grid_size_y = 2;
     tmp.maxStack = 5;
@@ -528,7 +528,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 15 */
-    tmp.name = "Clean rag";
+    tmp.name = "clean rag";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
     tmp.maxStack = 10;
@@ -585,7 +585,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 18 */
-    tmp.name = "Water bottle";
+    tmp.name = "water bottle";
     tmp.grid_size_x = 1;
     tmp.grid_size_y = 4;
     tmp.maxStack = 1;
@@ -604,7 +604,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 19 */
-    tmp.name = "Red shirt";
+    tmp.name = "red shirt";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
     tmp.maxStack = 1;
@@ -624,7 +624,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 20 */
-    tmp.name = "Blue pants";
+    tmp.name = "blue pants";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
     tmp.maxStack = 1;
@@ -644,7 +644,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 21 */
-    tmp.name = "Ski mask";
+    tmp.name = "ski mask";
     tmp.grid_size_x = 2;
     tmp.grid_size_y = 2;
     tmp.maxStack = 1;
@@ -664,7 +664,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 22 */
-    tmp.name = "Right glove";
+    tmp.name = "right glove";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
     tmp.maxStack = 1;
@@ -684,7 +684,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 23 */
-    tmp.name = "Left glove";
+    tmp.name = "left glove";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
     tmp.maxStack = 1;
@@ -704,7 +704,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 24 */
-    tmp.name = "Right shoe";
+    tmp.name = "right shoe";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
     tmp.maxStack = 1;
@@ -725,7 +725,7 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 25 */
-    tmp.name = "Left shoe";
+    tmp.name = "left shoe";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 3;
     tmp.maxStack = 1;
