@@ -310,7 +310,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
-    tmp.weapon_damage = 0.05;
+    tmp.weapon_damage = 0.15;
     tmp.weapon_range = 3;
     g.item_info.push_back(tmp);
 
@@ -1632,7 +1632,7 @@ void Character::hurt(float amount) {
     health -= min(health, amount);
     pain -= min(pain, amount * 3);
     activity = ACTIVITY_COMBAT;
-    spendTime(10);
+    spendTime(0);
 }
 
 void Character::spendTime(int _dt) {
@@ -2063,8 +2063,18 @@ void runPlayerEncounter(void);
 
 // character c1 interrupts c2.
 void chInterruptsPlayer(Character *c1) {
-    cout << c1 << " interrupted player " << g.map->player->nextMove << " -> " << c1->nextMove << endl;
+    int playersNewDt = g.map->player->nextMove - c1->nextMove;
 
+    cout << c1 << " interrupted player! nextMove: "
+         << g.map->player->nextMove << " -> " << c1->nextMove << " dt: "
+         << g.map->player->dt << " -> " << playersNewDt << endl;
+
+    /*
+      TODO: this fails
+    */
+    assert(playersNewDt >= 0);
+
+    g.map->player->dt = playersNewDt;
     g.map->player->nextMove = c1->nextMove;
     g.map->player->update();
 }
@@ -2082,6 +2092,9 @@ void Character::move(int new_n) {
             // one character on that tile
             if(g.map->charsByPos.count(this->n) > 1) {
                 g.encounterInterrupt = true;
+                /*
+                  TODO: player interrupts AIs
+                */
             }
         } else if(this->n == g.map->player->n) {
             // or if this npc moved into the player's position
@@ -2106,6 +2119,7 @@ void Character::move(int new_n) {
 }
 
 void Character::die(void) {
+    cout << "Died: " << name << endl;
     g.map->removeCharacter(this);
 }
 
@@ -3080,7 +3094,7 @@ void GridSortButton::draw(void) {
         al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_black);
 }
 
-void Game::AddMessage(string &str) {
+void Game::AddMessage(string str) {
     if(log == NULL)
         return;
 
@@ -3853,14 +3867,13 @@ void end_turn() {
     // an encounter interrupt
     while((c = next()) != g.map->player && g.encounterInterrupt == false && g.ai_encounterInterrupt == -1)
         {
-            cout << c << ' ';
+            cout << c << " (" << c->nextMove << ") ";
             c->do_AI();
+            if(g.ai_encounterInterrupt != -1) {
+                runAIEncounter(g.ai_encounterInterrupt);
+            }
         }
     cout << endl;
-
-    if(g.ai_encounterInterrupt != -1) {
-        runAIEncounter(g.ai_encounterInterrupt);
-    }
 
     g.map->player->update_visibility();
 
@@ -4243,34 +4256,42 @@ private:
     Character *c1;
     Character *c2;
 
+    // the distance between the characters (approx. [m])
     int range;
 
-public:
-    Encounter(void) { running = false; }
-
-    void setup(Character *c1, Character *c2);
-
-    bool isRunning(void);
-    void endEncounter(void);
-
-    void runPlayerEncounterStep(void);
-    void do_encounter_messages(void);
-    void npcEncounterStep(void);
-    void npcEncounterStep(int n);
-    void runAIEncounter(int n);
-
-    bool isEncounterNPCdead(void);
-    bool isEncounterNPCdead(int n);
-    bool involvesPlayer(void);
-    int getRange(void);
-    Item *weaponUsedBy(Character *c);
-
-    bool playerInRange(void);
+    // general
     void advance(int steps);
     void retreat(int steps);
     bool npcRelocated(void);
 
+    // AI vs AI
+    void npcEncounterStep(int n);
+    bool isEncounterNPCdead(int n);
+
+    // player vs AI
+    void endEncounter(void);
+    void npcEncounterStep(void);
+    bool isEncounterNPCdead(void);
+    bool involvesPlayer(void);
+
+public:
+    Encounter(void) { running = false; }
+
+    // general
+    void setup(Character *c1, Character *c2);
+
+    // AI vs AI
+    void runAIEncounter(int n);
+
+    // player vs AI
+    float getHealth(int n);
+    const char *getName(int n);
+    int getRange(void);
     ALLEGRO_BITMAP *get_character_sprite(int i);
+    bool isRunning(void);
+    bool playerInRange(void);
+    void runPlayerEncounterStep(void);
+    void do_encounter_messages(void);
 };
 
 struct EncounterGridSystem : public GridSystem {
@@ -4282,6 +4303,8 @@ struct EncounterGridSystem : public GridSystem {
 };
 
 struct EncounterUI : public UI {
+    const int off_x = 97;
+
     Encounter *encounter;
 
     EncounterGridSystem *encounterGrids;
@@ -4310,6 +4333,14 @@ bool Encounter::involvesPlayer(void) { return c1 == g.map->player; }
 
 bool Encounter::npcRelocated(void) {
     return c1->n != c2->n;
+}
+
+float Encounter::getHealth(int n) {
+    return n == 0 ? c1->health : c2->health;
+}
+
+const char *Encounter::getName(int n) {
+    return n == 0 ? c1->name : c2->name;
 }
 
 ALLEGRO_BITMAP *Encounter::get_character_sprite(int i) {
@@ -4416,6 +4447,7 @@ void Encounter::do_encounter_messages(void) {
         g.AddMessage("There's someone in the vicinity!");
 }
 
+// only called by the player
 void Encounter::npcEncounterStep(void) {
     npcEncounterStep(0);
 }
@@ -4435,8 +4467,11 @@ void Encounter::npcEncounterStep(int n) {
         bool successfully_fled = fled_dist(*g.rng) > 0;
 
         if(successfully_fled == true) {
-            if(involvesPlayer() == true)
+            if(involvesPlayer() == true) {
                 sprintf(buf, "%s flees from you!", _c2->name);
+                g.AddMessage("Encounter ends.");
+                endEncounter();
+            }
             else
                 sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
             _c2->randomMove();
@@ -4542,6 +4577,7 @@ void Encounter::runPlayerEncounterStep(void) {
             snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
             g.AddMessage(msg);
             npcEncounterStep();
+            if(npcRelocated() == true) return;
         }
     } else if(action1 == "Single attack") {
         char msg[100];
@@ -4552,23 +4588,28 @@ void Encounter::runPlayerEncounterStep(void) {
 
         if(isEncounterNPCdead() == true) return;
         npcEncounterStep();
+        if(npcRelocated() == true) return;
     } else if(action1 == "Retreat") {
         retreat(2);
         npcEncounterStep();
+        if(npcRelocated() == true) return;
     } else if(action1 == "Advance") {
         advance(2);
         npcEncounterStep();
+        if(npcRelocated() == true) return;
     } else {
 
     }
 
     if(isEncounterNPCdead() == true) return;
+    if(npcRelocated() == true) return;
     g.ui_Encounter->setup();
 }
 
 EncounterGridSystem::EncounterGridSystem() {
-    options = new Grid (105, 300, 16, 10, NULL);
-    selected = new Grid (410, 300, 16, 10, g.encounter_selected);
+    options = new Grid (97 + 105, 300, 16, 10, NULL);
+    //                  ^^ g.ui_Encounter->off_x
+    selected = new Grid (97 + 398, 300, 16, 10, g.encounter_selected);
 
     grids.push_back(options);
     grids.push_back(selected);
@@ -4600,7 +4641,7 @@ EncounterUI::EncounterUI() {
     encounter = new Encounter;
 
     button_confirm = new Button;
-    button_confirm->pos.x1 = 715;
+    button_confirm->pos.x1 = off_x + 691;
     button_confirm->pos.y1 = 300;
     button_confirm->pos.x2 = 75;
     button_confirm->pos.y2 = 45;
@@ -4628,7 +4669,7 @@ void EncounterUI::setup(void) {
         Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
 
         encounter->setup(c1, c2);
-        cout << "Running encounter at: " << c1->n << " with AI " << c2 << endl;
+        cout << "Running encounter at: " << c1->n << " with AI " << c2->name << endl;
     }
 
     encounterGrids->selected->items.clear();
@@ -4645,19 +4686,29 @@ void EncounterUI::setup(void) {
 }
 
 void EncounterUI::draw(void) {
-    al_draw_filled_rectangle(105, 25, 405, 295, g.color_grey2);
-    al_draw_filled_rectangle(410, 25, 680, 295, g.color_grey2);
-    al_draw_filled_rectangle(685, 25, 985, 295, g.color_grey2);
-    al_draw_text(g.font, g.color_white, 200, 10, 0,
+    al_draw_filled_rectangle(off_x + 105, 25, off_x + 405, 295, g.color_grey2);
+    al_draw_filled_rectangle(off_x + 410, 25, off_x + 680, 295, g.color_grey2);
+    al_draw_filled_rectangle(off_x + 685, 25, off_x + 985, 295, g.color_grey2);
+    al_draw_text(g.font, g.color_white, off_x + 105, 10, 0,
                  "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
 
-    char range_text[20];
-    sprintf(range_text, "range: %d", encounter->getRange());
-    al_draw_text(g.font, g.color_black, 502, 208, 0, range_text);
+    char buf[30];
+    sprintf(buf, "range: %d", encounter->getRange());
+    al_draw_text(g.font, g.color_black, off_x + 507, 208, 0, buf);
 
-    al_draw_bitmap(encounter->get_character_sprite(0), 120, 40, 0);
-    al_draw_bitmap(encounter->get_character_sprite(1), 700, 40, 0);
-    al_draw_bitmap(cur_tile_sprite, 490, 120, 0);
+    al_draw_bitmap(encounter->get_character_sprite(0), off_x + 120, 40, 0);
+    sprintf(buf, "name: %s", encounter->getName(0));
+    al_draw_text(g.font, g.color_black, off_x + 120, 110, 0, buf);
+    sprintf(buf, "health: %f", encounter->getHealth(0));
+    al_draw_text(g.font, g.color_black, off_x + 120, 120, 0, buf);
+
+    al_draw_bitmap(encounter->get_character_sprite(1), off_x + 700, 40, 0);
+    sprintf(buf, "name: %s", encounter->getName(1));
+    al_draw_text(g.font, g.color_black, off_x + 700, 110, 0, buf);
+    sprintf(buf, "health: %f", encounter->getHealth(1));
+    al_draw_text(g.font, g.color_black, off_x + 700, 120, 0, buf);
+
+    al_draw_bitmap(cur_tile_sprite, off_x + 490, 120, 0);
 
     UI::draw();
 }
@@ -6125,8 +6176,7 @@ MiniMapUI::~MiniMapUI(void) {
 // creates the player and npcs
 // must be called after init_tilemap();
 void init_characters(void) {
-    const char *names[] = { "Player",
-                            "Herb Bert",
+    const char *names[] = { "Herb Bert",
                             "Jepson Parker",
                             "Farley Rigby",
                             "Homer Brooke",
@@ -6154,10 +6204,10 @@ void init_characters(void) {
         }
         else { // everyone else is an NPC
             g.map->characters.push_back(c);
+            c->name = names[(i - 1) % 14];
         }
 
         c->n = n;
-        c->name = names[1 + i % 14];
 
         // add starting items
         Item *backpack = new Item("backpack");
@@ -6176,6 +6226,7 @@ void init_characters(void) {
     }
 
     g.map->updateCharsByPos();
+    g.map->player->name = "Player";
     g.map->player->update_visibility();
     g.map->focusOnPlayer();
     g.map->player->enableSkill(0);
@@ -6409,13 +6460,15 @@ int main(int argc, char **argv) {
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
             g.key = ev.keyboard.keycode;
-            if(g.key == ALLEGRO_KEY_ESCAPE)
-                if(g.ui == g.ui_MainMap)
-                   break;
-                else
+            if(g.key == ALLEGRO_KEY_ESCAPE) {
+                if(g.ui == g.ui_MainMap) {
+                    break;
+                } else if(g.ui != g.ui_Encounter) {
                     button_MainMap_press();
-            else
+                }
+            } else {
                 g.ui->keyDownEvent();
+            }
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here
