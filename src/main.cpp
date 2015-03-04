@@ -146,7 +146,8 @@ struct Game {
     EncounterUI *ui_Encounter;
     ScavengeUI *ui_Scavenge;
 
-    bool encounterInterrupt;
+    bool encounterInterrupt; // player
+    int ai_encounterInterrupt; // AI at index
 
     MessageLog *log;
 
@@ -1460,6 +1461,8 @@ Wound::Wound() {
 struct Character {
     int n; // position by offset
 
+    const char *name;
+
     Grid *right_hand_hold;
     Grid *left_hand_hold;
     Grid *right_hand;
@@ -2066,24 +2069,19 @@ void chInterruptsPlayer(Character *c1) {
     g.map->player->update();
 }
 
+void runAIEncounter(int n);
+
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
         n = new_n;
         g.map->updateCharsByPos();
 
-        /*
-          TODO: How does this work if three npcs move into the same position?
-          Encounters should "stack", and be run in sequence.
-        */
         // start an encounter if
         if(this == g.map->player) {
             // this character is the player and there's more than
             // one character on that tile
             if(g.map->charsByPos.count(this->n) > 1) {
                 g.encounterInterrupt = true;
-                /*
-                  TODO: the player interrupts the npc(s)
-                */
             }
         } else if(this->n == g.map->player->n) {
             // or if this npc moved into the player's position
@@ -2092,9 +2090,9 @@ void Character::move(int new_n) {
             chInterruptsPlayer(this);
 
         } else if(g.map->charsByPos.count(this->n) > 1) {
-            // or if there are two npcs at the same position
+            g.ai_encounterInterrupt = this->n;
             /*
-              TODO: aiEncounter(this->n);
+              TODO: AI interrupts AIs
             */
         }
     }
@@ -3082,7 +3080,7 @@ void GridSortButton::draw(void) {
         al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_black);
 }
 
-void Game::AddMessage(string str) {
+void Game::AddMessage(string &str) {
     if(log == NULL)
         return;
 
@@ -3835,13 +3833,16 @@ void end_turn_debug_print(void) {
     // g.map->player->print_stats();
 }
 
-// process AI's without caring about encounter interrupts.
-// used when already in an encounter.
+// process AI's without caring about player encounter interrupts.
+// used when player is already in an encounter.
 void processAI(void) {
     Character *c;
     while((c = next()) != g.map->player)
         {
             c->do_AI();
+            if(g.ai_encounterInterrupt != -1) {
+                runAIEncounter(g.ai_encounterInterrupt);
+            }
         }
 }
 
@@ -3850,10 +3851,16 @@ void end_turn() {
 
     // process characters until it's the player's turn again or we get
     // an encounter interrupt
-    while((c = next()) != g.map->player && g.encounterInterrupt == false)
+    while((c = next()) != g.map->player && g.encounterInterrupt == false && g.ai_encounterInterrupt == -1)
         {
+            cout << c << ' ';
             c->do_AI();
         }
+    cout << endl;
+
+    if(g.ai_encounterInterrupt != -1) {
+        runAIEncounter(g.ai_encounterInterrupt);
+    }
 
     g.map->player->update_visibility();
 
@@ -4250,6 +4257,7 @@ public:
     void do_encounter_messages(void);
     void npcEncounterStep(void);
     void npcEncounterStep(int n);
+    void runAIEncounter(int n);
 
     bool isEncounterNPCdead(void);
     bool isEncounterNPCdead(int n);
@@ -4260,6 +4268,7 @@ public:
     bool playerInRange(void);
     void advance(int steps);
     void retreat(int steps);
+    bool npcRelocated(void);
 
     ALLEGRO_BITMAP *get_character_sprite(int i);
 };
@@ -4299,6 +4308,10 @@ int Encounter::getRange(void) { return range; }
 
 bool Encounter::involvesPlayer(void) { return c1 == g.map->player; }
 
+bool Encounter::npcRelocated(void) {
+    return c1->n != c2->n;
+}
+
 ALLEGRO_BITMAP *Encounter::get_character_sprite(int i) {
     if(i == 0)
         return c1->sprite;
@@ -4336,6 +4349,43 @@ void runPlayerEncounter(void) {
     g.ui = g.ui_Encounter;
 }
 
+void runAIEncounter(int n) {
+    Encounter e;
+    e.runAIEncounter(n);
+}
+
+// resolve all AI encounters at pos n
+void Encounter::runAIEncounter(int n) {
+    int num_there;
+    // run encounters until only one character remains
+    do {
+        // setup
+        range = 10;
+        auto cs = g.map->charsByPos.equal_range(n).first;
+        c1 = cs->second;
+        cs++;
+        c2 = cs->second;
+
+        while(true) {
+            npcEncounterStep(0);
+            // the npc can die or leave (TODO: etc)
+            if(isEncounterNPCdead(0) == true || npcRelocated() == true) break;
+
+            npcEncounterStep(1);
+            if(isEncounterNPCdead(1) == true || npcRelocated() == true) break;
+
+            cout << c1->health << ' ' << c2->health << endl;
+        }
+        c1->post_update();
+        c2->post_update();
+
+        // g.map->updateCharsByPos();
+        num_there = g.map->charsByPos.count(n);
+    } while(num_there >= 2);
+    g.ai_encounterInterrupt = -1;
+    // g.map->updateCharsByPos();
+}
+
 void button_MainMap_press(void);
 
 void Encounter::endEncounter(void) {
@@ -4367,35 +4417,75 @@ void Encounter::do_encounter_messages(void) {
 }
 
 void Encounter::npcEncounterStep(void) {
-    npcEncounterStep(1);
+    npcEncounterStep(0);
 }
 
-// c2 acts against c1
+// c2 acts against c1 (n == 0)
+// c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) {
     Character *_c1 = n == 0 ? c1 : c2;
     Character *_c2 = n == 0 ? c2 : c1;
+    char buf[100];
 
-    if(_c2->health > 0.8) {
-        if(range <= 1) {
-            if(involvesPlayer() == true) {
-                g.AddMessage("The adversary smashes you with their bits!");
-            } else {
-                g.AddMessage("%s hits %s with %s");
-            }
-            _c1->hurt(0.05);
+    uniform_int_distribution<> will_dist(0, 10);
+    bool wantsToFlee = will_dist(*g.rng) == 0;
+
+    if(wantsToFlee == true) {
+        uniform_int_distribution<> fled_dist(0, 2);
+        bool successfully_fled = fled_dist(*g.rng) > 0;
+
+        if(successfully_fled == true) {
+            if(involvesPlayer() == true)
+                sprintf(buf, "%s flees from you!", _c2->name);
+            else
+                sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
+            _c2->randomMove();
         } else {
-            if(involvesPlayer() == true) {
-                g.AddMessage("The adversary advances on your position!");
+            if(involvesPlayer() == true)
+                sprintf(buf, "%s tries to flee but can't!", _c2->name);
+            else
+                sprintf(buf, "%s tries to flee from %s but can't!", _c2->name, _c1->name);
+        }
+
+        if(g.map->playerSees(_c1->n))
+            g.AddMessage(buf);
+
+    } else {
+        if(_c2->health > 0.8) {
+            /*
+              TODO: if this is 1, it leads to an infinite loop since
+              the attacker can't ever reach the fleeing enemy
+            */
+            if(range <= 2) {
+                if(involvesPlayer() == true)
+                    sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                else
+                    sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
+
+                if(g.map->playerSees(_c1->n))
+                    g.AddMessage(buf);
+
+                _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
             } else {
-                g.AddMessage("%s advances toward %s!");
+                if(involvesPlayer() == true)
+                    sprintf(buf, "%s advances on your position!", _c2->name);
+                else
+                    sprintf(buf, "%s advances toward %s!", _c2->name, _c1->name);
+
+                if(g.map->playerSees(_c1->n))
+                    g.AddMessage(buf);
+
                 advance(2);
             }
-        }
-    } else {
-        if(involvesPlayer() == true) {
-            g.AddMessage("The adversary retreats!");
         } else {
-            g.AddMessage("%s retreats from %s!");
+            if(involvesPlayer() == true)
+                sprintf(buf, "%s retreats from you!", _c2->name);
+            else
+                sprintf(buf, "%s retreats from %s!", _c2->name, _c1->name);
+
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
+
             retreat(1);
         }
     }
@@ -4409,10 +4499,16 @@ bool Encounter::isEncounterNPCdead(int n) {
     Character *c = n == 0 ? c1 : c2;
 
     if(c->health < 0.01) {
-        g.AddMessage("The adversary succumbs to their wounds.");
-        g.AddMessage("Encounter ends.");
-        // g.map->updateCharsByPos();
-        endEncounter();
+        if(involvesPlayer() == true) {
+            g.AddMessage("The adversary succumbs to their wounds.");
+            g.AddMessage("Encounter ends.");
+            // g.map->updateCharsByPos();
+            endEncounter();
+        } else if(g.map->playerSees(c->n)) {
+            char buf[100];
+            sprintf(buf, "%s dies!", c->name);
+            g.AddMessage(buf);
+        }
         return true;
     }
     return false;
@@ -4428,7 +4524,7 @@ void Encounter::runPlayerEncounterStep(void) {
         return;
     }
 
-    string action1 = g.item_info[actions->front()->info_index].name;
+    string action1 = actions->front()->getName();
 
     if(action1 == "Flee") {
         uniform_int_distribution<> fled_dist(0, 2);
@@ -4442,15 +4538,18 @@ void Encounter::runPlayerEncounterStep(void) {
             endEncounter();
             return;
         } else {
-            g.AddMessage("You try to get away but your adversary prevents you!");
+            char msg[100];
+            snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
+            g.AddMessage(msg);
             npcEncounterStep();
         }
     } else if(action1 == "Single attack") {
         char msg[100];
-        sprintf(msg, "You hit your adversary with the %s!", c1->getSelectedWeapon()->getName());
+        sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
         g.AddMessage(msg);
 
-        c2->hurt(0.15);
+        c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
+
         if(isEncounterNPCdead() == true) return;
         npcEncounterStep();
     } else if(action1 == "Retreat") {
@@ -5387,22 +5486,22 @@ vector<Grid *> *ground_at_character(Character *character) {
         assert(ground_grid != NULL);
         ground->push_back(ground_grid);
         // test items
-        ground_grid->PlaceItem(new Item("Crowbar"));
-        ground_grid->PlaceItem(new Item("Shopping trolley"));
-        ground_grid->PlaceItem(new Item("Pill bottle"));
-        ground_grid->PlaceItem(new Item("Arrow", 4));
-        ground_grid->PlaceItem(new Item("Arrow", 3));
-        ground_grid->PlaceItem(new Item("Whiskey", 10));
-        ground_grid->PlaceItem(new Item("Clean rag", 10));
-        ground_grid->PlaceItem(new Item("Clean rag", 10));
-        ground_grid->PlaceItem(new Item ("Water bottle"));
-        ground_grid->PlaceItem(new Item ("Red shirt"));
-        ground_grid->PlaceItem(new Item ("Blue pants"));
-        ground_grid->PlaceItem(new Item ("Ski mask"));
-        ground_grid->PlaceItem(new Item ("Right glove"));
-        ground_grid->PlaceItem(new Item ("Left glove"));
-        ground_grid->PlaceItem(new Item ("Right shoe"));
-        ground_grid->PlaceItem(new Item ("Left shoe"));
+        ground_grid->PlaceItem(new Item("crowbar"));
+        ground_grid->PlaceItem(new Item("shopping trolley"));
+        ground_grid->PlaceItem(new Item("pill bottle"));
+        ground_grid->PlaceItem(new Item("arrow", 4));
+        ground_grid->PlaceItem(new Item("arrow", 3));
+        ground_grid->PlaceItem(new Item("whiskey", 10));
+        ground_grid->PlaceItem(new Item("clean rag", 10));
+        ground_grid->PlaceItem(new Item("clean rag", 10));
+        ground_grid->PlaceItem(new Item ("water bottle"));
+        ground_grid->PlaceItem(new Item ("red shirt"));
+        ground_grid->PlaceItem(new Item ("blue pants"));
+        ground_grid->PlaceItem(new Item ("ski mask"));
+        ground_grid->PlaceItem(new Item ("right glove"));
+        ground_grid->PlaceItem(new Item ("left glove"));
+        ground_grid->PlaceItem(new Item ("right shoe"));
+        ground_grid->PlaceItem(new Item ("left shoe"));
     }
     g.map->tiles[character->n].ground_items = ground;
     return ground;
@@ -6026,6 +6125,23 @@ MiniMapUI::~MiniMapUI(void) {
 // creates the player and npcs
 // must be called after init_tilemap();
 void init_characters(void) {
+    const char *names[] = { "Player",
+                            "Herb Bert",
+                            "Jepson Parker",
+                            "Farley Rigby",
+                            "Homer Brooke",
+                            "Eustace Chamberlain",
+                            "Piers Moore",
+                            "Sonnie Aitken",
+                            "Alycia Burke",
+                            "Suzie Martinson",
+                            "Lilibeth Beasley",
+                            "Nat Corra",
+                            "Keanna Lowe",
+                            "Jordyn Auttenberg",
+                            "Cary Lamar" };
+
+
     uniform_int_distribution<> dist(0, g.map->max_t);
 
     for(int i = 0; i < 15; i++) {
@@ -6036,25 +6152,27 @@ void init_characters(void) {
         if(i == 0) { // player is character 0
             g.map->player = c;
         }
-        else // everyone else is an NPC
+        else { // everyone else is an NPC
             g.map->characters.push_back(c);
+        }
 
         c->n = n;
+        c->name = names[1 + i % 14];
 
         // add starting items
-        Item *backpack = new Item("Backpack");
+        Item *backpack = new Item("backpack");
         c->back->PlaceItem(backpack);
-        Item *first_aid_kit1 = new Item("First aid kit");
+        Item *first_aid_kit1 = new Item("first aid kit");
         backpack->storage->PlaceItem(first_aid_kit1);
-        Item *first_aid_kit2 = new Item("First aid kit");
+        Item *first_aid_kit2 = new Item("first aid kit");
         c->left_hand_hold->PlaceItem(first_aid_kit2);
-        Item *pill_bottle2 = new Item("Pill bottle");
+        Item *pill_bottle2 = new Item("pill bottle");
         first_aid_kit1->storage->PlaceItem(pill_bottle2);
-        Item *pill_bottle3 = new Item("Pill bottle");
+        Item *pill_bottle3 = new Item("pill bottle");
         first_aid_kit2->storage->PlaceItem(pill_bottle3);
 
-        backpack->storage->PlaceItem(new Item("Bullet", 5));
-        backpack->storage->PlaceItem(new Item("Bullet", 3));
+        backpack->storage->PlaceItem(new Item("bullet", 5));
+        backpack->storage->PlaceItem(new Item("bullet", 3));
     }
 
     g.map->updateCharsByPos();
@@ -6091,7 +6209,8 @@ void init_colors(void) {
 }
 
 void init_misc(void) {
-    g.hand_combat = new Item ("Hand-to-hand combat");
+    g.hand_combat = new Item ("fist");
+    g.ai_encounterInterrupt = -1;
 }
 
 void allegro_init(void) {
