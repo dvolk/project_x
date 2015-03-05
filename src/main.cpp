@@ -195,7 +195,8 @@ enum ItemSlot {
     ARMOR_LEFT_HAND,
     ARMOR_RIGHT_HAND,
     ARMOR_BACK,
-    WATER_BOTTLE
+    WATER_BOTTLE,
+    WEAPON_BOW
 };
 
 struct ItemInfo {
@@ -804,6 +805,28 @@ void init_iteminfo(void) {
     tmp.warmth = 0.1;
     tmp.weapon_damage = 0.1;
     tmp.weapon_range = 1;
+    g.item_info.push_back(tmp);
+
+    /* 28 */
+    tmp.name = "makeshift wood bow";
+    tmp.grid_size_x = 14;
+    tmp.grid_size_y = 3;
+    tmp.maxStack = 1;
+    tmp.weight = 1500;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[84];
+    tmp.isVehicle = false;
+    tmp.isContainer = true;
+    tmp.container_size_x = 6;
+    tmp.container_size_y = 1;
+    tmp.skill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = WEAPON_BOW;
+    tmp.warmth = 0.0;
+    tmp.weapon_damage = 0.2;
+    tmp.weapon_range = 8;
     g.item_info.push_back(tmp);
 }
 
@@ -1568,12 +1591,58 @@ struct Character {
     void sleep(void);
     void wait(void);
 
+    bool useWeapon(void);
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
+    bool weaponUsesAmmo(void);
+    bool hasAmmoForWeapon(void);
+    bool consumeWeaponAmmo(void);
+    int8_t countWeaponAmmo(void);
 
     void recomputeCarryWeight(void);
     void recomputeWarmth(void);
 };
+
+/*
+  TODO: these functions have confusing names and functionality
+*/
+bool Character::weaponUsesAmmo(void) {
+    return getSelectedWeapon()->getItemSlot() == WEAPON_BOW;
+}
+
+int8_t Character::countWeaponAmmo(void) {
+    return getSelectedWeapon()->storage->items.front()->cur_stack;
+}
+
+bool Character::hasAmmoForWeapon(void) {
+    Item *w = getSelectedWeapon();
+
+    if(w->getItemSlot() == WEAPON_BOW) {
+        if(w->storage->items.empty() == true) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// consume ammo if we can
+bool Character::consumeWeaponAmmo(void) {
+    if(weaponUsesAmmo() == true) {
+        if(hasAmmoForWeapon() == true) {
+            Item *ammo = getSelectedWeapon()->storage->items.front();
+            if(ammo->cur_stack == 1) {
+                getSelectedWeapon()->storage->RemoveItem(ammo);
+                delete ammo;
+            } else {
+                ammo->cur_stack--;
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
 
 void Character::switchWeaponHand(void) {
     selected_weapon_slot = selected_weapon_slot == 0 ? 1 : 0;
@@ -1636,7 +1705,6 @@ void Character::hurt(float amount) {
 }
 
 void Character::spendTime(int _dt) {
-    //    this->myLastMove = nextMove;
     this->dt += _dt;
     this->nextMove += _dt;
 }
@@ -1653,7 +1721,7 @@ void Character::useItem(Item *i) {
       TODO: spent time should be item specific
     */
     activity = ACTIVITY_USE;
-    spendTime(10);
+    spendTime(0);
 }
 
 bool Character::hasSkill(int n) {
@@ -1773,6 +1841,7 @@ int dir_transform(int n, int dir);
 
 // data that's common to all tiles of the same type
 struct TileInfo {
+    const char *name;
     int bitmap_index;
     ALLEGRO_COLOR minimap_color;
     bool blocks_los;
@@ -1892,7 +1961,12 @@ struct TileMap : public Widget {
     void addRandomCharacter(void);
 
     float getCurrentTemperature(int n);
+    const char *getTileName(int n);
 };
+
+const char *TileMap::getTileName(int n) {
+    return tile_info[tiles[n].info_index].name;
+}
 
 float TileMap::getCurrentTemperature(__attribute__ ((unused)) int n) {
     return 0.7;
@@ -1966,6 +2040,27 @@ void Character::do_AI(void) {
     update();
     randomMove();
     post_update();
+}
+
+bool Character::useWeapon(void) {
+    if(consumeWeaponAmmo() == false)
+        return false;
+    
+    Item *w = getSelectedWeapon();
+
+    w->condition -= 0.05;
+
+    if(w->condition < 0.01) {
+        if(this == g.map->player) {
+            char buf[50];
+            sprintf(buf, "Your %s is destroyed!", w->getName());
+            g.AddMessage(buf);
+        }
+        assert(w->parent);
+        w->parent->RemoveItem(w);
+        delete w;
+    }
+    return true;
 }
 
 void Character::post_update(void) {
@@ -2172,11 +2267,15 @@ void WeaponSwitcher::draw(void) {
 
     al_draw_bitmap(w->get_sprite(), weapon_x, weapon_y, 0);
     al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 8, 0, w->getName());
-}
 
-void MessageLog::mouseDown(void) {
-    if(g.mouse_x > g.weapon_switcher->pos.x1) {
-        g.map->player->switchWeaponHand();
+    if(w->storage != NULL) {
+        char buf[20];
+        if(w->storage->items.size() != 0) {
+            sprintf(buf, "Ammo: %d", w->storage->items.front()->cur_stack);
+        } else {
+            sprintf(buf, "Ammo: empty");
+        }
+        al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 18, 0, buf);
     }
 }
 
@@ -3318,12 +3417,14 @@ void GridSystem::drawItemTooltip(void) {
                item->parent->pos.y1 + (item->pos.y1 + item->pos.y2) * Grid::grid_px_y >= g.mouse_y) {
 
                 al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
-                                         g.mouse_x + 150, g.mouse_y + 48, g.color_black);
+                                         g.mouse_x + 200, g.mouse_y + 56, g.color_black);
                 al_draw_text(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 8,
                              0, g.item_info[item->info_index].name.c_str());
+                al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
+                              0, "condition: %.1f", item->condition);
                 int weight = g.item_info[item->info_index].weight;
                 if(weight > 0) {
-                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
+                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 40,
                                   0, "%d g", weight * item->cur_stack);
                 }
 
@@ -3332,7 +3433,7 @@ void GridSystem::drawItemTooltip(void) {
                    held == NULL &&
                    item->parent->hpinfo == NULL)
                     // ^^ unless it's on a hardpoint
-                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + 48);
+                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + 56);
 
                 return;
             }
@@ -3606,7 +3707,8 @@ void GridSystem::gsMouseUpEvent() {
             char b[60];
             snprintf(b, sizeof(b), "Moved %s onto grid %d at %d, %d",
                      g.item_info[held->info_index].name.c_str(), i, drop_x, drop_y);
-            g.AddMessage(b);
+            puts(b);
+            // g.AddMessage(b);
             // the item is placed. we're done
             held = NULL;
             return;
@@ -4249,12 +4351,23 @@ void runCrafting(void) {
     updateCraftingOutput();
 }
 
+// stats associated with characters but only needed during an
+// encounter
+struct EncounterCharacter {
+    bool visible;
+    Item *last_move;
+
+    EncounterCharacter(void);
+};
+
 struct Encounter {
 private:
     bool running;
 
     Character *c1;
     Character *c2;
+    EncounterCharacter ec1;
+    EncounterCharacter ec2;
 
     // the distance between the characters (approx. [m])
     int range;
@@ -4275,7 +4388,7 @@ private:
     bool involvesPlayer(void);
 
 public:
-    Encounter(void) { running = false; }
+    Encounter(void);
 
     // general
     void setup(Character *c1, Character *c2);
@@ -4286,10 +4399,13 @@ public:
     // player vs AI
     float getHealth(int n);
     const char *getName(int n);
+    const char *getEquippedWeaponName(int n);
+    const char *getTerrainName(void);
     int getRange(void);
     ALLEGRO_BITMAP *get_character_sprite(int i);
     bool isRunning(void);
     bool playerInRange(void);
+    bool seesOpponent(int n);
     void runPlayerEncounterStep(void);
     void do_encounter_messages(void);
 };
@@ -4305,11 +4421,12 @@ struct EncounterGridSystem : public GridSystem {
 struct EncounterUI : public UI {
     const int off_x = 97;
 
-    Encounter *encounter;
+    Encounter encounter;
 
     EncounterGridSystem *encounterGrids;
 
     ALLEGRO_BITMAP *cur_tile_sprite;
+    ALLEGRO_BITMAP *unknown_character_sprite;
     Button *button_confirm;
 
     Item *flee;
@@ -4324,6 +4441,19 @@ struct EncounterUI : public UI {
 
     void setup(void);
 };
+
+EncounterCharacter::EncounterCharacter(void) {
+    visible = false;
+    last_move = NULL;
+}
+
+Encounter::Encounter(void) {
+    running = false;
+}
+
+bool Encounter::seesOpponent(int n) {
+    return n == 1 ? ec2.visible : ec1.visible;
+}
 
 bool Encounter::isRunning(void) { return running; }
 
@@ -4343,6 +4473,15 @@ const char *Encounter::getName(int n) {
     return n == 0 ? c1->name : c2->name;
 }
 
+const char *Encounter::getEquippedWeaponName(int n) {
+    return n == 0 ? c1->getSelectedWeapon()->getName() : c2->getSelectedWeapon()->getName();
+}
+
+const char *Encounter::getTerrainName(void) {
+    return g.map->getTileName(c1->n);
+}
+
+
 ALLEGRO_BITMAP *Encounter::get_character_sprite(int i) {
     if(i == 0)
         return c1->sprite;
@@ -4358,7 +4497,7 @@ bool Encounter::playerInRange(void) {
 
 void Encounter::advance(int steps) {
     if(steps >= range)
-        range = 1;
+        range = 0;
     else
         range -= steps;
 }
@@ -4376,7 +4515,7 @@ void Encounter::setup(Character *c1, Character *c2) {
 
 void runPlayerEncounter(void) {
     g.ui_Encounter->setup();
-    g.ui_Encounter->encounter->do_encounter_messages();
+    g.ui_Encounter->encounter.do_encounter_messages();
     g.ui = g.ui_Encounter;
 }
 
@@ -4399,7 +4538,6 @@ void Encounter::runAIEncounter(int n) {
 
         while(true) {
             npcEncounterStep(0);
-            // the npc can die or leave (TODO: etc)
             if(isEncounterNPCdead(0) == true || npcRelocated() == true) break;
 
             npcEncounterStep(1);
@@ -4410,11 +4548,9 @@ void Encounter::runAIEncounter(int n) {
         c1->post_update();
         c2->post_update();
 
-        // g.map->updateCharsByPos();
         num_there = g.map->charsByPos.count(n);
     } while(num_there >= 2);
     g.ai_encounterInterrupt = -1;
-    // g.map->updateCharsByPos();
 }
 
 void button_MainMap_press(void);
@@ -4472,8 +4608,10 @@ void Encounter::npcEncounterStep(int n) {
                 g.AddMessage("Encounter ends.");
                 endEncounter();
             }
-            else
+            else {
                 sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
+                cout << _c2 << " fled successfully" << endl;
+            }
             _c2->randomMove();
         } else {
             if(involvesPlayer() == true)
@@ -4487,20 +4625,23 @@ void Encounter::npcEncounterStep(int n) {
 
     } else {
         if(_c2->health > 0.8) {
-            /*
-              TODO: if this is 1, it leads to an infinite loop since
-              the attacker can't ever reach the fleeing enemy
-            */
-            if(range <= 2) {
-                if(involvesPlayer() == true)
-                    sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
-                else
-                    sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
-
+            if(range <= _c2->getSelectedWeapon()->get_weapon_range() && seesOpponent(n) && _c2->hasAmmoForWeapon()) {
+                // we're in range, see the opponent and have enough ammo
+                bool used = _c2->useWeapon();
+                if(used == true) {
+                    _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
+                    if(involvesPlayer() == true)
+                        sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                    else
+                        sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
+                } else {
+                    /*
+                      TODO: ??
+                    */
+                }
                 if(g.map->playerSees(_c1->n))
                     g.AddMessage(buf);
 
-                _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
             } else {
                 if(involvesPlayer() == true)
                     sprintf(buf, "%s advances on your position!", _c2->name);
@@ -4559,6 +4700,7 @@ void Encounter::runPlayerEncounterStep(void) {
         return;
     }
 
+    char msg[100];
     string action1 = actions->front()->getName();
 
     if(action1 == "Flee") {
@@ -4566,25 +4708,28 @@ void Encounter::runPlayerEncounterStep(void) {
         bool successfully_fled = fled_dist(*g.rng) > 0;
 
         if(successfully_fled == true) {
-            c1->hurt(0.1);
+            if(c2->useWeapon() == true)
+                c1->hurt(0.1);
+
             c1->randomMove();
             g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
             g.AddMessage("Encounter ends.");
             endEncounter();
             return;
         } else {
-            char msg[100];
             snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
             g.AddMessage(msg);
             npcEncounterStep();
             if(npcRelocated() == true) return;
         }
     } else if(action1 == "Single attack") {
-        char msg[100];
-        sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
-        g.AddMessage(msg);
-
-        c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
+        if(c1->useWeapon() == true) {
+            c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
+            sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
+            g.AddMessage(msg);
+        } else {
+            g.AddMessage("Couldn't use weapon!");
+        }
 
         if(isEncounterNPCdead() == true) return;
         npcEncounterStep();
@@ -4603,6 +4748,12 @@ void Encounter::runPlayerEncounterStep(void) {
 
     if(isEncounterNPCdead() == true) return;
     if(npcRelocated() == true) return;
+
+    if(range <= 6)
+        ec2.visible = true;
+    else
+        ec2.visible = false;
+
     g.ui_Encounter->setup();
 }
 
@@ -4629,7 +4780,7 @@ EncounterGridSystem::~EncounterGridSystem() {
 }
 
 void runEncounterStepCB(void) {
-    g.ui_Encounter->encounter->runPlayerEncounterStep();
+    g.ui_Encounter->encounter.runPlayerEncounterStep();
 }
 
 EncounterUI::EncounterUI() {
@@ -4638,7 +4789,7 @@ EncounterUI::EncounterUI() {
     single_attack = new Item ("Single attack");
     retreat = new Item ("Retreat");
     advance = new Item ("Advance");
-    encounter = new Encounter;
+    unknown_character_sprite = g.bitmaps[83];
 
     button_confirm = new Button;
     button_confirm->pos.x1 = off_x + 691;
@@ -4663,12 +4814,12 @@ void EncounterUI::setup(void) {
     // the tile sprite
     cur_tile_sprite = g.map->bitmaps[g.map->tile_info[g.map->tiles[g.map->player->n].info_index].bitmap_index];
 
-    if(encounter->isRunning() == false) {
+    if(encounter.isRunning() == false) {
         Character *c1 = g.map->player;
         g.map->updateCharsByPos();
         Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
 
-        encounter->setup(c1, c2);
+        encounter.setup(c1, c2);
         cout << "Running encounter at: " << c1->n << " with AI " << c2->name << endl;
     }
 
@@ -4677,7 +4828,7 @@ void EncounterUI::setup(void) {
     widgets.push_back(encounterGrids);
 
     encounterGrids->options->PlaceItem(flee);
-    if(encounter->playerInRange() == true) {
+    if(encounter.playerInRange() == true) {
         encounterGrids->options->PlaceItem(single_attack);
     }
     encounterGrids->options->PlaceItem(retreat);
@@ -4693,22 +4844,47 @@ void EncounterUI::draw(void) {
                  "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
 
     char buf[30];
-    sprintf(buf, "range: %d", encounter->getRange());
-    al_draw_text(g.font, g.color_black, off_x + 507, 208, 0, buf);
 
-    al_draw_bitmap(encounter->get_character_sprite(0), off_x + 120, 40, 0);
-    sprintf(buf, "name: %s", encounter->getName(0));
+    al_draw_bitmap(encounter.get_character_sprite(0), off_x + 120, 40, 0);
+    sprintf(buf, "Name: %s", encounter.getName(0));
     al_draw_text(g.font, g.color_black, off_x + 120, 110, 0, buf);
-    sprintf(buf, "health: %f", encounter->getHealth(0));
-    al_draw_text(g.font, g.color_black, off_x + 120, 120, 0, buf);
 
-    al_draw_bitmap(encounter->get_character_sprite(1), off_x + 700, 40, 0);
-    sprintf(buf, "name: %s", encounter->getName(1));
-    al_draw_text(g.font, g.color_black, off_x + 700, 110, 0, buf);
-    sprintf(buf, "health: %f", encounter->getHealth(1));
-    al_draw_text(g.font, g.color_black, off_x + 700, 120, 0, buf);
+    if(encounter.seesOpponent(0) == true) {
+        al_draw_text(g.font, g.color_black, off_x + 120, 120, 0,
+                     "visible: yes");
+    } else {
+        al_draw_text(g.font, g.color_black, off_x + 120, 120, 0,
+                     "visible: no");
+    }
 
-    al_draw_bitmap(cur_tile_sprite, off_x + 490, 120, 0);
+    sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(0));
+    al_draw_text(g.font, g.color_black, off_x + 120, 130, 0, buf);
+    sprintf(buf, "Health: %f", encounter.getHealth(0));
+    al_draw_text(g.font, g.color_black, off_x + 120, 140, 0, buf);
+
+    al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
+    sprintf(buf, "Terrain: %s", encounter.getTerrainName());
+    al_draw_text(g.font, g.color_black, off_x + 430, 160, 0, buf);
+    sprintf(buf, "Range: %d", encounter.getRange());
+    al_draw_text(g.font, g.color_black, off_x + 430, 170, 0, buf);
+
+    if(encounter.seesOpponent(1) == true) {
+        al_draw_bitmap(encounter.get_character_sprite(1), off_x + 700, 40, 0);
+        sprintf(buf, "Name: %s", encounter.getName(1));
+        al_draw_text(g.font, g.color_black, off_x + 700, 110, 0, buf);
+        al_draw_text(g.font, g.color_black, off_x + 700, 120, 0,
+                     "visible: yes");
+        sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
+        al_draw_text(g.font, g.color_black, off_x + 700, 130, 0, buf);
+        sprintf(buf, "Health: %f", encounter.getHealth(1));
+        al_draw_text(g.font, g.color_black, off_x + 700, 140, 0, buf);
+    } else {
+        al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
+        al_draw_text(g.font, g.color_black, off_x + 700, 110, 0,
+                     "Name: unknown");
+        al_draw_text(g.font, g.color_black, off_x + 700, 120, 0,
+                     "Visible: no");
+    }
 
     UI::draw();
 }
@@ -4716,6 +4892,16 @@ void EncounterUI::draw(void) {
 EncounterUI::~EncounterUI() {
     delete flee;
     delete single_attack;
+}
+
+void MessageLog::mouseDown(void) {
+    if(g.mouse_x > g.weapon_switcher->pos.x1) {
+        g.map->player->switchWeaponHand();
+
+        // ...
+        if(g.ui == g.ui_Encounter)
+            g.ui_Encounter->setup();
+    }
 }
 
 struct ScavengeGridSystem : public GridSystem {
@@ -5553,6 +5739,7 @@ vector<Grid *> *ground_at_character(Character *character) {
         ground_grid->PlaceItem(new Item ("left glove"));
         ground_grid->PlaceItem(new Item ("right shoe"));
         ground_grid->PlaceItem(new Item ("left shoe"));
+        ground_grid->PlaceItem(new Item ("makeshift wood bow"));
     }
     g.map->tiles[character->n].ground_items = ground;
     return ground;
@@ -5883,7 +6070,9 @@ void load_bitmaps(void) {
     /* 79 */ filenames.push_back("media/backgrounds/upper_left_arm_wound.png");
     /* 80 */ filenames.push_back("media/items/abstract/retreat.png");
     /* 81 */ filenames.push_back("media/items/abstract/advance.png");
-    /* 81 */ filenames.push_back("media/items/hand_combat.png");
+    /* 82 */ filenames.push_back("media/items/hand_combat.png");
+    /* 83 */ filenames.push_back("media/characters/unknown.png");
+    /* 84 */ filenames.push_back("media/items/makeshift_wood_bow.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -6127,6 +6316,7 @@ void init_tilemap(int sx, int sy) {
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = false;
+    i.name = "Grassland";
     g.map->tile_info.push_back(i);
     // tree
     i.minimap_color = al_map_rgb(0, 150, 0);
@@ -6134,6 +6324,7 @@ void init_tilemap(int sx, int sy) {
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.name = "Wood";
     g.map->tile_info.push_back(i);
     // city
     i.minimap_color = al_map_rgb(255, 255, 255);
@@ -6141,6 +6332,7 @@ void init_tilemap(int sx, int sy) {
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.name = "City";
     g.map->tile_info.push_back(i);
     // swamp
     i.minimap_color = al_map_rgb(0, 0, 200);
@@ -6148,6 +6340,7 @@ void init_tilemap(int sx, int sy) {
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.name = "Swamp";
     g.map->tile_info.push_back(i);
 
     g.map->bitmaps.push_back(g.bitmaps[17]);
