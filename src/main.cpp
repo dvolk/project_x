@@ -199,636 +199,7 @@ enum ItemSlot {
     WEAPON_BOW
 };
 
-struct ItemInfo {
-    string name;
-
-    ItemSlot slot;
-
-    int grid_size_x;
-    int grid_size_y;
-    int container_size_x;
-    int container_size_y;
-
-    int maxStack;
-    int weight; // [g]
-
-    bool isVehicle;
-    bool isContainer;
-    bool skill;
-    // can it be applied to a body part (i.e. bandages and disinfectants)?
-    bool apply_to_body;
-    // when applied to a body part, is it consumed (i.e. disinfectants)?
-    bool consumed_on_application;
-    // when used, is it consumed (i.e. food, water, medicine)?
-    bool consumed_on_use;
-
-    float warmth;
-
-    float weapon_damage;
-    int weapon_range;
-
-    ALLEGRO_BITMAP *sprite;
-    ALLEGRO_BITMAP *sprite_on_hp;
-};
-
-void init_iteminfo(void) {
-    ItemInfo tmp;
-    /* 00 */
-    tmp.name = "";
-    tmp.grid_size_x = 1;
-    tmp.grid_size_y = 1;
-    tmp.maxStack = 1;
-    tmp.sprite = NULL;
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.warmth = 0;
-    tmp.weapon_damage = 0.001;
-    tmp.weapon_range = 1;
-    g.item_info.push_back(tmp);
-
-    /* 01 */
-    tmp.name = "backpack";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 6;
-    tmp.maxStack = 1;
-    tmp.weight = 1000;
-    tmp.sprite = g.bitmaps[24];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = true;
-    tmp.container_size_x = 10;
-    tmp.container_size_y = 10;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_BACK;
-    tmp.warmth = 0.05;
-    g.item_info.push_back(tmp);
-
-    /* 02 */
-    tmp.name = "first aid kit";
-    tmp.grid_size_x = 4;
-    tmp.grid_size_y = 4;
-    tmp.maxStack = 1;
-    tmp.weight = 750;
-    tmp.sprite = g.bitmaps[22];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = true;
-    tmp.container_size_x = 4;
-    tmp.container_size_y = 4;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.warmth = 0;
-    g.item_info.push_back(tmp);
-
-    /* 03 */
-    tmp.name = "crowbar";
-    tmp.grid_size_x = 14;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = 2500;
-    tmp.sprite = g.bitmaps[20];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.weapon_damage = 0.15;
-    tmp.weapon_range = 3;
-    g.item_info.push_back(tmp);
-
-    /* 04 */
-    tmp.name = "shopping trolley";
-    tmp.grid_size_x = 12;
-    tmp.grid_size_y = 12;
-    tmp.maxStack = 1;
-    tmp.weight = 5000;
-    tmp.sprite = g.bitmaps[26];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = true;
-    tmp.isContainer = true;
-    tmp.container_size_x = 20;
-    tmp.container_size_y = 20;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.weapon_damage = 0.0;
-    tmp.weapon_range = 1;
-    g.item_info.push_back(tmp);
-
-    /* 05 */
-    tmp.name = "pill bottle";
-    tmp.grid_size_x = 1;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = 50;
-    tmp.sprite = g.bitmaps[27];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = true;
-    tmp.container_size_x = 1;
-    tmp.container_size_y = 2;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 06 */
-    tmp.name = "Flee";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[31];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 07 */
-    tmp.name = "Single attack";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[32];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 08 */
-    tmp.name = "bullet";
-    tmp.grid_size_x = 1;
-    tmp.grid_size_y = 1;
-    tmp.maxStack = 5;
-    tmp.weight = 5;
-    tmp.sprite = g.bitmaps[34];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.weapon_damage = 0.001;
-    g.item_info.push_back(tmp);
-
-    /* 09 */
-    tmp.name = "arrow";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 1;
-    tmp.maxStack = 5;
-    tmp.weight = 75;
-    tmp.sprite = g.bitmaps[35];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.weapon_damage = 0.005;
-    g.item_info.push_back(tmp);
-
-    /* 10 */
-    tmp.name = "Quick";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[36];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = true;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.weapon_damage = 0.0;
-    g.item_info.push_back(tmp);
-
-    /* 11 */
-    tmp.name = "Lockpicking";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[37];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = true;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 12 */
-    tmp.name = "Myopia";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[38];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = true;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 13 */
-    tmp.name = "Metabolism";
-    tmp.grid_size_x = 6;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[39];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = true;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 14 */
-    tmp.name = "whiskey";
-    tmp.grid_size_x = 1;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 5;
-    tmp.weight = 50;
-    tmp.sprite = g.bitmaps[40];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = true;
-    tmp.consumed_on_application = true;
-    tmp.consumed_on_use = true;
-    tmp.slot = WATER_BOTTLE;
-    g.item_info.push_back(tmp);
-
-    /* 15 */
-    tmp.name = "clean rag";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 10;
-    tmp.weight = 50;
-    tmp.sprite = g.bitmaps[41];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = true;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 16 */
-    tmp.name = "Factory";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[42];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 17 */
-    tmp.name = "Shack in the woods";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[43];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 18 */
-    tmp.name = "water bottle";
-    tmp.grid_size_x = 1;
-    tmp.grid_size_y = 4;
-    tmp.maxStack = 1;
-    tmp.weight = 100;
-    tmp.sprite = g.bitmaps[49];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = true;
-    tmp.container_size_x = 1;
-    tmp.container_size_y = 2;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 19 */
-    tmp.name = "red shirt";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = g.bitmaps[50];
-    tmp.sprite = g.bitmaps[51];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_TORSO;
-    tmp.warmth = 0.1;
-    g.item_info.push_back(tmp);
-
-    /* 20 */
-    tmp.name = "blue pants";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = g.bitmaps[52];
-    tmp.sprite = g.bitmaps[53];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_LEGS;
-    tmp.warmth = 0.5;
-    g.item_info.push_back(tmp);
-
-    /* 21 */
-    tmp.name = "ski mask";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = g.bitmaps[54];
-    tmp.sprite = g.bitmaps[55];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_HEAD;
-    tmp.warmth = 0.1;
-    g.item_info.push_back(tmp);
-
-    /* 22 */
-    tmp.name = "right glove";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[56];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_RIGHT_HAND;
-    tmp.warmth = 0.1;
-    g.item_info.push_back(tmp);
-
-    /* 23 */
-    tmp.name = "left glove";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[57];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_LEFT_HAND;
-    tmp.warmth = 0.1;
-    g.item_info.push_back(tmp);
-
-    /* 24 */
-    tmp.name = "right shoe";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[58];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_RIGHT_SHOE;
-    tmp.warmth = 0.1;
-    tmp.weapon_damage = 0.005;
-    g.item_info.push_back(tmp);
-
-    /* 25 */
-    tmp.name = "left shoe";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[59];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = ARMOR_LEFT_SHOE;
-    tmp.warmth = 0.1;
-    tmp.weapon_damage = 0.005;
-    g.item_info.push_back(tmp);
-
-    /* 26 */
-    tmp.name = "Retreat";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[80];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 27 */
-    tmp.name = "Advance";
-    tmp.grid_size_x = 2;
-    tmp.grid_size_y = 2;
-    tmp.maxStack = 1;
-    tmp.weight = -1;
-    tmp.sprite = g.bitmaps[81];
-    tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    g.item_info.push_back(tmp);
-
-    /* 28 */
-    tmp.name = "fist";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
-    tmp.maxStack = 1;
-    tmp.weight = 500;
-    tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[82];
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
-    tmp.warmth = 0.1;
-    tmp.weapon_damage = 0.1;
-    tmp.weapon_range = 1;
-    g.item_info.push_back(tmp);
-
-    /* 28 */
-    tmp.name = "makeshift wood bow";
-    tmp.grid_size_x = 14;
-    tmp.grid_size_y = 3;
-    tmp.maxStack = 1;
-    tmp.weight = 1500;
-    tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[84];
-    tmp.isVehicle = false;
-    tmp.isContainer = true;
-    tmp.container_size_x = 6;
-    tmp.container_size_y = 1;
-    tmp.skill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.slot = WEAPON_BOW;
-    tmp.warmth = 0.0;
-    tmp.weapon_damage = 0.2;
-    tmp.weapon_range = 8;
-    g.item_info.push_back(tmp);
-}
+#include "./itemdefs.h"
 
 struct Item {
     // position and size of the item on the grid
@@ -1468,7 +839,8 @@ enum ActivityKind {
     ACTIVITY_MOVE,
     ACTIVITY_HURT,
     ACTIVITY_USE,
-    ACTIVITY_COMBAT
+    ACTIVITY_COMBAT,
+    ACTIVITY_SCAVENGE
 };
 
 struct Wound {
@@ -1842,8 +1214,8 @@ int dir_transform(int n, int dir);
 // data that's common to all tiles of the same type
 struct TileInfo {
     const char *name;
-    int bitmap_index;
     ALLEGRO_COLOR minimap_color;
+    ALLEGRO_BITMAP *sprite;
     bool blocks_los;
     bool blocks_movement;
     bool has_locations;
@@ -1852,13 +1224,16 @@ struct TileInfo {
 // data that's common to all locations of the same type
 struct LocationInfo {
     Item *location_item;
-    string description;
+    const char *description;
 
     // these are base values. The actual values depend on where on the map
     // you are
-    int8_t base_loot_level;
-    int8_t base_safety_level;
-    int8_t base_sneak_level;
+    float base_loot_level;
+    float base_safety_level;
+    float base_sneak_level;
+
+    // how long it takes the location to reset (appear again as a scavenging option)
+    int reset_time;
 };
 
 void init_locationdata(void) {
@@ -1869,11 +1244,13 @@ void init_locationdata(void) {
     tmp.base_loot_level = 100;
     tmp.base_safety_level = 100;
     tmp.base_sneak_level = 100;
+    tmp.reset_time = 10000;
     tmp.location_item = factory;
     tmp.description = "An abandoned factory, full of decaying industrial equipment.";
     g.location_info.push_back(tmp);
 
     tmp.description = "A shack in the woods.";
+    tmp.reset_time = 20000;
     tmp.location_item = shack;
     g.location_info.push_back(tmp);
 }
@@ -1882,7 +1259,13 @@ void init_locationdata(void) {
 struct Location {
     int8_t info_index; // index into LocationInfo
     int last_looted;
+
+    int getResetTime(void);
 };
+
+int Location::getResetTime(void) {
+    return g.location_info[info_index].reset_time;
+}
 
 // a hex tile
 struct Tile {
@@ -1890,6 +1273,8 @@ struct Tile {
     int8_t visible;
     vector<Grid *> *ground_items;
     vector<Location *> *locations;
+
+    ALLEGRO_BITMAP *getBitmap(void);
 };
 
 struct TileMap : public Widget {
@@ -1929,10 +1314,9 @@ struct TileMap : public Widget {
 
     // array of size_x * size_y tiles, allocated in constructor
     // TODO: would a 2D array be better?
-    vector <Tile> tiles;
+    vector<Tile> tiles;
 
     vector<TileInfo> tile_info;
-    vector<ALLEGRO_BITMAP *>bitmaps;
 
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
@@ -1962,7 +1346,12 @@ struct TileMap : public Widget {
 
     float getCurrentTemperature(int n);
     const char *getTileName(int n);
+    ALLEGRO_BITMAP *getBitmap(int n);
 };
+
+ALLEGRO_BITMAP *TileMap::getBitmap(int n) {
+    return tile_info[tiles[n].info_index].sprite;
+}
 
 const char *TileMap::getTileName(int n) {
     return tile_info[tiles[n].info_index].name;
@@ -2045,7 +1434,7 @@ void Character::do_AI(void) {
 bool Character::useWeapon(void) {
     if(consumeWeaponAmmo() == false)
         return false;
-    
+
     Item *w = getSelectedWeapon();
 
     w->condition -= 0.05;
@@ -2784,14 +2173,14 @@ constexpr int lines3[18][3] =
 void Character::update_visibility(void) {
     // set line of sight distance based on time of day
     int tod = nextMove % 24000;
-    if(tod > 5000 && tod <= 8000)
+    if(tod > 5000 && tod <= 8000) // morning
         current_los_distance = 1;
-    else if(tod > 8000 && tod <= 18000)
+    else if(tod > 8000 && tod <= 18000) // early day
         current_los_distance = 2;
-    else if(tod > 18000 && tod <= 22000)
+    else if(tod > 18000 && tod <= 22000) // evening
         current_los_distance = 1;
     else
-        current_los_distance = 0;
+        current_los_distance = 0; // night
 
     currently_seeing.clear();
     currently_seeing.push_back(n);
@@ -3263,7 +2652,7 @@ void mkRingM(int n, int m) {
 }
 
 void TileMap::generate(void) {
-    uniform_int_distribution<> tile_type_dist(0, bitmaps.size() - 1);
+    uniform_int_distribution<> tile_type_dist(0, tile_info.size() - 1);
 
     tiles.reserve(size_x * size_y);
 
@@ -3300,7 +2689,7 @@ void TileMap::drawTile(int i, int x, int y) {
 
         if(currently_seeing == true) {
             // draw the tile at full brightness
-            al_draw_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
+            al_draw_bitmap(tile_info[tiles[t].info_index].sprite,
                            r_off_x + off_x,
                            r_off_y + off_y,
                            0);
@@ -3311,14 +2700,14 @@ void TileMap::drawTile(int i, int x, int y) {
               generate and store tinted bitmaps
             */
             // otherwise draw it 50% tinted
-            al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
+            al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
                                   g.color_tile_tint,
                                   r_off_x + off_x,
                                   r_off_y + off_y, 0);
         }
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
-            al_draw_tinted_bitmap(bitmaps[tile_info[tiles[t].info_index].bitmap_index],
+            al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
                                   g.color_active_tile_tint,
                                   r_off_x + off_x,
                                   r_off_y + off_y, 0);
@@ -3389,12 +2778,12 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
     off_y += 40 * r_y;
 
     if(mouse_n == n) {
-        al_draw_tinted_bitmap(bitmaps[tile_info[tiles[n].info_index].bitmap_index],
+        al_draw_tinted_bitmap(tile_info[tiles[n].info_index].sprite,
                                      g.color_active_tile_tint,
                                      r_off_x + off_x,
                                      r_off_y + off_y, 0);
     } else {
-        al_draw_bitmap_region(bitmaps[tile_info[tiles[n].info_index].bitmap_index],
+        al_draw_bitmap_region(tile_info[tiles[n].info_index].sprite,
                               0, 0, 100, 40,
                               r_off_x + off_x,
                               r_off_y + off_y, 0);
@@ -4397,17 +3786,18 @@ public:
     void runAIEncounter(int n);
 
     // player vs AI
+    void runPlayerEncounterStep(void);
+    void do_encounter_messages(void);
+    // info needed by EncounterUI
     float getHealth(int n);
     const char *getName(int n);
     const char *getEquippedWeaponName(int n);
     const char *getTerrainName(void);
-    int getRange(void);
     ALLEGRO_BITMAP *get_character_sprite(int i);
+    int getRange(void);
     bool isRunning(void);
     bool playerInRange(void);
     bool seesOpponent(int n);
-    void runPlayerEncounterStep(void);
-    void do_encounter_messages(void);
 };
 
 struct EncounterGridSystem : public GridSystem {
@@ -4443,7 +3833,7 @@ struct EncounterUI : public UI {
 };
 
 EncounterCharacter::EncounterCharacter(void) {
-    visible = false;
+    visible = true;
     last_move = NULL;
 }
 
@@ -4635,9 +4025,7 @@ void Encounter::npcEncounterStep(int n) {
                     else
                         sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
                 } else {
-                    /*
-                      TODO: ??
-                    */
+                    sprintf(buf, "%s fumbled trying to use %s!", _c2->name, _c2->getSelectedWeapon()->getName());
                 }
                 if(g.map->playerSees(_c1->n))
                     g.AddMessage(buf);
@@ -4709,7 +4097,7 @@ void Encounter::runPlayerEncounterStep(void) {
 
         if(successfully_fled == true) {
             if(c2->useWeapon() == true)
-                c1->hurt(0.1);
+                c1->hurt(c2->getSelectedWeapon()->get_weapon_damage() / 3);
 
             c1->randomMove();
             g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
@@ -4812,7 +4200,7 @@ void EncounterUI::setup(void) {
     addIndicatorWidgets();
 
     // the tile sprite
-    cur_tile_sprite = g.map->bitmaps[g.map->tile_info[g.map->tiles[g.map->player->n].info_index].bitmap_index];
+    cur_tile_sprite = g.map->tile_info[g.map->tiles[g.map->player->n].info_index].sprite;
 
     if(encounter.isRunning() == false) {
         Character *c1 = g.map->player;
@@ -4845,6 +4233,7 @@ void EncounterUI::draw(void) {
 
     char buf[30];
 
+    // left pane
     al_draw_bitmap(encounter.get_character_sprite(0), off_x + 120, 40, 0);
     sprintf(buf, "Name: %s", encounter.getName(0));
     al_draw_text(g.font, g.color_black, off_x + 120, 110, 0, buf);
@@ -4862,12 +4251,14 @@ void EncounterUI::draw(void) {
     sprintf(buf, "Health: %f", encounter.getHealth(0));
     al_draw_text(g.font, g.color_black, off_x + 120, 140, 0, buf);
 
+    // center pane
     al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
     sprintf(buf, "Terrain: %s", encounter.getTerrainName());
     al_draw_text(g.font, g.color_black, off_x + 430, 160, 0, buf);
     sprintf(buf, "Range: %d", encounter.getRange());
     al_draw_text(g.font, g.color_black, off_x + 430, 170, 0, buf);
 
+    // right pane
     if(encounter.seesOpponent(1) == true) {
         al_draw_bitmap(encounter.get_character_sprite(1), off_x + 700, 40, 0);
         sprintf(buf, "Name: %s", encounter.getName(1));
@@ -4914,22 +4305,54 @@ struct ScavengeGridSystem : public GridSystem {
 
 struct ScavengeUI : public UI {
     Character *player;
-    Tile *current_tile;
     ScavengeGridSystem *gridsystem;
-    // ALLEGRO_BITMAP *cur_tile_sprite;
     Button *button_confirm;
     int current_stage;
     unordered_map<Item *, Location *> items_to_locations;
     Item *selected_location;
     vector<Item *> selected_tools;
+    vector<Item *> scavenged_items;
 
     ScavengeUI();
     ~ScavengeUI();
 
-    void draw(void) override { UI::draw(); };
+    void draw(void);
 
     void setup(void);
     void reset(void);
+
+    void runScavengeStep(void);
+};
+
+void ScavengeUI::draw(void) {
+    int off_x = 420;
+    int off_y = 365;
+
+    al_draw_bitmap(g.map->getBitmap(player->n), off_x, off_y - 120, 0);
+    if(current_stage == 0) {
+        if(items_to_locations.empty() == true) {
+            al_draw_text(g.font, g.color_white, 105, 365, 0, "There don't seem to be any worthwhile spots to scavenge here at the moment.");
+        } else {
+            al_draw_text(g.font, g.color_white, 105, 365, 0, "Choose a location to scavenge:");
+        }
+    } else if(current_stage == 1) {
+        al_draw_text(g.font, g.color_white, 105, 365, 0, "Choose what to use during scavenging:");
+    } else {
+        al_draw_text(g.font, g.color_white, off_x, off_y - 20, 0, "Scavenging results:");
+
+        if(scavenged_items.empty() == true) {
+            al_draw_text(g.font, g.color_white, off_x, off_y, 0, "You didn't find any items this time.");
+        } else {
+            al_draw_text(g.font, g.color_white, off_x, off_y, 0, "You found some items:");
+            int i = 0;
+            for(auto& item : scavenged_items) {
+                al_draw_text(g.font, g.color_white, off_x + 10, off_y + 20 + 10 * i, 0, item->getName());
+                i++;
+            }
+        }
+    }
+
+    UI::draw();
 };
 
 void ScavengeUI::reset(void) {
@@ -4960,41 +4383,50 @@ ScavengeGridSystem::~ScavengeGridSystem() {
 }
 
 void runScavenging(void) {
-    int *stage = &g.ui_Scavenge->current_stage;
-    cout << "runScavenging() stage: " << *stage << endl;
+    g.ui_Scavenge->runScavengeStep();
+}
 
-    vector<Item *> *selected = &g.ui_Scavenge->gridsystem->selected->items;
+void ScavengeUI::runScavengeStep(void) {
+    cout << "runScavenging() stage: " << current_stage << endl;
 
-    if(*stage == 0) {
+    vector<Item *> *selected = &gridsystem->selected->items;
+
+    if(current_stage == 0) {
         if(selected->empty()) {
             return;
         }
         // after the first stage, we picked a location
-        g.ui_Scavenge->selected_location = selected->front();
-    } else if(*stage == 1) {
+        selected_location = selected->front();
+    } else if(current_stage == 1) {
         // after the second step, we picked the tools used for scavenging
-        g.ui_Scavenge->selected_tools = *selected;
+        selected_tools = *selected;
     }
 
-
-    Item *location_item = g.ui_Scavenge->selected_location;
-    Location *location =g.ui_Scavenge->items_to_locations.find(location_item)->second;
+    Location *location = items_to_locations.find(selected_location)->second;
     assert(location != NULL);
 
-    if(*stage == 0) {
+    if(current_stage == 0) {
         // show options for this tile
-        (*stage)++;
-        g.ui_Scavenge->setup();
-    } else if(*stage == 1) {
-        // take location and options, generate items scavenged,
-        // and show results ("found something"/"found nothing")
-        PlaceItemOnMultiGrid(ground_at_player(), new Item ("Crowbar"));
-        PlaceItemOnMultiGrid(ground_at_player(), new Item ("Water bottle"));
-        location->last_looted = g.map->player->nextMove;
-        (*stage)++;
-        g.ui_Scavenge->setup();
-    } else if(*stage == 2) {
+        current_stage++;
+        setup();
+    } else if(current_stage == 1) {
+        // take location and options, generate items scavenged
+        scavenged_items.push_back(new Item ("crowbar"));
+        scavenged_items.push_back(new Item ("water bottle"));
+
+        location->last_looted = player->nextMove;
+        current_stage++;
+        setup();
+    } else if(current_stage == 2) {
+        player->activity = ACTIVITY_SCAVENGE;
+        player->spendTime(500);
+
+        for(auto& item : scavenged_items) {
+            PlaceItemOnMultiGrid(ground_at_player(), item);
+        }
         button_MainMap_press();
+    } else {
+        assert(false);
     }
 }
 
@@ -5025,27 +4457,32 @@ void ScavengeUI::setup(void) {
     gridsystem->options->items.clear();
 
     if(current_stage == 0) {
+        scavenged_items.clear();
         items_to_locations.clear();
         player = g.map->player;
         vector<Location *> *locations = locations_at_character(player);
+
+        // add viable locations to the options grid
         for(auto& location : *locations) {
             if(location->last_looted == 0 ||
-               location->last_looted + 10000 < player->nextMove) {
-                Item *i = g.location_info[location->info_index].location_item;
+               location->last_looted + location->getResetTime() < player->nextMove) {
+                Item *loc_item = g.location_info[location->info_index].location_item;
                 // we add the location items to the options grid
-                gridsystem->options->PlaceItem(i);
+                gridsystem->options->PlaceItem(loc_item);
                 // we make a map from location items to locations
                 // so runScavenging can know which location we're looting
                 // based on the item selected
-                items_to_locations.insert(pair<Item *, Location *>(i, location));
+                items_to_locations.insert(pair<Item *, Location *>(loc_item, location));
             }
         }
     } else if(current_stage == 1) {
-        gridsystem->options->PlaceItem(new Item ("Crowbar"));
-        // show options for looting
+        /*
+          TODO: grab scavenging tools from player's inventory and display them here
+        */
+        gridsystem->options->PlaceItem(new Item ("crowbar")); // TODO: leak
     } else if(current_stage == 2) {
+        // we're done. ScavengeUI::draw is showing what we got
         gridsystem->visible = false;
-        // show what we got
     }
 
     addLogAndButtons();
@@ -6312,7 +5749,7 @@ void init_tilemap(int sx, int sy) {
     TileInfo i;
     // grass
     i.minimap_color = al_map_rgb(0, 255, 0);
-    i.bitmap_index = 0;
+    i.sprite = g.bitmaps[17];
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = false;
@@ -6320,7 +5757,7 @@ void init_tilemap(int sx, int sy) {
     g.map->tile_info.push_back(i);
     // tree
     i.minimap_color = al_map_rgb(0, 150, 0);
-    i.bitmap_index = 1;
+    i.sprite = g.bitmaps[18];
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
@@ -6328,7 +5765,7 @@ void init_tilemap(int sx, int sy) {
     g.map->tile_info.push_back(i);
     // city
     i.minimap_color = al_map_rgb(255, 255, 255);
-    i.bitmap_index = 2;
+    i.sprite = g.bitmaps[19];
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
@@ -6336,17 +5773,12 @@ void init_tilemap(int sx, int sy) {
     g.map->tile_info.push_back(i);
     // swamp
     i.minimap_color = al_map_rgb(0, 0, 200);
-    i.bitmap_index = 3;
+    i.sprite = g.bitmaps[23];
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = true;
     i.name = "Swamp";
     g.map->tile_info.push_back(i);
-
-    g.map->bitmaps.push_back(g.bitmaps[17]);
-    g.map->bitmaps.push_back(g.bitmaps[18]);
-    g.map->bitmaps.push_back(g.bitmaps[19]);
-    g.map->bitmaps.push_back(g.bitmaps[23]);
 
     g.map->generate();
 }
