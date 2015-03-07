@@ -1,5 +1,21 @@
+enum ItemSlot {
+    SLOT_NONE,
+    ARMOR_HEAD,
+    ARMOR_TORSO,
+    ARMOR_LEGS,
+    ARMOR_LEFT_SHOE,
+    ARMOR_RIGHT_SHOE,
+    ARMOR_LEFT_HAND,
+    ARMOR_RIGHT_HAND,
+    ARMOR_BACK,
+    WATER_BOTTLE,
+    WEAPON_BOW
+};
+
+struct Grid;
+
 struct ItemInfo {
-    string name;
+    const char *name;
 
     ItemSlot slot;
 
@@ -13,7 +29,8 @@ struct ItemInfo {
 
     bool isVehicle;
     bool isContainer;
-    bool skill;
+    bool isSkill;
+    bool isLocation;
     // can it be applied to a body part (i.e. bandages and disinfectants)?
     bool apply_to_body;
     // when applied to a body part, is it consumed (i.e. disinfectants)?
@@ -41,9 +58,10 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isLocation = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -65,7 +83,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 10;
     tmp.container_size_y = 10;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -85,7 +103,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 4;
     tmp.container_size_y = 4;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -105,7 +123,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -126,7 +144,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 20;
     tmp.container_size_y = 20;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -147,7 +165,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 1;
     tmp.container_size_y = 2;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -166,7 +184,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -185,7 +203,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -204,7 +222,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -224,7 +242,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -244,7 +262,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = true;
+    tmp.isSkill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -264,7 +282,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = true;
+    tmp.isSkill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -283,7 +301,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = true;
+    tmp.isSkill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -302,7 +320,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = true;
+    tmp.isSkill = true;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -321,7 +339,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = true;
     tmp.consumed_on_application = true;
     tmp.consumed_on_use = true;
@@ -340,7 +358,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = true;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -357,9 +375,10 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isLocation = true;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -376,9 +395,10 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isLocation = true;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -395,9 +415,10 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = true;
+    tmp.isLocation = false;
     tmp.container_size_x = 1;
     tmp.container_size_y = 2;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -416,7 +437,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -436,7 +457,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -456,7 +477,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -476,7 +497,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -496,7 +517,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -516,7 +537,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -537,7 +558,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -558,7 +579,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -577,7 +598,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -596,7 +617,7 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
@@ -618,7 +639,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 6;
     tmp.container_size_y = 1;
-    tmp.skill = false;
+    tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;

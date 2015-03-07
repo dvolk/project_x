@@ -185,20 +185,6 @@ bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
           || b_y + b_height <= a_y);
 }
 
-enum ItemSlot {
-    SLOT_NONE,
-    ARMOR_HEAD,
-    ARMOR_TORSO,
-    ARMOR_LEGS,
-    ARMOR_LEFT_SHOE,
-    ARMOR_RIGHT_SHOE,
-    ARMOR_LEFT_HAND,
-    ARMOR_RIGHT_HAND,
-    ARMOR_BACK,
-    WATER_BOTTLE,
-    WEAPON_BOW
-};
-
 #include "./itemdefs.h"
 
 struct Item {
@@ -232,12 +218,13 @@ struct Item {
 
     Item(const Item& i);
     Item(int info_index);
-    Item(string item_name);
-    Item(string item_name, int num_stack);
+    Item(const char *item_name);
+    Item(const char *item_name, int num_stack);
     ~Item();
 
     void init(int info_index);
-    void init_from_name(string name);
+    void init_from_name(const char *name);
+    static int index_from_name(const char *name);
     void resetHardpointPos(void);
 
     void draw(void);
@@ -297,7 +284,7 @@ int Item::get_grid_size_y(void) {
 }
 
 const char *Item::getName(void) {
-    return g.item_info[info_index].name.c_str();
+    return g.item_info[info_index].name;
 }
 
 bool Item::isVehicle(void) {
@@ -606,35 +593,46 @@ void Item::init(int info_index) {
                            g.item_info[info_index].container_size_x,
                            g.item_info[info_index].container_size_y,
                            NULL);
+
     this->condition = 1.0;
+    if(g.item_info[info_index].maxStack != 1 ||
+       g.item_info[info_index].isSkill == true ||
+       g.item_info[info_index].isLocation == true) {
+        // skills, locations and stackable items don't have condition
+        this->condition = -1.0;
+    }
 }
 
 Item::Item(int info_index) {
     init(info_index);
 }
 
-Item::Item(string item_name, int num_stack) {
+Item::Item(const char *item_name, int num_stack) {
     init_from_name(item_name);
     this->cur_stack = num_stack;
 }
 
-Item::Item(string item_name) {
+Item::Item(const char *item_name) {
     init_from_name(item_name);
 }
 
-void Item::init_from_name(string item_name) {
+int Item::index_from_name(const char *item_name) {
     int i = 0;
     for(auto& info : g.item_info) {
         if(info.name == item_name) {
-            init(i);
-            return;
+            return i;
         }
         i++;
     }
 
     char buf[75];
-    snprintf(buf, sizeof(buf), "Unknown item: %s", item_name.c_str());
+    snprintf(buf, sizeof(buf), "Unknown item: %s", item_name);
     errorQuit(buf);
+    return -1;
+}
+
+void Item::init_from_name(const char *item_name) {
+    init(index_from_name(item_name));
 }
 
 int Item::get_weight(void) {
@@ -1226,6 +1224,9 @@ struct LocationInfo {
     Item *location_item;
     const char *description;
 
+    // probability & item index
+    vector<pair<float, int>> loot_table;
+
     // these are base values. The actual values depend on where on the map
     // you are
     float base_loot_level;
@@ -1234,25 +1235,53 @@ struct LocationInfo {
 
     // how long it takes the location to reset (appear again as a scavenging option)
     int reset_time;
+
+    void add_loot(const char *item_name, float prob);
 };
 
+void LocationInfo::add_loot(const char *item_name, float prob) {
+    loot_table.push_back(make_pair(prob, Item::index_from_name(item_name)));
+}
+
 void init_locationdata(void) {
-    Item *factory = new Item ("Factory");
-    Item *shack = new Item ("Shack in the woods");
-
     LocationInfo tmp;
-    tmp.base_loot_level = 100;
-    tmp.base_safety_level = 100;
-    tmp.base_sneak_level = 100;
-    tmp.reset_time = 10000;
-    tmp.location_item = factory;
+
+    Item *factory = new Item ("Factory");
     tmp.description = "An abandoned factory, full of decaying industrial equipment.";
+    tmp.location_item = factory;
+    tmp.base_loot_level = 0.1;
+    tmp.base_safety_level = 0.1;
+    tmp.base_sneak_level = 0.2;
+    tmp.reset_time = 10000;
+    tmp.add_loot("backpack", 0.1);
+    tmp.add_loot("first aid kit", 0.1);
+    tmp.add_loot("crowbar", 0.1);
+    tmp.add_loot("shopping trolley", 0.01);
+    tmp.add_loot("clean rag", 0.5);
+    tmp.add_loot("water bottle", 0.2);
+    tmp.add_loot("whiskey", 0.4);
+    tmp.add_loot("red shirt", 0.05);
+    tmp.add_loot("ski mask", 0.05);
+    tmp.add_loot("right glove", 0.05);
+    tmp.add_loot("left glove", 0.05);
+    tmp.add_loot("blue pants", 0.05);
     g.location_info.push_back(tmp);
 
+    tmp.loot_table.clear();
+
+    Item *shack = new Item ("Shack in the woods");
     tmp.description = "A shack in the woods.";
-    tmp.reset_time = 20000;
     tmp.location_item = shack;
+    tmp.base_loot_level = 0.3;
+    tmp.base_safety_level = 0.3;
+    tmp.base_sneak_level = 0.5;
+    tmp.reset_time = 20000;
+    tmp.add_loot("clean rag", 0.5);
+    tmp.add_loot("water bottle", 0.2);
+    tmp.add_loot("red shirt", 0.2);
+    tmp.add_loot("whiskey", 0.5);
     g.location_info.push_back(tmp);
+    tmp.loot_table.clear();
 }
 
 // a location on the
@@ -1261,10 +1290,15 @@ struct Location {
     int last_looted;
 
     int getResetTime(void);
+    vector<pair<float, int>> getLootTable(void);
 };
 
 int Location::getResetTime(void) {
     return g.location_info[info_index].reset_time;
+}
+
+vector<pair<float, int>> Location::getLootTable(void) {
+    return g.location_info[info_index].loot_table;
 }
 
 // a hex tile
@@ -2805,16 +2839,31 @@ void GridSystem::drawItemTooltip(void) {
                item->parent->pos.x1 + (item->pos.x1 + item->pos.x2) * Grid::grid_px_x >= g.mouse_x &&
                item->parent->pos.y1 + (item->pos.y1 + item->pos.y2) * Grid::grid_px_y >= g.mouse_y) {
 
-                al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
-                                         g.mouse_x + 200, g.mouse_y + 56, g.color_black);
-                al_draw_text(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 8,
-                             0, g.item_info[item->info_index].name.c_str());
-                al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 24,
-                              0, "condition: %.1f", item->condition);
                 int weight = g.item_info[item->info_index].weight;
-                if(weight > 0) {
-                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 40,
+                bool display_weight = weight > 0;
+                bool display_condition = item->condition > 0.0;
+                float off_y = 24.0;
+                float box_height =
+                    off_y
+                    + (display_weight == true ? 16.0 : 0)
+                    + (display_condition == true ? 16.0 : 0);
+
+                al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
+                                         g.mouse_x + 200, g.mouse_y + box_height, g.color_black);
+
+                al_draw_text(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 8,
+                             0, g.item_info[item->info_index].name);
+
+                if(display_condition == true) {
+                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
+                                  0, "condition: %.2f", item->condition);
+                    off_y += 16;
+                }
+
+                if(display_weight == true) {
+                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
                                   0, "%d g", weight * item->cur_stack);
+                    off_y += 16;
                 }
 
                 // if the item has a grid, draw it under the text
@@ -2822,7 +2871,7 @@ void GridSystem::drawItemTooltip(void) {
                    held == NULL &&
                    item->parent->hpinfo == NULL)
                     // ^^ unless it's on a hardpoint
-                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + 56);
+                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + off_y);
 
                 return;
             }
@@ -3095,7 +3144,7 @@ void GridSystem::gsMouseUpEvent() {
 
             char b[60];
             snprintf(b, sizeof(b), "Moved %s onto grid %d at %d, %d",
-                     g.item_info[held->info_index].name.c_str(), i, drop_x, drop_y);
+                     g.item_info[held->info_index].name, i, drop_x, drop_y);
             puts(b);
             // g.AddMessage(b);
             // the item is placed. we're done
@@ -3121,7 +3170,7 @@ void GridSystem::gsMouseUpEvent() {
 
     char b[40];
     snprintf(b, sizeof(b), "Blocked on grid %d", i);
-    g.AddMessage(b);
+    cout << b;
     return;
 
  stack_it:
@@ -3397,7 +3446,7 @@ void CraftingGridSystem::exit(void) {
     while(ingredients->items.empty() == false) {
         Item *moving = ingredients->items.front();
         // don't move crafting skills
-        if(g.item_info[moving->info_index].skill == false) {
+        if(g.item_info[moving->info_index].isSkill == false) {
             PlaceItemOnMultiGrid(ground_at_player(), moving);
         }
         ingredients->RemoveItem(moving);
@@ -3406,7 +3455,7 @@ void CraftingGridSystem::exit(void) {
     Grid *ground = ground_at_player()->at(current_ground_page);
     vector<Item *>::iterator it;
     for(it = ground->items.begin(); it != ground->items.end();) {
-        if(g.item_info[(*it)->info_index].skill == true) {
+        if(g.item_info[(*it)->info_index].isSkill == true) {
             it = ground->items.erase(it);
         }
         else {
@@ -3449,7 +3498,7 @@ int countItemsOfType(Grid* grid, int searching_for) {
 }
 
 struct Recipe {
-    string name;
+    const char *name;
     int time_cost;
     // item info_index and amount
     vector<pair<int, int>> ingredients;
@@ -3734,7 +3783,10 @@ void runCrafting(void) {
     vector<Recipe *> rs = find_craftable_recipe(in);
     if(!rs.empty()) {
         create_results(rs.at(selected_recipe));
-        g.AddMessage("Crafted " + rs.at(selected_recipe)->name);
+
+        char buf[100];
+        snprintf(buf, sizeof(buf), "Crafted %s", rs.at(selected_recipe)->name);
+        g.AddMessage(buf);
     }
 
     updateCraftingOutput();
@@ -4322,6 +4374,9 @@ struct ScavengeUI : public UI {
     void reset(void);
 
     void runScavengeStep(void);
+    void scavengeLocation(void);
+    void resetLastLooted(void);
+    void addLootedItems(void);
 };
 
 void ScavengeUI::draw(void) {
@@ -4386,48 +4441,71 @@ void runScavenging(void) {
     g.ui_Scavenge->runScavengeStep();
 }
 
+void ScavengeUI::scavengeLocation(void) {
+    Location *location = items_to_locations.find(selected_location)->second;
+    vector<pair<float, int>> loot_table = location->getLootTable();
+    uniform_real_distribution<> prob(0, 1);
+
+    for(auto& loot_entry : loot_table) {
+
+        int loot_item_index = loot_entry.second;
+        float loot_probability = loot_entry.first;
+        float roll = prob(*g.rng);
+
+        if(roll < loot_probability) {
+            scavenged_items.push_back(new Item (loot_item_index));
+        }
+    }
+}
+
+void ScavengeUI::resetLastLooted(void) {
+    Location *location = items_to_locations.find(selected_location)->second;
+    assert(location != NULL);
+    location->last_looted = player->nextMove;
+}
+
+void ScavengeUI::addLootedItems(void) {
+    for(auto& item : scavenged_items) {
+        PlaceItemOnMultiGrid(ground_at_player(), item);
+    }
+}
+
 void ScavengeUI::runScavengeStep(void) {
     cout << "runScavenging() stage: " << current_stage << endl;
 
     vector<Item *> *selected = &gridsystem->selected->items;
 
+
     if(current_stage == 0) {
         if(selected->empty()) {
+            if(items_to_locations.empty() == true) {
+                // if we haven't selected anything because there's
+                // nothing to select, exit
+                button_MainMap_press();
+            }
+            // must select a location
             return;
         }
-        // after the first stage, we picked a location
         selected_location = selected->front();
-    } else if(current_stage == 1) {
+    }
+    else if(current_stage == 1) {
         // after the second step, we picked the tools used for scavenging
         selected_tools = *selected;
-    }
-
-    Location *location = items_to_locations.find(selected_location)->second;
-    assert(location != NULL);
-
-    if(current_stage == 0) {
-        // show options for this tile
-        current_stage++;
-        setup();
-    } else if(current_stage == 1) {
         // take location and options, generate items scavenged
-        scavenged_items.push_back(new Item ("crowbar"));
-        scavenged_items.push_back(new Item ("water bottle"));
-
-        location->last_looted = player->nextMove;
-        current_stage++;
-        setup();
-    } else if(current_stage == 2) {
-        player->activity = ACTIVITY_SCAVENGE;
-        player->spendTime(500);
-
-        for(auto& item : scavenged_items) {
-            PlaceItemOnMultiGrid(ground_at_player(), item);
-        }
-        button_MainMap_press();
-    } else {
-        assert(false);
+        scavengeLocation();
     }
+    else if(current_stage == 2) {
+        addLootedItems();
+        resetLastLooted();
+        player->activity = ACTIVITY_SCAVENGE;
+        player->spendTime(1000);
+        button_MainMap_press();
+        return;
+    } else {
+        errorQuit("invalid scavenge step");
+    }
+    current_stage++;
+    setup();
 }
 
 ScavengeUI::ScavengeUI() {
@@ -5108,8 +5186,26 @@ void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
 }
 
 // resolve tile to location_info index
-int tile_to_locations_index(__attribute__ ((unused)) Tile t) {
-    return 0;
+vector<int> tile_to_locations_indexes(Tile t) {
+    vector<int> ret;
+    /*
+      TODO: make helper functions to translate strings to indexes
+    */
+    switch(t.info_index) {
+    case 0: // grass
+        // nothing
+        break;
+    case 1: // wood
+        ret.push_back(1); // shack
+        break;
+    case 2: // city
+        ret.push_back(0); // factory
+        break;
+    case 3: // swamp
+        // nothing
+        break;
+    }
+    return ret;
 }
 
 // returns, or creates, locations at a tile
@@ -5117,26 +5213,25 @@ vector<Location *> *locations_at_character(Character *character) {
     // get locations at player position
     assert(character != NULL);
     assert(good_index(character->n) == true);
-    vector<Location *> *locations = g.map->tiles[character->n].locations;
+
+    Tile char_tile = g.map->tiles[character->n];
+    vector<Location *> *locations = char_tile.locations;
 
     if(locations == NULL) {
         locations = new vector<Location *>;
-    }
-    assert(locations);
+        assert(locations);
+        g.map->tiles[character->n].locations = locations;
 
-    if((*locations).empty()) {
-        // create first location if it doesn't exist
-        Location *location1 = new Location;
-        location1->info_index = 0;
-        location1->last_looted = 0;
-        Location *location2 = new Location;
-        location2->info_index = 1;
-        location2->last_looted = 0;
+        vector<int> idxs = tile_to_locations_indexes(char_tile);
 
-        locations->push_back(location1);
-        locations->push_back(location2);
+        for(auto& idx : idxs) {
+            Location *location = new Location;
+            location->info_index = idx;
+            location->last_looted = 0;
+            locations->push_back(location);
+        }
     }
-    g.map->tiles[character->n].locations = locations;
+
     return locations;
 }
 
