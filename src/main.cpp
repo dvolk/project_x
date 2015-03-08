@@ -338,6 +338,7 @@ struct HardpointInfo {
     bool vehiclepoint;
     bool medical;
     bool visible;
+    bool pleaseRotateIt;
 
     HardpointInfo() {
         vehiclepoint = false;
@@ -395,6 +396,9 @@ void init_hardpointinfo(void) {
     g.left_hand->visible = false;
     g.right_foot->visible = false;
     g.left_foot->visible = false;
+
+    g.right_shoulder->pleaseRotateIt = true;
+    g.left_shoulder->pleaseRotateIt = true;
 }
 
 struct Button : public Widget {
@@ -594,7 +598,9 @@ void Item::init(int info_index) {
                            g.item_info[info_index].container_size_y,
                            NULL);
 
-    this->condition = 1.0;
+    uniform_real_distribution<> cond_dist(0.02,1);
+    this->condition = cond_dist(*g.rng);
+
     if(g.item_info[info_index].maxStack != 1 ||
        g.item_info[info_index].isSkill == true ||
        g.item_info[info_index].isLocation == true) {
@@ -1471,7 +1477,7 @@ bool Character::useWeapon(void) {
 
     Item *w = getSelectedWeapon();
 
-    w->condition -= 0.05;
+    w->condition -= 0.0078278;
 
     if(w->condition < 0.01) {
         if(this == g.map->player) {
@@ -2856,7 +2862,7 @@ void GridSystem::drawItemTooltip(void) {
 
                 if(display_condition == true) {
                     al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
-                                  0, "condition: %.2f", item->condition);
+                                  0, "condition: %.1f%%", item->condition * 100);
                     off_y += 16;
                 }
 
@@ -3103,6 +3109,9 @@ void GridSystem::gsMouseUpEvent() {
                 drop_y = 0;
                 // and un-rotate it
                 if(held->rotated == true) held->rotate();
+                // some hardpoints like shoulders rotate their items
+                if(grid->hpinfo->pleaseRotateIt == true)
+                    held->rotate();
             }
 
             // is this item compatible with the grid?
@@ -4704,8 +4713,8 @@ struct InventoryGridSystem : public GridSystem {
     void reset(void);
     void draw(void) {
         al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
-        GridSystem::draw();
         al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+        GridSystem::draw();
     }
 
     void keyDown(void) override;
@@ -5323,6 +5332,8 @@ void CampGridSystem::reset(void) {
 void InventoryGridSystem::reset(void) {
     // add player inventory
     grids.clear();
+    grids.push_back(g.map->player->right_shoulder);
+    grids.push_back(g.map->player->left_shoulder);
     grids.push_back(g.map->player->right_hand_hold);
     grids.push_back(g.map->player->left_hand_hold);
     grids.push_back(g.map->player->right_hand);
@@ -5330,8 +5341,6 @@ void InventoryGridSystem::reset(void) {
     grids.push_back(g.map->player->back);
     grids.push_back(g.map->player->head);
     grids.push_back(g.map->player->neck);
-    grids.push_back(g.map->player->right_shoulder);
-    grids.push_back(g.map->player->left_shoulder);
     grids.push_back(g.map->player->torso);
     grids.push_back(g.map->player->legs);
     grids.push_back(g.map->player->right_foot);
