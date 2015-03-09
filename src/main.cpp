@@ -1136,8 +1136,8 @@ Character::Character(void) {
     right_hand = new Grid (off_x - 85, off_y + 223, 3, 3, g.right_hand);
     left_hand = new Grid (off_x + 67, off_y + 215, 3, 3, g.left_hand);
     legs = new Grid (off_x - 33, off_y + 220, 6, 11, g.legs);
-    right_foot = new Grid (off_x - 35, off_y + 415, 3, 3, g.right_foot);
-    left_foot = new Grid (off_x + 25, off_y + 415, 3, 3, g.left_foot);
+    right_foot = new Grid (off_x - 35, off_y + 392, 3, 3, g.right_foot);
+    left_foot = new Grid (off_x + 25, off_y + 392, 3, 3, g.left_foot);
 
     back = new Grid(680, 10, 2, 2, g.back);
     right_hand_hold = new Grid (680, 195, 2, 2, g.right_hand_hold);
@@ -4754,7 +4754,7 @@ ConditionGridSystem::~ConditionGridSystem() {
 void ConditionGridSystem::draw(void) {
     al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
     al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-    al_draw_filled_rectangle(700, 50, 1175, 500, g.color_greu);
+    al_draw_filled_rectangle(700, 50, 1175, 500, g.color_grey);
     al_draw_text(g.font, g.color_black, 708, 58, 0, "Current conditions:");
 
     for (auto& g : grids) {
@@ -5356,9 +5356,9 @@ void InventoryGridSystem::reset(void) {
     grids.push_back(g.map->player->head);
     grids.push_back(g.map->player->neck);
     grids.push_back(g.map->player->torso);
-    grids.push_back(g.map->player->legs);
     grids.push_back(g.map->player->right_foot);
     grids.push_back(g.map->player->left_foot);
+    grids.push_back(g.map->player->legs);
 
     g.map->player->addInventoryHardpoints(this);
 
@@ -5367,9 +5367,9 @@ void InventoryGridSystem::reset(void) {
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
-    pos.x1 = 0;
+    pos.x1 = 100;
     pos.y1 = 0;
-    pos.x2 = 1280;
+    pos.x2 = 1180;
     pos.y2 = 720;
 
     countTotalItems();
@@ -5379,9 +5379,9 @@ void InventoryGridSystem::reset(void) {
 void ConditionGridSystem::reset(void) {
     // add backpack and hand hardpoints
     grids.clear();
-    // grids.push_back(g.map->player->right_hand_hold);
-    // grids.push_back(g.map->player->left_hand_hold);
-    // grids.push_back(g.map->player->back);
+    grids.push_back(g.map->player->right_hand_hold);
+    grids.push_back(g.map->player->left_hand_hold);
+    grids.push_back(g.map->player->back);
 
     // body hardpoints
     grids.push_back(g.map->player->medical_upper_torso);
