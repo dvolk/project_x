@@ -405,8 +405,11 @@ struct Button : public Widget {
     bool pressed;
     ALLEGRO_BITMAP *up;
     ALLEGRO_BITMAP *down;
+    const char *name;
+    int name_len;
 
-    Button();
+    Button(void);
+    Button(const char *_name);
     ~Button();
 
     void mouseDown(void);
@@ -1665,7 +1668,16 @@ void Character::drop_all_items(void) {
     }
 }
 
-Button::Button() {
+Button::Button(void) {
+    name = NULL;
+    pressed = false;
+    up = NULL;
+    down = NULL;
+}
+
+Button::Button(const char *_name) {
+    name = _name;
+    name_len = 16 + 8 * strlen(_name);
     pressed = false;
     up = NULL;
     down = NULL;
@@ -2465,7 +2477,6 @@ struct UI {
         info("~UI()");
         for(auto& widget : widgets) {
             delete widget;
-            widget = NULL;
         }
     }
 
@@ -2568,7 +2579,7 @@ void UI::hoverOverEvent(void) {
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
            widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
             widget->hoverOver();
-            // break;
+            return;
         }
     }
 }
@@ -2589,7 +2600,10 @@ void Button::keyDown(void) {
 }
 
 void Button::hoverOver(void) {
-    cout << "button!" << endl;
+    if(name != NULL) {
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + name_len, pos.y1 + 24, g.color_black);
+        al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 8, 0, name);
+    }
 }
 
 void Button::mouseDown(void) { press(); }
@@ -3707,7 +3721,7 @@ CraftingUI::CraftingUI() {
     craftGrids = new CraftingGridSystem;
     craftGrids->change = updateCraftingOutput;
 
-    button_prev_recipe = new Button;
+    button_prev_recipe = new Button ("Previous recipe");
     button_prev_recipe->pos.x1 = 500;
     button_prev_recipe->pos.y1 = 260;
     button_prev_recipe->pos.x2 = 75;
@@ -3716,7 +3730,7 @@ CraftingUI::CraftingUI() {
     button_prev_recipe->down = NULL;
     button_prev_recipe->onMouseDown = craftingPrevRecipe;
 
-    button_confirm = new Button;
+    button_confirm = new Button ("Commit selected");
     button_confirm->pos.x1 = 580;
     button_confirm->pos.y1 = 260;
     button_confirm->pos.x2 = 75;
@@ -3725,7 +3739,7 @@ CraftingUI::CraftingUI() {
     button_confirm->down = NULL;
     button_confirm->onMouseDown = runCrafting;
 
-    button_next_recipe = new Button;
+    button_next_recipe = new Button ("Next recipe");
     button_next_recipe->pos.x1 = 660;
     button_next_recipe->pos.y1 = 260;
     button_next_recipe->pos.x2 = 75;
@@ -4240,7 +4254,7 @@ EncounterUI::EncounterUI() {
     advance = new Item ("Advance");
     unknown_character_sprite = g.bitmaps[83];
 
-    button_confirm = new Button;
+    button_confirm = new Button ("Commit selection");
     button_confirm->pos.x1 = off_x + 691;
     button_confirm->pos.y1 = 300;
     button_confirm->pos.x2 = 75;
@@ -4520,7 +4534,7 @@ void ScavengeUI::runScavengeStep(void) {
 ScavengeUI::ScavengeUI() {
     gridsystem = new ScavengeGridSystem;
 
-    button_confirm = new Button;
+    button_confirm = new Button ("Commit selection");
     button_confirm->pos.x1 = 855;
     button_confirm->pos.y1 = 380;
     button_confirm->pos.x2 = 75;
@@ -4740,8 +4754,8 @@ ConditionGridSystem::~ConditionGridSystem() {
 void ConditionGridSystem::draw(void) {
     al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
     al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-    al_draw_filled_rectangle(1000, 50, 1175, 500, g.color_white);
-    al_draw_text(g.font, g.color_black, 1008, 58, 0, "Current conditions:");
+    al_draw_filled_rectangle(700, 50, 1175, 500, g.color_greu);
+    al_draw_text(g.font, g.color_black, 708, 58, 0, "Current conditions:");
 
     for (auto& g : grids) {
         // skip medical hardpoints
@@ -4940,7 +4954,7 @@ void ConditionGridSystem::keyDown(void) {
 VehicleUI::VehicleUI() {
     gridsystem = new VehicleGridSystem;
 
-    ground_next_page = new Button;
+    ground_next_page = new Button ("Next page");
     ground_next_page->pos.x1 = 485;
     ground_next_page->pos.y1 = 50;
     ground_next_page->pos.x2 = 20;
@@ -4949,7 +4963,7 @@ VehicleUI::VehicleUI() {
     ground_next_page->down = NULL;
     ground_next_page->onMouseDown = VehicleNextGroundPage;
 
-    ground_prev_page = new Button;
+    ground_prev_page = new Button ("Previous page");
     ground_prev_page->pos.x1 = 465;
     ground_prev_page->pos.y1 = 50;
     ground_prev_page->pos.x2 = 20;
@@ -4968,7 +4982,7 @@ VehicleUI::VehicleUI() {
 CampUI::CampUI() {
     gridsystem = new CampGridSystem;
 
-    ground_next_page = new Button;
+    ground_next_page = new Button ("Next page");
     ground_next_page->pos.x1 = 485;
     ground_next_page->pos.y1 = 50;
     ground_next_page->pos.x2 = 20;
@@ -4977,7 +4991,7 @@ CampUI::CampUI() {
     ground_next_page->down = NULL;
     ground_next_page->onMouseDown = CampNextGroundPage;
 
-    ground_prev_page = new Button;
+    ground_prev_page = new Button ("Previous page");
     ground_prev_page->pos.x1 = 465;
     ground_prev_page->pos.y1 = 50;
     ground_prev_page->pos.x2 = 20;
@@ -5010,7 +5024,7 @@ ItemsUI::ItemsUI() {
     gridsystem  = new InventoryGridSystem;
     gridsystem->change = InventoryChangeCallback;
 
-    ground_next_page = new Button;
+    ground_next_page = new Button ("Next page");
     ground_next_page->pos.x1 = 485;
     ground_next_page->pos.y1 = 50;
     ground_next_page->pos.x2 = 20;
@@ -5019,7 +5033,7 @@ ItemsUI::ItemsUI() {
     ground_next_page->down = NULL;
     ground_next_page->onMouseDown = InventoryNextGroundPage;
 
-    ground_prev_page = new Button;
+    ground_prev_page = new Button ("Previous page");
     ground_prev_page->pos.x1 = 465;
     ground_prev_page->pos.y1 = 50;
     ground_prev_page->pos.x2 = 20;
@@ -5038,7 +5052,7 @@ ItemsUI::ItemsUI() {
 ConditionUI::ConditionUI() {
     gridsystem  = new ConditionGridSystem;
 
-    ground_next_page = new Button;
+    ground_next_page = new Button ("Next page");
     ground_next_page->pos.x1 = 485;
     ground_next_page->pos.y1 = 50;
     ground_next_page->pos.x2 = 20;
@@ -5047,7 +5061,7 @@ ConditionUI::ConditionUI() {
     ground_next_page->down = NULL;
     ground_next_page->onMouseDown = ConditionNextGroundPage;
 
-    ground_prev_page = new Button;
+    ground_prev_page = new Button ("Previous page");
     ground_prev_page->pos.x1 = 465;
     ground_prev_page->pos.y1 = 50;
     ground_prev_page->pos.x2 = 20;
@@ -5365,9 +5379,9 @@ void InventoryGridSystem::reset(void) {
 void ConditionGridSystem::reset(void) {
     // add backpack and hand hardpoints
     grids.clear();
-    grids.push_back(g.map->player->right_hand_hold);
-    grids.push_back(g.map->player->left_hand_hold);
-    grids.push_back(g.map->player->back);
+    // grids.push_back(g.map->player->right_hand_hold);
+    // grids.push_back(g.map->player->left_hand_hold);
+    // grids.push_back(g.map->player->back);
 
     // body hardpoints
     grids.push_back(g.map->player->medical_upper_torso);
@@ -5631,17 +5645,17 @@ void unload_bitmaps(void) {
 }
 
 void init_buttons(void) {
-    g.button_MainMap   = new Button;
-    g.button_MiniMap   = new Button;
-    g.button_Skills    = new Button;
-    g.button_Crafting  = new Button;
-    g.button_Items     = new Button;
-    g.button_Condition = new Button;
-    g.button_Camp      = new Button;
-    g.button_Vehicle   = new Button;
-    g.button_endturn   = new Button;
-    g.button_scavenge  = new Button;
-    g.button_sleep     = new Button;
+    g.button_MainMap   = new Button ("Main map");
+    g.button_MiniMap   = new Button ("Mini map");
+    g.button_Skills    = new Button ("Skills");
+    g.button_Crafting  = new Button ("Crafting");
+    g.button_Items     = new Button ("Inventory");
+    g.button_Condition = new Button ("Condition");
+    g.button_Camp      = new Button ("Camp");
+    g.button_Vehicle   = new Button ("Vehicle");
+    g.button_endturn   = new Button ("Wait");
+    g.button_scavenge  = new Button ("Scavenge");
+    g.button_sleep     = new Button ("Sleep");
 
     int off_y = 175;
     int step = 45;
@@ -6154,6 +6168,7 @@ int main(int argc, char **argv) {
 
     bool redraw = true;
     bool was_mouse_down = false;
+    bool draw_hover = false;
 
     // counter;
     int i = 0;
@@ -6165,6 +6180,7 @@ int main(int argc, char **argv) {
 
         g.mouse_x = mouse_state.x;
         g.mouse_y = mouse_state.y;
+        draw_hover = false;
         // 1 - RMB
         // 2 - LMB
         // 4 - wheel
@@ -6182,6 +6198,7 @@ int main(int argc, char **argv) {
             // mouse up event
             was_mouse_down = false;
         } else {
+            draw_hover = true;
             // hover event
         }
 
@@ -6215,6 +6232,8 @@ int main(int argc, char **argv) {
 
             { // drawing goes here
                 g.ui->draw();
+                if(draw_hover == true)
+                    g.ui->hoverOverEvent();
             }
             al_flip_display();
         }
