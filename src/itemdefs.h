@@ -19,10 +19,18 @@ struct ItemInfo {
 
     ItemSlot slot;
 
+    // the size of the item in grid units
     int grid_size_x;
     int grid_size_y;
+    // the size when deployed on a hardpoint
+    int grid_size_on_hp_x;
+    int grid_size_on_hp_y;
+
     int container_size_x;
     int container_size_y;
+
+    float container_offset_x;
+    float container_offset_y;
 
     int maxStack;
     int weight; // [g]
@@ -53,6 +61,8 @@ void init_iteminfo(void) {
     tmp.name = "";
     tmp.grid_size_x = 1;
     tmp.grid_size_y = 1;
+    tmp.grid_size_on_hp_x = -1;
+    tmp.grid_size_on_hp_y = -1;
     tmp.maxStack = 1;
     tmp.sprite = NULL;
     tmp.sprite_on_hp = NULL;
@@ -61,6 +71,8 @@ void init_iteminfo(void) {
     tmp.isLocation = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.container_offset_x = 0;
+    tmp.container_offset_y = 0;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
@@ -426,17 +438,21 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 19 */
-    tmp.name = "red shirt";
+    tmp.name = "red hoodie";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = 9;
+    tmp.grid_size_on_hp_y = 9;
     tmp.maxStack = 1;
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[50];
     tmp.sprite = g.bitmaps[51];
     tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
+    tmp.isContainer = true;
+    tmp.container_size_x = 2;
+    tmp.container_size_y = 4;
+    tmp.container_offset_x = -85;
+    tmp.container_offset_y = 220;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
@@ -446,17 +462,21 @@ void init_iteminfo(void) {
     g.item_info.push_back(tmp);
 
     /* 20 */
-    tmp.name = "blue pants";
+    tmp.name = "blue jeans";
     tmp.grid_size_x = 3;
     tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = 6;
+    tmp.grid_size_on_hp_y = 11;
     tmp.maxStack = 1;
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[52];
     tmp.sprite = g.bitmaps[53];
     tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
+    tmp.isContainer = true;
+    tmp.container_size_x = 2;
+    tmp.container_size_y = 2;
+    tmp.container_offset_x = -115;
+    tmp.container_offset_y = +150;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
@@ -469,6 +489,8 @@ void init_iteminfo(void) {
     tmp.name = "ski mask";
     tmp.grid_size_x = 2;
     tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = -1;
+    tmp.grid_size_on_hp_y = -1;
     tmp.maxStack = 1;
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[54];
@@ -477,6 +499,8 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
+    tmp.container_offset_x = 0;
+    tmp.container_offset_y = 0;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;

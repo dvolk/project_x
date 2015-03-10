@@ -246,6 +246,7 @@ struct Item {
     float get_weapon_damage(void);
     int get_weight(void);
     float get_warmth(void);
+    void getHpDims(float &x2, float &y2);
 };
 
 Item::Item(const Item& i) {
@@ -508,6 +509,7 @@ struct Grid {
     void Sort(bool (*comp)(Item *l, Item *r));
 
     void resetPos(void);
+    void resetPos(float sx, float sy);
     Item *grab_item(int x, int y); // get item at screen position
     void unstack_item(int x, int y); // unstack item at screen position
 
@@ -537,6 +539,12 @@ Grid::~Grid() {
 void Grid::resetPos(void) {
     pos.x2 = pos.x1 + grid_size_x * grid_px_x;
     pos.y2 = pos.y1 + grid_size_y * grid_px_y;
+}
+
+void Grid::resetPos(float off_x, float off_y) {
+    pos.x1 += off_x;
+    pos.y1 += off_y;
+    resetPos();
 }
 
 bool Grid::PlaceItemWantsStacking = true;
@@ -623,6 +631,20 @@ Item::Item(const char *item_name, int num_stack) {
 
 Item::Item(const char *item_name) {
     init_from_name(item_name);
+}
+
+// an item on a hardpoint may have a different size than
+// on a normal grid. e.g. clothing
+void Item::getHpDims(float &x2, float &y2) {
+    if(parent != NULL &&
+       parent->hpinfo != NULL &&
+       g.item_info[info_index].grid_size_on_hp_x != -1) {
+        x2 = g.item_info[info_index].grid_size_on_hp_x;
+        y2 = g.item_info[info_index].grid_size_on_hp_y;
+    } else {
+        x2 = pos.x2;
+        y2 = pos.y2;
+    }
 }
 
 int Item::index_from_name(const char *item_name) {
@@ -832,7 +854,10 @@ void Item::resetHardpointPos(void) {
     if(parent != NULL) {
         storage->pos.x1 = parent->pos.x1 + pos.x2 * Grid::grid_px_x + 10;
         storage->pos.y1 = parent->pos.y1;
-        storage->resetPos();
+
+        storage->resetPos(g.item_info[info_index].container_offset_x,
+                          g.item_info[info_index].container_offset_y);
+
         storage->gsb->reset();
     } else {
         info("WARNING: no item parent");
@@ -1269,11 +1294,11 @@ void init_locationdata(void) {
     tmp.add_loot("clean rag", 0.5);
     tmp.add_loot("water bottle", 0.2);
     tmp.add_loot("whiskey", 0.4);
-    tmp.add_loot("red shirt", 0.05);
+    tmp.add_loot("red hoodie", 0.05);
     tmp.add_loot("ski mask", 0.05);
     tmp.add_loot("right glove", 0.05);
     tmp.add_loot("left glove", 0.05);
-    tmp.add_loot("blue pants", 0.05);
+    tmp.add_loot("blue jeans", 0.05);
     g.location_info.push_back(tmp);
 
     tmp.loot_table.clear();
@@ -1287,7 +1312,7 @@ void init_locationdata(void) {
     tmp.reset_time = 20000;
     tmp.add_loot("clean rag", 0.5);
     tmp.add_loot("water bottle", 0.2);
-    tmp.add_loot("red shirt", 0.2);
+    tmp.add_loot("red hoodie", 0.2);
     tmp.add_loot("whiskey", 0.5);
     g.location_info.push_back(tmp);
     tmp.loot_table.clear();
@@ -1810,6 +1835,11 @@ struct GridSystem : public Widget {
 };
 
 GridSystem::GridSystem(void) {
+    pos.x1 = 100;
+    pos.y1 = 0;
+    pos.x2 = 1080;
+    pos.y2 = 720;
+
     auto_move_to_ground = false;
     auto_target = NULL;
     held = NULL;
@@ -2024,9 +2054,12 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     if(size_y * hex_step_y < g.display_y)
         r_off_y = (g.display_y - size_y * hex_step_y) / 4;
 
-    pos.x1 = r_off_x;
+    /*
+      TODO: I don't even
+    */
+    pos.x1 = max(100, r_off_x);
     pos.y1 = r_off_y;
-    pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x);
+    pos.x2 = min(g.display_x - 200, (int)pos.x1 + (size_x + 1) * hex_step_x);
     pos.y2 = min(g.display_y, (int)pos.y1 + (size_y + 1) * hex_step_y);
 
     max_t = size_x * size_y - 1;
@@ -2139,7 +2172,7 @@ void TileMap::mouseToTileXY(int &x, int &y) {
 int TileMap::mouseToTileN(void) {
     if(g.mouse_x < pos.x1 ||
        g.mouse_y < pos.y1 + 40 ||
-       g.mouse_x > pos.x2 - 81 ||
+       g.mouse_x > pos.x2 + 21 || // - 81 ||
        g.mouse_y > pos.y2 - 1) {
         return -1;
     }
@@ -2852,12 +2885,17 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
 void GridSystem::drawItemTooltip(void) {
     // draw item tooltips
     // this should probably work some other way
+    float sx;
+    float sy;
+
     for(auto& grid : grids) {
         for(auto& item : grid->items) {
+            item->getHpDims(sx, sy);
+
             if(item->parent->pos.x1 + item->pos.x1 * Grid::grid_px_x <= g.mouse_x &&
                item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= g.mouse_y &&
-               item->parent->pos.x1 + (item->pos.x1 + item->pos.x2) * Grid::grid_px_x >= g.mouse_x &&
-               item->parent->pos.y1 + (item->pos.y1 + item->pos.y2) * Grid::grid_px_y >= g.mouse_y) {
+               item->parent->pos.x1 + (item->pos.x1 + sx) * Grid::grid_px_x >= g.mouse_x &&
+               item->parent->pos.y1 + (item->pos.y1 + sy) * Grid::grid_px_y >= g.mouse_y) {
 
                 int weight = g.item_info[item->info_index].weight;
                 bool display_weight = weight > 0;
@@ -3043,10 +3081,8 @@ void GridSystem::gsMouseUpEvent() {
             in_bounds =
                 g.mouse_x - g.hold_off_x >= grid->pos.x1 &&
                 g.mouse_y - g.hold_off_y >= grid->pos.y1 &&
-                g.mouse_x - g.hold_off_x + Grid::grid_px_x * held->pos.x2
-                <= grid->pos.x2 + 8 &&
-                g.mouse_y - g.hold_off_y + Grid::grid_px_y * held->pos.y2
-                <= grid->pos.y2 + 8;
+                g.mouse_x - g.hold_off_x + Grid::grid_px_x * held->pos.x2 <= grid->pos.x2 + 17 &&
+                g.mouse_y - g.hold_off_y + Grid::grid_px_y * held->pos.y2 <= grid->pos.y2 + 17;
         }
         else {
             // hardpoint
@@ -3363,11 +3399,15 @@ void Grid::unstack_item(int x, int y) {
 
 Item *Grid::grab_item(int x, int y) {
     int c = 0;
+    float x2;
+    float y2;
     for (auto& i : items) {
+        i->getHpDims(x2, y2);
+
         if(i->parent->pos.x1 + i->pos.x1 * grid_px_x <= x &&
            i->parent->pos.y1 + i->pos.y1 * grid_px_y <= y &&
-           i->parent->pos.x1 + (i->pos.x1 + i->pos.x2) * grid_px_x >= x &&
-           i->parent->pos.y1 + (i->pos.y1 + i->pos.y2) * grid_px_y >= y) {
+           i->parent->pos.x1 + (i->pos.x1 + x2) * grid_px_x >= x &&
+           i->parent->pos.y1 + (i->pos.y1 + y2) * grid_px_y >= y) {
             Item *a = items[c];
             items.erase(items.begin() + c);
             return a;
@@ -3776,11 +3816,6 @@ void CraftingGridSystem::reset(void) {
 
     grids.push_back((*ground)[current_ground_page]);
     interaction_forbidden.push_back(results);
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
 
     countTotalItems();
     GridSystem::reset();
@@ -4229,11 +4264,6 @@ EncounterGridSystem::EncounterGridSystem() {
     grids.push_back(selected);
 
     auto_target = selected;
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
 }
 
 EncounterGridSystem::~EncounterGridSystem() {
@@ -4446,11 +4476,6 @@ ScavengeGridSystem::ScavengeGridSystem() {
     grids.push_back(selected);
 
     auto_target = selected;
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
 
     reset();
 }
@@ -4972,9 +4997,9 @@ VehicleUI::VehicleUI() {
     ground_prev_page->down = NULL;
     ground_prev_page->onMouseDown = VehiclePrevGroundPage;
 
-    widgets.push_back(gridsystem);
     addLogAndButtons();
     addIndicatorWidgets();
+    widgets.push_back(gridsystem);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -5000,9 +5025,9 @@ CampUI::CampUI() {
     ground_prev_page->down = NULL;
     ground_prev_page->onMouseDown = CampPrevGroundPage;
 
-    widgets.push_back(gridsystem);
     addLogAndButtons();
     addIndicatorWidgets();
+    widgets.push_back(gridsystem);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -5042,9 +5067,9 @@ ItemsUI::ItemsUI() {
     ground_prev_page->down = NULL;
     ground_prev_page->onMouseDown = InventoryPrevGroundPage;
 
-    widgets.push_back(gridsystem);
     addLogAndButtons();
     addIndicatorWidgets();
+    widgets.push_back(gridsystem);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -5070,9 +5095,9 @@ ConditionUI::ConditionUI() {
     ground_prev_page->down = NULL;
     ground_prev_page->onMouseDown = ConditionPrevGroundPage;
 
-    widgets.push_back(gridsystem);
     addLogAndButtons();
     addIndicatorWidgets();
+    widgets.push_back(gridsystem);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
 }
@@ -5139,11 +5164,6 @@ void SkillsGridSystem::reset(void) {
     grids.push_back(bad);
     interaction_forbidden.push_back(good);
     interaction_forbidden.push_back(bad);
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
 
     countTotalItems();
     GridSystem::reset();
@@ -5287,8 +5307,8 @@ vector<Grid *> *ground_at_character(Character *character) {
         ground_grid->PlaceItem(new Item("clean rag", 10));
         ground_grid->PlaceItem(new Item("clean rag", 10));
         ground_grid->PlaceItem(new Item ("water bottle"));
-        ground_grid->PlaceItem(new Item ("red shirt"));
-        ground_grid->PlaceItem(new Item ("blue pants"));
+        ground_grid->PlaceItem(new Item ("red hoodie"));
+        ground_grid->PlaceItem(new Item ("blue jeans"));
         ground_grid->PlaceItem(new Item ("ski mask"));
         ground_grid->PlaceItem(new Item ("right glove"));
         ground_grid->PlaceItem(new Item ("left glove"));
@@ -5315,11 +5335,6 @@ void VehicleGridSystem::reset(void) {
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
-
     countTotalItems();
     GridSystem::reset();
 }
@@ -5333,11 +5348,6 @@ void CampGridSystem::reset(void) {
     (*ground)[current_ground_page]->gsb_displayed = true;
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
 
     countTotalItems();
     GridSystem::reset();
@@ -5366,11 +5376,6 @@ void InventoryGridSystem::reset(void) {
     (*ground)[current_ground_page]->gsb_displayed = true;
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
-
-    pos.x1 = 100;
-    pos.y1 = 0;
-    pos.x2 = 1180;
-    pos.y2 = 720;
 
     countTotalItems();
     GridSystem::reset();
@@ -5401,11 +5406,6 @@ void ConditionGridSystem::reset(void) {
     (*ground)[current_ground_page]->gsb_displayed = true;
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
-
-    pos.x1 = 0;
-    pos.y1 = 0;
-    pos.x2 = 1280;
-    pos.y2 = 720;
 
     countTotalItems();
     GridSystem::reset();
@@ -5662,7 +5662,7 @@ void init_buttons(void) {
     // left
     g.button_MainMap->pos.x1 = 0;
     g.button_MainMap->pos.y1 = off_y + 1 * step;
-    g.button_MainMap->pos.x2 = 100;
+    g.button_MainMap->pos.x2 = 75;
     g.button_MainMap->pos.y2 = 45;
     g.button_MainMap->up = g.bitmaps[0];
     g.button_MainMap->down = g.bitmaps[1];
@@ -5670,7 +5670,7 @@ void init_buttons(void) {
 
     g.button_MiniMap->pos.x1 = 0;
     g.button_MiniMap->pos.y1 = off_y + 2 * step;
-    g.button_MiniMap->pos.x2 = 100;
+    g.button_MiniMap->pos.x2 = 75;
     g.button_MiniMap->pos.y2 = 45;
     g.button_MiniMap->up = g.bitmaps[2];
     g.button_MiniMap->down = g.bitmaps[3];
@@ -5678,7 +5678,7 @@ void init_buttons(void) {
 
     g.button_Skills->pos.x1 = 0;
     g.button_Skills->pos.y1 = off_y + 3 * step;
-    g.button_Skills->pos.x2 = 100;
+    g.button_Skills->pos.x2 = 75;
     g.button_Skills->pos.y2 = 45;
     g.button_Skills->up = g.bitmaps[4];
     g.button_Skills->down = g.bitmaps[5];
@@ -5686,7 +5686,7 @@ void init_buttons(void) {
 
     g.button_Crafting->pos.x1 = 0;
     g.button_Crafting->pos.y1 = off_y + 4 * step;
-    g.button_Crafting->pos.x2 = 100;
+    g.button_Crafting->pos.x2 = 75;
     g.button_Crafting->pos.y2 = 45;
     g.button_Crafting->up = g.bitmaps[6];
     g.button_Crafting->down = g.bitmaps[7];
@@ -5695,7 +5695,7 @@ void init_buttons(void) {
     // right
     g.button_Items->pos.x1 = 0;
     g.button_Items->pos.y1 = off_y + 5 * step;
-    g.button_Items->pos.x2 = 100;
+    g.button_Items->pos.x2 = 75;
     g.button_Items->pos.y2 = 45;
     g.button_Items->up = g.bitmaps[8];
     g.button_Items->down = g.bitmaps[9];
@@ -5703,7 +5703,7 @@ void init_buttons(void) {
 
     g.button_Condition->pos.x1 = 0;
     g.button_Condition->pos.y1 = off_y + 6 * step;
-    g.button_Condition->pos.x2 = 100;
+    g.button_Condition->pos.x2 = 75;
     g.button_Condition->pos.y2 = 45;
     g.button_Condition->up = g.bitmaps[10];
     g.button_Condition->down = g.bitmaps[11];
@@ -5711,7 +5711,7 @@ void init_buttons(void) {
 
     g.button_Camp->pos.x1 = 0;
     g.button_Camp->pos.y1 = off_y + 7 * step;
-    g.button_Camp->pos.x2 = 100;
+    g.button_Camp->pos.x2 = 75;
     g.button_Camp->pos.y2 = 45;
     g.button_Camp->up = g.bitmaps[12];
     g.button_Camp->down = g.bitmaps[13];
@@ -5719,7 +5719,7 @@ void init_buttons(void) {
 
     g.button_Vehicle->pos.x1 = 0;
     g.button_Vehicle->pos.y1 = off_y + 8 * step;
-    g.button_Vehicle->pos.x2 = 100;
+    g.button_Vehicle->pos.x2 = 75;
     g.button_Vehicle->pos.y2 = 45;
     g.button_Vehicle->up = g.bitmaps[14];
     g.button_Vehicle->down = g.bitmaps[15];
