@@ -347,6 +347,7 @@ struct HardpointInfo {
         sprite = NULL;
         medical = false;
         visible = true;
+        pleaseRotateIt = false;
     }
 };
 
