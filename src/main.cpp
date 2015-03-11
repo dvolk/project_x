@@ -997,6 +997,7 @@ struct Character {
     void wait(void);
 
     bool useWeapon(void);
+    void abuseItem(Item *item, float dt);
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
     bool weaponUsesAmmo(void);
@@ -1500,24 +1501,58 @@ void Character::do_AI(void) {
     post_update();
 }
 
+vector<Grid *> *ground_at_character(Character *character);
+
+// decrease item's condition and destroy it if its condition is too low
+void Character::abuseItem(Item *item, float amount) {
+    if(item->condition < -0.5)
+        // some items like the fist can't be damaged
+        return;
+
+    item->condition -= amount;
+
+    if(item->condition < 0.01) {
+        cout << name << " destroyed " << item->getName() << " at " << n << endl;
+        // items is destroyed
+        if(this == g.map->player) {
+            // add message if character is player
+            char buf[70];
+            sprintf(buf, "Your %s is destroyed!", item->getName());
+            g.AddMessage(buf);
+        }
+        if(item->storage != NULL) {
+            // dump the contained items on the ground
+            while(item->storage->items.empty() != true) {
+                Item *moved = item->storage->items.front();
+                item->storage->RemoveItem(moved);
+                PlaceItemOnMultiGrid(ground_at_character(this), moved);
+            }
+        }
+
+        if(item->parent == NULL) {
+            /*
+              TODO: wtf?
+             */
+            cout << name << "'s " << item->getName() << " has NULL parent" << endl;
+
+            delete item;
+            return;
+        }
+
+        assert(item->parent != NULL);
+        item->parent->RemoveItem(item);
+
+        delete item;
+    }
+}
+
 bool Character::useWeapon(void) {
     if(consumeWeaponAmmo() == false)
         return false;
 
     Item *w = getSelectedWeapon();
+    abuseItem(w, 0.00777);
 
-    w->condition -= 0.0078278;
-
-    if(w->condition < 0.01) {
-        if(this == g.map->player) {
-            char buf[50];
-            sprintf(buf, "Your %s is destroyed!", w->getName());
-            g.AddMessage(buf);
-        }
-        assert(w->parent);
-        w->parent->RemoveItem(w);
-        delete w;
-    }
     return true;
 }
 
@@ -1589,6 +1624,18 @@ void Character::update(void) {
     // decrease satiety by 2% per 1000 time units
     float satietyChange = 0.02 * 0.001 * dt;
     satiety = max((float)0.0, satiety - satietyChange);
+
+    if(activity == ACTIVITY_MOVE) {
+        /*
+          TODO: decrease condition of items that the player is carrying
+          on inventory hardpoints
+        */
+        for(auto& hp : inventory_hardpoints) {
+            for(auto& item : hp->items) {
+                abuseItem(item, dt * 0.01 * 0.001);
+            }
+        }
+    }
 
     dt = 0;
     activity = ACTIVITY_NONE;
@@ -1676,7 +1723,6 @@ void Character::die(void) {
     g.map->removeCharacter(this);
 }
 
-vector<Grid *> *ground_at_character(Character *character);
 void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
 
 void Character::drop_all_items(void) {
@@ -1771,13 +1817,13 @@ void TimeDisplay::draw(void) {
     calculate_tod();
 
     if(tod > 0 && tod <= 6000)
-        al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, "It's morning.");
+        al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, "Morning");
     else if(tod > 6000 && tod <= 12000)
-        al_draw_text(g.font, g.color_white, pos.x1, pos.y1, 0, "It's midday.");
+        al_draw_text(g.font, g.color_white, pos.x1, pos.y1, 0, "Midday");
     else if(tod > 12000 && tod <= 18000)
-        al_draw_text(g.font, g.color_grey2, pos.x1, pos.y1, 0, "It's the afternoon.");
+        al_draw_text(g.font, g.color_grey2, pos.x1, pos.y1, 0, "Afternoon");
     else if(tod > 18000 && tod <= 24000)
-        al_draw_text(g.font, g.color_grey3, pos.x1, pos.y1, 0, "It's nighttime.");
+        al_draw_text(g.font, g.color_grey3, pos.x1, pos.y1, 0, "Nighttime");
 }
 
 struct GridSystem : public Widget {
@@ -4462,7 +4508,7 @@ void ScavengeUI::draw(void) {
     }
 
     UI::draw();
-};
+}
 
 void ScavengeUI::reset(void) {
     current_stage = 0;
