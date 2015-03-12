@@ -42,6 +42,7 @@ struct ItemInfo {
     bool isSkill;
     bool isLocation;
     bool isLiquid;
+    bool isEncounterAction;
     // can the item be damaged. Some items can't be damaged, those
     // are already treated as undamagable. This is for items that don't
     // meet those conditions.
@@ -80,6 +81,7 @@ void init_iteminfo(void) {
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isLocation = false;
+    tmp.isEncounterAction = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.container_offset_x = 0;
@@ -206,6 +208,7 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.isSkill = false;
@@ -225,6 +228,7 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.isSkill = false;
@@ -244,6 +248,7 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isEncounterAction = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.isSkill = false;
@@ -621,6 +626,7 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.isSkill = false;
@@ -640,6 +646,7 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isVehicle = false;
     tmp.isContainer = false;
+    tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.isSkill = false;
@@ -662,6 +669,7 @@ void init_iteminfo(void) {
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
     tmp.isSkill = false;
+    tmp.isEncounterAction = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;

@@ -650,7 +650,8 @@ void Item::init(int info_index) {
     if(g.item_info[info_index].canBeDamaged == false ||
        g.item_info[info_index].maxStack != 1 ||
        g.item_info[info_index].isSkill == true ||
-       g.item_info[info_index].isLocation == true) {
+       g.item_info[info_index].isLocation == true ||
+       g.item_info[info_index].isEncounterAction == true) {
         // skills, locations and stackable items don't have condition
         this->condition = -1.0;
     }
