@@ -198,21 +198,16 @@ struct Item {
     Rect pos;
     // index into g.item_info, which contains
     // information that's common to the item
-    int8_t info_index;
+    int16_t info_index;
     // items can stack onto one item
-    int cur_stack;
+    int16_t cur_stack;
     // items can be rotated
     bool rotated;
     // items can have their own storage space e.g.
     // a backpack. NULL if they don't
     Grid *storage;
-    // the grid that the item belongs to. set to NULL
-    // when the item is held by the player
+    // the grid that the item belongs to.
     Grid *parent;
-    // when the item is held, this is set to the parent
-    // so that the item can be returned if it can't
-    // be placed
-    Grid *old_parent;
     // item's condition. Once it goes negative the item should be
     // destroyed. Item conditions should be decreased a bit on
     // each turn, and seperately when the item is used, so all items
@@ -221,17 +216,18 @@ struct Item {
     float condition;
 
     Item(const Item& i);
-    Item(int info_index);
+    Item(int16_t info_index);
     Item(const char *item_name);
-    Item(const char *item_name, int num_stack);
+    Item(const char *item_name, int16_t num_stack);
     ~Item();
 
-    void init(int info_index);
+    void init(int16_t info_index);
     void init_from_name(const char *name);
     static int index_from_name(const char *name);
     void resetHardpointPos(void);
 
     void draw(void);
+    void drawHeld(void);
     void rotate(void);
 
     ALLEGRO_BITMAP *get_sprite();
@@ -259,7 +255,6 @@ Item::Item(const Item& i) {
     this->cur_stack = i.cur_stack;
     this->info_index = i.info_index;
     this->parent = i.parent;
-    this->old_parent = i.old_parent;
     this->storage = i.storage;
     this->rotated = i.rotated;
     this->condition = i.condition;
@@ -344,7 +339,7 @@ struct MessageLog : public Widget {
 
 struct GridInfo {
     ALLEGRO_BITMAP *sprite;
-    int maxItems;
+    int16_t maxItems;
     bool noGrid;
     bool canHoldLiquid;
     bool vehiclepoint;
@@ -379,7 +374,6 @@ void init_hardpointinfo(void) {
     g.right_foot = new GridInfo;
     g.left_foot = new GridInfo;
     g.vehicle = new GridInfo;
-    g.encounter_selected = new GridInfo;
     g.medical_upper_torso = new GridInfo;
     g.medical_lower_torso = new GridInfo;
     g.medical_left_upper_leg = new GridInfo;
@@ -393,6 +387,8 @@ void init_hardpointinfo(void) {
 
     g.bottle = new GridInfo;
     g.ground = new GridInfo;
+
+    g.encounter_selected = new GridInfo;
 
     g.bottle->canHoldLiquid = true;
     g.bottle->noGrid = false;
@@ -619,13 +615,12 @@ void Grid::Sort(bool (*comp)(Item *l, Item *r)) {
     assert((int)items.size() == num_items);
 }
 
-void Item::init(int info_index) {
+void Item::init(int16_t info_index) {
     pos.x1 = 0;
     pos.y1 = 0;
     pos.x2 = g.item_info[info_index].grid_size_x;
     pos.y2 = g.item_info[info_index].grid_size_y;
     parent = NULL;
-    old_parent = NULL;
     cur_stack = 1;
     storage = NULL;
     this->rotated = false;
@@ -657,11 +652,11 @@ void Item::init(int info_index) {
     }
 }
 
-Item::Item(int info_index) {
+Item::Item(int16_t info_index) {
     init(info_index);
 }
 
-Item::Item(const char *item_name, int num_stack) {
+Item::Item(const char *item_name, int16_t num_stack) {
     init_from_name(item_name);
     this->cur_stack = num_stack;
 }
@@ -716,7 +711,6 @@ int Item::get_weight(void) {
 }
 
 void Grid::AddItem(Item *item) {
-    item->old_parent = item->parent;
     item->parent = this;
     items.push_back(item);
 }
@@ -817,7 +811,7 @@ Item *Grid::PlaceItem(Item *to_place) {
                 return NULL;
             } else {
                 // otherwise we still have some number of them to place
-                int moved = g.item_info[to_place->info_index].maxStack - merge_with->cur_stack;
+                int16_t moved = g.item_info[to_place->info_index].maxStack - merge_with->cur_stack;
                 merge_with->cur_stack += moved;
                 to_place->cur_stack -= moved;
                 // recursively place the rest
@@ -1050,7 +1044,7 @@ struct Character {
     bool weaponUsesAmmo(void);
     bool hasAmmoForWeapon(void);
     bool consumeWeaponAmmo(void);
-    int8_t countWeaponAmmo(void);
+    int16_t countWeaponAmmo(void);
 
     void recomputeCarryWeight(void);
     void recomputeWarmth(void);
@@ -1063,7 +1057,7 @@ bool Character::weaponUsesAmmo(void) {
     return getSelectedWeapon()->getItemSlot() == WEAPON_BOW;
 }
 
-int8_t Character::countWeaponAmmo(void) {
+int16_t Character::countWeaponAmmo(void) {
     return getSelectedWeapon()->storage->items.front()->cur_stack;
 }
 
@@ -1369,7 +1363,7 @@ void init_locationdata(void) {
 
 // a location on the
 struct Location {
-    int8_t info_index; // index into LocationInfo
+    int16_t info_index; // index into LocationInfo
     int last_looted;
 
     int getResetTime(void);
@@ -2008,6 +2002,8 @@ void GridSystem::MouseAutoMoveItemToGround() {
     assert(from != NULL);
 
     PlaceItemOnMultiGrid(ground, item);
+    if(item->storage != NULL)
+        item->storage->gsb_displayed = false;
     reset();
 }
 
@@ -2032,18 +2028,26 @@ void GridSystem::MouseAutoMoveItemToTarget() {
     assert(item != NULL);
     assert(from != NULL);
 
-    if(auto_target->info != NULL && auto_target->info->noGrid == true) {
-        // if we're auto-moving to a hard point
-        if((int)auto_target->items.size() >= auto_target->info->maxItems) {
-            // and there's no space
-            Item *prev = auto_target->items.front();
-            assert(prev->old_parent);
-            // then replace the item that's already there.
-            prev->old_parent->PlaceItem(prev);
-            auto_target->RemoveItem(prev);
-        }
+    // if(auto_target->info != NULL && auto_target->info->noGrid == true) {
+    //     // if we're auto-moving to a hard point
+    //     if((int)auto_target->items.size() >= auto_target->info->maxItems) {
+
+    //         // and there's no space
+    //         Item *prev = auto_target->items.front();
+    //         assert(prev->old_parent);
+    //         // then replace the item that's already there.
+    //         prev->parent->PlaceItem(prev);
+    //         auto_target->RemoveItem(prev);
+    //     }
+    // }
+    if(auto_target->PlaceItem(item) != NULL) {
+        assert(item->parent != NULL);
+        item->parent->AddItem(item);
+        return;
     }
-    auto_target->PlaceItem(item);
+
+    if(item->storage != NULL)
+        item->storage->gsb_displayed = false;
     reset();
 }
 
@@ -3022,7 +3026,6 @@ void GridSystem::drawItemTooltip(void) {
 
                 // if the item has a grid, draw it under the text
                 if(item->storage != NULL &&
-                   held == NULL &&
                    (item->parent->info == NULL ||
                     item->parent->info->noGrid == false))
                     // ^^ unless it's on a hardpoint
@@ -3040,7 +3043,7 @@ void GridSystem::draw(void) {
     }
 
     if(held != NULL)
-        held->draw();
+        held->drawHeld();
     else {
         drawItemTooltip();
     }
@@ -3115,8 +3118,6 @@ void GridSystem::GrabItem() {
         g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
     g.hold_off_y =
         g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * Grid::grid_px_y);
-    held->old_parent = held->parent;
-    held->parent = NULL;
 
     if(held->storage != NULL) {
         // if this item was on a hardpoint, we need to remove
@@ -3298,7 +3299,6 @@ void GridSystem::gsMouseUpEvent() {
             // we've found the grid and there's nothing blocking
             // the placement there, so drop it
             held->parent = grid;
-            held->old_parent = NULL;
             held->pos.x1 = drop_x;
             held->pos.y1 = drop_y;
             grid->items.push_back(held);
@@ -3324,8 +3324,7 @@ void GridSystem::gsMouseUpEvent() {
         // rotate back to original orientation
         held->rotate();
     }
-    held->parent = held->old_parent;
-    held->old_parent->items.push_back(held);
+    held->parent->items.push_back(held);
 
     addStorageGrid();
 
@@ -3352,7 +3351,7 @@ void GridSystem::gsMouseUpEvent() {
         return;
     } else {
         // otherwise we still have some number of them to place
-        int moved = g.item_info[held->info_index].maxStack - merge_with->cur_stack;
+        int16_t moved = g.item_info[held->info_index].maxStack - merge_with->cur_stack;
         merge_with->cur_stack += moved;
         held->cur_stack -= moved;
         // place the rest
@@ -3406,51 +3405,20 @@ void Item::draw(void) {
     ALLEGRO_BITMAP *sprite = g.item_info[info_index].sprite;
     ALLEGRO_BITMAP *sprite_on_hp = g.item_info[info_index].sprite_on_hp;
 
-    if(parent != NULL) {
-        // we're on a grid
-        int x1 = parent->pos.x1 + pos.x1 * Grid::grid_px_x;
-        int y1 = parent->pos.y1 + pos.y1 * Grid::grid_px_y;
-        int x2 = parent->pos.x1 + (pos.x1 + pos.x2) * Grid::grid_px_x;
-        int y2 = parent->pos.y1 + (pos.y1 + pos.y2) * Grid::grid_px_y;
+    // we're on a grid
+    float x1 = parent->pos.x1 + pos.x1 * Grid::grid_px_x;
+    float y1 = parent->pos.y1 + pos.y1 * Grid::grid_px_y;
+    float x2 = parent->pos.x1 + (pos.x1 + pos.x2) * Grid::grid_px_x;
+    float y2 = parent->pos.y1 + (pos.y1 + pos.y2) * Grid::grid_px_y;
 
-        if(sprite == NULL) {
-            al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
-            al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
-        }
-        else {
-            if(parent->info != NULL && parent->info->noGrid == true && sprite_on_hp != NULL) {
-                al_draw_bitmap(sprite_on_hp, x1, y1, 0);
-            } else {
-                if(rotated == true) {
-                    float h = al_get_bitmap_height(sprite);
-                    al_draw_rotated_bitmap(sprite, 0, 0, x1+h, y1, ALLEGRO_PI / 2, 0);
-                } else {
-                    al_draw_bitmap(sprite, x1, y1, 0);
-                }
-            }
-        }
-
-        if(cur_stack > 1) {
-            // draw number of stacked items
-            char buf[4];
-            sprintf(buf, "%d", cur_stack);
-            if(cur_stack > 9)
-                al_draw_text(g.font, g.color_black, x2 - 17, y2 - 9, 0, buf);
-            else
-                al_draw_text(g.font, g.color_black, x2 - 9, y2 - 9, 0, buf);
-        }
-    } else {
-        // we're held by the mouse
-        int x1 = g.mouse_x - g.hold_off_x;
-        int y1 = g.mouse_y - g.hold_off_y;
-        int x2 = g.mouse_x - g.hold_off_x + pos.x2 * 16;
-        int y2 = g.mouse_y - g.hold_off_y + pos.y2 * 16;
-
-        if(sprite == NULL) {
-            al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
-            al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
-        }
-        else {
+    if(sprite == NULL) {
+        al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
+        al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
+    }
+    else {
+        if(parent->info != NULL && parent->info->noGrid == true && sprite_on_hp != NULL) {
+            al_draw_bitmap(sprite_on_hp, x1, y1, 0);
+        } else {
             if(rotated == true) {
                 float h = al_get_bitmap_height(sprite);
                 al_draw_rotated_bitmap(sprite, 0, 0, x1+h, y1, ALLEGRO_PI / 2, 0);
@@ -3459,7 +3427,41 @@ void Item::draw(void) {
             }
         }
     }
+
+    if(cur_stack > 1) {
+        // draw number of stacked items
+        char buf[4];
+        sprintf(buf, "%d", cur_stack);
+        if(cur_stack > 9)
+            al_draw_text(g.font, g.color_black, x2 - 17, y2 - 9, 0, buf);
+        else
+            al_draw_text(g.font, g.color_black, x2 - 9, y2 - 9, 0, buf);
+    }
 }
+
+void Item::drawHeld(void) {
+    ALLEGRO_BITMAP *sprite = get_sprite();
+
+    // we're held by the mouse
+    float x1 = g.mouse_x - g.hold_off_x;
+    float y1 = g.mouse_y - g.hold_off_y;
+
+    if(sprite == NULL) {
+        float x2 = g.mouse_x - g.hold_off_x + pos.x2 * 16;
+        float y2 = g.mouse_y - g.hold_off_y + pos.y2 * 16;
+        al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
+        al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
+    }
+    else {
+        if(rotated == true) {
+            float h = al_get_bitmap_height(sprite);
+            al_draw_rotated_bitmap(sprite, 0, 0, x1+h, y1, ALLEGRO_PI / 2, 0);
+        } else {
+            al_draw_bitmap(sprite, x1, y1, 0);
+        }
+    }
+}
+
 /*
   valgrind reports a loss here
 */
@@ -3711,11 +3713,11 @@ vector<Recipe *> find_craftable_recipe(Grid *ingredients) {
     return ret;
 }
 
-void remove_amount_from_grid(Grid *ingredients, int index, int amount) {
+void remove_amount_from_grid(Grid *ingredients, int index, int16_t amount) {
     // remove items' stack size
     for(auto& item : ingredients->items) {
         if(item->info_index == index) {
-            int removed = min(amount, item->cur_stack);
+            int16_t removed = min(amount, item->cur_stack);
             item->cur_stack -= removed;
             amount -= removed;
             if(amount == 0) {
@@ -4910,7 +4912,7 @@ void ConditionGridSystem::draw(void) {
     // GridSystem::draw();
 
     if(held != NULL)
-        held->draw();
+        held->drawHeld();
     else {
         drawItemTooltip();
     }

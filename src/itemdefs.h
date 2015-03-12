@@ -34,7 +34,7 @@ struct ItemInfo {
 
     // how many items can be stacked on top of each other. Stacked items
     // are one item
-    int maxStack;
+    int16_t maxStack;
     int weight; // [g]
 
     bool isVehicle;
