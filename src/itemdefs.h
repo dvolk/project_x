@@ -25,13 +25,15 @@ struct ItemInfo {
     // the size when deployed on a hardpoint
     int grid_size_on_hp_x;
     int grid_size_on_hp_y;
-
+    // the size of the container attached to the item
     int container_size_x;
     int container_size_y;
-
+    // where to offset the item's container in the inventory display
     float container_offset_x;
     float container_offset_y;
 
+    // how many items can be stacked on top of each other. Stacked items
+    // are one item
     int maxStack;
     int weight; // [g]
 
@@ -39,19 +41,28 @@ struct ItemInfo {
     bool isContainer;
     bool isSkill;
     bool isLocation;
+    // can the item be damaged. Some items can't be damaged, those
+    // are already treated as undamagable. This is for items that don't
+    // meet those conditions.
+    bool canBeDamaged;
+    // is the container something that can hold liquids?
+    bool canHoldLiquid;
     // can it be applied to a body part (i.e. bandages and disinfectants)?
     bool apply_to_body;
     // when applied to a body part, is it consumed (i.e. disinfectants)?
     bool consumed_on_application;
     // when used, is it consumed (i.e. food, water, medicine)?
     bool consumed_on_use;
-
+    // how much warmth this item gives when equipped on a hardpoint
     float warmth;
-
+    // weapon damage [0,1]
     float weapon_damage;
+    // weapon range [0-]
     int weapon_range;
 
+    // sprite when item is on a normal grid
     ALLEGRO_BITMAP *sprite;
+    // sprite when items is on a hardpoint
     ALLEGRO_BITMAP *sprite_on_hp;
 };
 
@@ -77,6 +88,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.canBeDamaged = true;
     tmp.slot = SLOT_NONE;
     tmp.warmth = 0;
     tmp.weapon_damage = 0.001;
@@ -244,7 +256,7 @@ void init_iteminfo(void) {
 
     /* 09 */
     tmp.name = "arrow";
-    tmp.grid_size_x = 6;
+    tmp.grid_size_x = 10;
     tmp.grid_size_y = 1;
     tmp.maxStack = 5;
     tmp.weight = 75;
@@ -645,13 +657,14 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.canBeDamaged = false;
     tmp.slot = SLOT_NONE;
     tmp.warmth = 0.1;
     tmp.weapon_damage = 0.1;
     tmp.weapon_range = 1;
     g.item_info.push_back(tmp);
 
-    /* 28 */
+    /* 29 */
     tmp.name = "makeshift wood bow";
     tmp.grid_size_x = 14;
     tmp.grid_size_y = 3;
@@ -661,12 +674,13 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[84];
     tmp.isVehicle = false;
     tmp.isContainer = true;
-    tmp.container_size_x = 6;
+    tmp.container_size_x = 10;
     tmp.container_size_y = 1;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.canBeDamaged = true;
     tmp.slot = WEAPON_BOW;
     tmp.warmth = 0.0;
     tmp.weapon_damage = 0.2;

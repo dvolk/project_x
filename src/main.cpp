@@ -613,7 +613,8 @@ void Item::init(int info_index) {
     uniform_real_distribution<> cond_dist(0.02,1);
     this->condition = cond_dist(*g.rng);
 
-    if(g.item_info[info_index].maxStack != 1 ||
+    if(g.item_info[info_index].canBeDamaged == false ||
+       g.item_info[info_index].maxStack != 1 ||
        g.item_info[info_index].isSkill == true ||
        g.item_info[info_index].isLocation == true) {
         // skills, locations and stackable items don't have condition
@@ -4377,6 +4378,9 @@ void EncounterUI::setup(void) {
 }
 
 void EncounterUI::draw(void) {
+    // g.map->draw();
+    // al_draw_filled_rectangle(off_x + 95, 0, off_x + 995, 500, g.color_grey);
+
     al_draw_filled_rectangle(off_x + 105, 25, off_x + 405, 295, g.color_grey2);
     al_draw_filled_rectangle(off_x + 410, 25, off_x + 680, 295, g.color_grey2);
     al_draw_filled_rectangle(off_x + 685, 25, off_x + 985, 295, g.color_grey2);
@@ -5675,6 +5679,8 @@ void load_bitmaps(void) {
     /* 82 */ filenames.push_back("media/items/hand_combat.png");
     /* 83 */ filenames.push_back("media/characters/unknown.png");
     /* 84 */ filenames.push_back("media/items/makeshift_wood_bow.png");
+    // /* 85 */ filenames.push_back("media/tile/crackedground.png");
+    // /* 86 */ filenames.push_back("media/tile/hill.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -5944,6 +5950,22 @@ void init_tilemap(int sx, int sy) {
     i.has_locations = true;
     i.name = "Swamp";
     g.map->tile_info.push_back(i);
+    // // crackedground
+    // i.minimap_color = al_map_rgb(0, 0, 200);
+    // i.sprite = g.bitmaps[85];
+    // i.blocks_los = false;
+    // i.blocks_movement = false;
+    // i.has_locations = true;
+    // i.name = "Cracked ground";
+    // g.map->tile_info.push_back(i);
+    // // Hill
+    // i.minimap_color = al_map_rgb(0, 0, 200);
+    // i.sprite = g.bitmaps[86];
+    // i.blocks_los = false;
+    // i.blocks_movement = false;
+    // i.has_locations = true;
+    // i.name = "Hill";
+    // g.map->tile_info.push_back(i);
 
     g.map->generate();
 }
