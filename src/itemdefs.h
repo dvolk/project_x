@@ -41,12 +41,11 @@ struct ItemInfo {
     bool isContainer;
     bool isSkill;
     bool isLocation;
+    bool isLiquid;
     // can the item be damaged. Some items can't be damaged, those
     // are already treated as undamagable. This is for items that don't
     // meet those conditions.
     bool canBeDamaged;
-    // is the container something that can hold liquids?
-    bool canHoldLiquid;
     // can it be applied to a body part (i.e. bandages and disinfectants)?
     bool apply_to_body;
     // when applied to a body part, is it consumed (i.e. disinfectants)?
@@ -77,6 +76,7 @@ void init_iteminfo(void) {
     tmp.maxStack = 1;
     tmp.sprite = NULL;
     tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isLocation = false;
@@ -359,6 +359,7 @@ void init_iteminfo(void) {
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[40];
     tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = true;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -378,6 +379,7 @@ void init_iteminfo(void) {
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[41];
     tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -563,12 +565,15 @@ void init_iteminfo(void) {
 
     /* 24 */
     tmp.name = "right shoe";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = 3;
+    tmp.grid_size_on_hp_y = 3;
     tmp.maxStack = 1;
     tmp.weight = 500;
     tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[58];
+    tmp.sprite = g.bitmaps[85];
+    tmp.sprite_on_hp = g.bitmaps[58];
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
@@ -584,12 +589,15 @@ void init_iteminfo(void) {
 
     /* 25 */
     tmp.name = "left shoe";
-    tmp.grid_size_x = 3;
-    tmp.grid_size_y = 3;
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = 3;
+    tmp.grid_size_on_hp_y = 3;
     tmp.maxStack = 1;
     tmp.weight = 500;
     tmp.sprite_on_hp = NULL;
-    tmp.sprite = g.bitmaps[59];
+    tmp.sprite = g.bitmaps[86];
+    tmp.sprite_on_hp = g.bitmaps[59];
     tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;

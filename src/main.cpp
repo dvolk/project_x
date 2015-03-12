@@ -41,7 +41,7 @@ struct SkillsUI;
 struct ConditionUI;
 struct CampUI;
 struct ScavengeUI;
-struct HardpointInfo;
+struct GridInfo;
 struct ItemInfo;
 struct LocationInfo;
 struct Item;
@@ -90,35 +90,39 @@ struct Game {
     vector<LocationInfo> location_info;
 
     // Items UI
-    HardpointInfo *right_hand_hold;
-    HardpointInfo *left_hand_hold;
-    HardpointInfo *right_hand;
-    HardpointInfo *left_hand;
-    HardpointInfo *back;
-    HardpointInfo *head;
-    HardpointInfo *neck;
-    HardpointInfo *right_shoulder;
-    HardpointInfo *left_shoulder;
-    HardpointInfo *torso;
-    HardpointInfo *legs;
-    HardpointInfo *right_foot;
-    HardpointInfo *left_foot;
-    HardpointInfo *vehicle;
+    GridInfo *right_hand_hold;
+    GridInfo *left_hand_hold;
+    GridInfo *right_hand;
+    GridInfo *left_hand;
+    GridInfo *back;
+    GridInfo *head;
+    GridInfo *neck;
+    GridInfo *right_shoulder;
+    GridInfo *left_shoulder;
+    GridInfo *torso;
+    GridInfo *legs;
+    GridInfo *right_foot;
+    GridInfo *left_foot;
+    GridInfo *vehicle;
 
     // encounter UI
-    HardpointInfo *encounter_selected;
+    GridInfo *encounter_selected;
 
     // condition UI
-    HardpointInfo *medical_upper_torso;
-    HardpointInfo *medical_lower_torso;
-    HardpointInfo *medical_left_upper_leg;
-    HardpointInfo *medical_right_upper_leg;
-    HardpointInfo *medical_left_lower_leg;
-    HardpointInfo *medical_right_lower_leg;
-    HardpointInfo *medical_left_upper_arm;
-    HardpointInfo *medical_right_upper_arm;
-    HardpointInfo *medical_left_lower_arm;
-    HardpointInfo *medical_right_lower_arm;
+    GridInfo *medical_upper_torso;
+    GridInfo *medical_lower_torso;
+    GridInfo *medical_left_upper_leg;
+    GridInfo *medical_right_upper_leg;
+    GridInfo *medical_left_lower_leg;
+    GridInfo *medical_right_lower_leg;
+    GridInfo *medical_left_upper_arm;
+    GridInfo *medical_right_upper_arm;
+    GridInfo *medical_left_lower_arm;
+    GridInfo *medical_right_lower_arm;
+
+    GridInfo *default_info;
+    GridInfo *ground;
+    GridInfo *bottle;
 
     BarIndicator *health_indicator;
     BarIndicator *pain_indicator;
@@ -241,6 +245,7 @@ struct Item {
     bool isConsumedOnApplication(void);
     bool isUsable(void);
     bool isConsumedOnUse(void);
+    bool isLiquid(void);
 
     int get_weapon_range(void);
     float get_weapon_damage(void);
@@ -258,6 +263,10 @@ Item::Item(const Item& i) {
     this->storage = i.storage;
     this->rotated = i.rotated;
     this->condition = i.condition;
+}
+
+bool Item::isLiquid(void) {
+    return g.item_info[info_index].isLiquid;
 }
 
 ALLEGRO_BITMAP *Item::get_sprite() {
@@ -333,17 +342,21 @@ struct MessageLog : public Widget {
     void draw(void);
 };
 
-struct HardpointInfo {
+struct GridInfo {
     ALLEGRO_BITMAP *sprite;
     int maxItems;
+    bool noGrid;
+    bool canHoldLiquid;
     bool vehiclepoint;
     bool medical;
     bool visible;
     bool pleaseRotateIt;
 
-    HardpointInfo() {
+    GridInfo() {
         vehiclepoint = false;
         maxItems = 1;
+        noGrid = true;
+        canHoldLiquid = false;
         sprite = NULL;
         medical = false;
         visible = true;
@@ -352,31 +365,42 @@ struct HardpointInfo {
 };
 
 void init_hardpointinfo(void) {
-    g.right_hand_hold = new HardpointInfo;
-    g.left_hand_hold = new HardpointInfo;
-    g.right_hand = new HardpointInfo;
-    g.left_hand = new HardpointInfo;
-    g.back = new HardpointInfo;
-    g.head = new HardpointInfo;
-    g.neck = new HardpointInfo;
-    g.right_shoulder = new HardpointInfo;
-    g.left_shoulder = new HardpointInfo;
-    g.torso = new HardpointInfo;
-    g.legs = new HardpointInfo;
-    g.right_foot = new HardpointInfo;
-    g.left_foot = new HardpointInfo;
-    g.vehicle = new HardpointInfo;
-    g.encounter_selected = new HardpointInfo;
-    g.medical_upper_torso = new HardpointInfo;
-    g.medical_lower_torso = new HardpointInfo;
-    g.medical_left_upper_leg = new HardpointInfo;
-    g.medical_right_upper_leg = new HardpointInfo;
-    g.medical_left_lower_leg = new HardpointInfo;
-    g.medical_right_lower_leg = new HardpointInfo;
-    g.medical_left_upper_arm = new HardpointInfo;
-    g.medical_right_upper_arm = new HardpointInfo;
-    g.medical_left_lower_arm = new HardpointInfo;
-    g.medical_right_lower_arm = new HardpointInfo;
+    g.right_hand_hold = new GridInfo;
+    g.left_hand_hold = new GridInfo;
+    g.right_hand = new GridInfo;
+    g.left_hand = new GridInfo;
+    g.back = new GridInfo;
+    g.head = new GridInfo;
+    g.neck = new GridInfo;
+    g.right_shoulder = new GridInfo;
+    g.left_shoulder = new GridInfo;
+    g.torso = new GridInfo;
+    g.legs = new GridInfo;
+    g.right_foot = new GridInfo;
+    g.left_foot = new GridInfo;
+    g.vehicle = new GridInfo;
+    g.encounter_selected = new GridInfo;
+    g.medical_upper_torso = new GridInfo;
+    g.medical_lower_torso = new GridInfo;
+    g.medical_left_upper_leg = new GridInfo;
+    g.medical_right_upper_leg = new GridInfo;
+    g.medical_left_lower_leg = new GridInfo;
+    g.medical_right_lower_leg = new GridInfo;
+    g.medical_left_upper_arm = new GridInfo;
+    g.medical_right_upper_arm = new GridInfo;
+    g.medical_left_lower_arm = new GridInfo;
+    g.medical_right_lower_arm = new GridInfo;
+
+    g.bottle = new GridInfo;
+    g.ground = new GridInfo;
+
+    g.bottle->canHoldLiquid = true;
+    g.bottle->noGrid = false;
+    g.ground->canHoldLiquid = true;
+    g.ground->noGrid = false;
+
+    g.default_info = NULL;
+    //    g.default_info->noGrid = false;
 
     g.medical_upper_torso->medical = true;
     g.medical_lower_torso->medical = true;
@@ -489,7 +513,7 @@ struct Grid {
 
     vector<Item *> items;
 
-    HardpointInfo *hpinfo;
+    GridInfo *info;
 
     // seems like these could be part of InventoryGridSystem, etc
     GridSortButton *gsb;
@@ -497,7 +521,7 @@ struct Grid {
 
     static bool PlaceItemWantsStacking;
 
-    Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h);
+    Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h);
     ~Grid();
 
     void draw(void);
@@ -517,15 +541,18 @@ struct Grid {
     bool item_compatible(Item *i);
 };
 
-Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, HardpointInfo *h) {
-    hpinfo = h;
+Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h) {
+    if(h != NULL)
+        info = h;
+    else
+        info = g.default_info;
     grid_size_x = size_x;
     grid_size_y = size_y;
     pos.x1 = w_pos_x;
     pos.y1 = w_pos_y;
     resetPos();
     gsb = NULL;
-    if(hpinfo == NULL)
+    if(info == NULL || info->noGrid == false)
         gsb = new GridSortButton (this);
     gsb_displayed = false;
 }
@@ -603,12 +630,19 @@ void Item::init(int info_index) {
     storage = NULL;
     this->rotated = false;
     this->info_index = info_index;
-    if(g.item_info[info_index].isContainer == true)
+    if(g.item_info[info_index].isContainer == true) {
+        GridInfo *info = NULL;
+
+        // set any special grids here
+        if(info_index == 18)
+            info = g.bottle;
+
         storage = new Grid(0,
                            0,
                            g.item_info[info_index].container_size_x,
                            g.item_info[info_index].container_size_y,
-                           NULL);
+                           info);
+    }
 
     uniform_real_distribution<> cond_dist(0.02,1);
     this->condition = cond_dist(*g.rng);
@@ -639,7 +673,8 @@ Item::Item(const char *item_name) {
 // on a normal grid. e.g. clothing
 void Item::getHpDims(float &x2, float &y2) {
     if(parent != NULL &&
-       parent->hpinfo != NULL &&
+       parent->info != NULL &&
+       parent->info->noGrid == true &&
        g.item_info[info_index].grid_size_on_hp_x != -1) {
         x2 = g.item_info[info_index].grid_size_on_hp_x;
         y2 = g.item_info[info_index].grid_size_on_hp_y;
@@ -705,10 +740,10 @@ void Grid::RemoveItem(Item *to_remove) {
 // automatically find a place to place the item on
 // return NULL if successful, otherwise return the item
 Item *Grid::PlaceItem(Item *to_place) {
-    if(hpinfo != NULL) {
-        // if we're on a hard point just check how many item there
-        // are there already
-        if((int)items.size() < hpinfo->maxItems) {
+    if(info != NULL && info->noGrid == true) {
+        // if we're on a hard point with no grid just check how many
+        // items there are there already
+        if((int)items.size() < info->maxItems) {
             to_place->pos.x1 = 0;
             to_place->pos.y1 = 0;
             AddItem(to_place);
@@ -792,7 +827,7 @@ Item *Grid::PlaceItem(Item *to_place) {
         }
         // clear the grid sort button if the new grid isn't a hardpoint
         if(to_place->storage != NULL &&
-           this->hpinfo == NULL) {
+           this->info == NULL) {
             to_place->storage->gsb_displayed = false;
         }
         AddItem(to_place);
@@ -805,42 +840,51 @@ Item *Grid::PlaceItem(Item *to_place) {
 }
 
 bool Grid::item_compatible(Item *i) {
+    if(i->isLiquid() == true) {
+        // liquids can only be placed in bottles & ground
+        if(info != NULL && info->canHoldLiquid == true) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     // you can place anything in a grid
-    if(hpinfo == NULL)
+    if(info == NULL)
         return true;
 
     ItemSlot slot = i->getItemSlot();
 
-    if(hpinfo == g.back && slot != ARMOR_BACK)
+    if(info == g.back && slot != ARMOR_BACK)
         return false;
-    if(hpinfo == g.torso && slot != ARMOR_TORSO)
+    if(info == g.torso && slot != ARMOR_TORSO)
         return false;
-    if(hpinfo == g.head && slot != ARMOR_HEAD)
+    if(info == g.head && slot != ARMOR_HEAD)
         return false;
-    if(hpinfo == g.legs && slot != ARMOR_LEGS)
+    if(info == g.legs && slot != ARMOR_LEGS)
         return false;
-    if(hpinfo == g.right_foot && slot != ARMOR_RIGHT_SHOE)
+    if(info == g.right_foot && slot != ARMOR_RIGHT_SHOE)
         return false;
-    if(hpinfo == g.left_foot && slot != ARMOR_LEFT_SHOE)
+    if(info == g.left_foot && slot != ARMOR_LEFT_SHOE)
         return false;
-    if(hpinfo == g.right_hand && slot != ARMOR_RIGHT_HAND)
+    if(info == g.right_hand && slot != ARMOR_RIGHT_HAND)
         return false;
-    if(hpinfo == g.left_hand && slot != ARMOR_LEFT_HAND)
+    if(info == g.left_hand && slot != ARMOR_LEFT_HAND)
         return false;
 
     // can't place/use non-medical items on body parts
-    if(hpinfo->medical == true &&
+    if(info->medical == true &&
        i->isMedical() == false)
         return false;
 
     // can only place vehicles in vehicle hardpoint
-    if(hpinfo->vehiclepoint == true &&
+    if(info->vehiclepoint == true &&
        i->isVehicle() == false)
         return false;
 
     // can't place vehicle on non-vehicle hardpoints
     if(i->isVehicle() == true &&
-       hpinfo->vehiclepoint == false)
+       info->vehiclepoint == false)
         return false;
 
     // allow by default
@@ -860,7 +904,8 @@ void Item::resetHardpointPos(void) {
         storage->resetPos(g.item_info[info_index].container_offset_x,
                           g.item_info[info_index].container_offset_y);
 
-        storage->gsb->reset();
+        if(storage->gsb != NULL)
+            storage->gsb->reset();
     } else {
         info("WARNING: no item parent");
     }
@@ -1905,7 +1950,8 @@ void GridSystem::reset(void) {
     for(auto& grid : grids) {
         for(auto& item : grid->items) {
             if(item->storage != NULL &&
-               item->parent->hpinfo != NULL) {
+               item->parent->info != NULL &&
+               item->parent->info->noGrid == true) {
                 item->storage->gsb_displayed = true;
             }
         }
@@ -1985,9 +2031,9 @@ void GridSystem::MouseAutoMoveItemToTarget() {
     assert(item != NULL);
     assert(from != NULL);
 
-    if(auto_target->hpinfo != NULL) {
+    if(auto_target->info != NULL && auto_target->info->noGrid == true) {
         // if we're auto-moving to a hard point
-        if((int)auto_target->items.size() >= auto_target->hpinfo->maxItems) {
+        if((int)auto_target->items.size() >= auto_target->info->maxItems) {
             // and there's no space
             Item *prev = auto_target->items.front();
             assert(prev->old_parent);
@@ -2032,7 +2078,8 @@ void Character::addInventoryHardpoints(GridSystem *gs) {
             if(item->storage != NULL) {
                 item->parent = hardpoint;
                 item->resetHardpointPos();
-                gs->grids.push_back(item->storage);
+                if(hardpoint->info->noGrid == true)
+                    gs->grids.push_back(item->storage);
             }
         }
     }
@@ -2975,7 +3022,8 @@ void GridSystem::drawItemTooltip(void) {
                 // if the item has a grid, draw it under the text
                 if(item->storage != NULL &&
                    held == NULL &&
-                   item->parent->hpinfo == NULL)
+                   (item->parent->info == NULL ||
+                    item->parent->info->noGrid == false))
                     // ^^ unless it's on a hardpoint
                     item->storage->drawAt(g.mouse_x + 16, g.mouse_y + off_y);
 
@@ -3093,7 +3141,8 @@ void GridSystem::GrabItem() {
 void GridSystem::addStorageGrid(void) {
     if(held != NULL &&
        held->storage != NULL &&
-       held->parent->hpinfo != NULL) {
+       held->parent->info != NULL &&
+       held->parent->info->noGrid == true) {
         // ^^ we only want to add it if it's on a hardpoint
         held->storage->gsb_displayed = true;
         held->resetHardpointPos();
@@ -3122,7 +3171,7 @@ void GridSystem::gsMouseUpEvent() {
         // the bounds check depends if the grid is a real grid
         // or a hardpoint
         bool in_bounds = false;
-        if(grid->hpinfo == NULL) {
+        if(grid->info == NULL || grid->info->noGrid == false) {
             // grid
             drop_x = ((g.mouse_x - g.hold_off_x) - grid->pos.x1) / Grid::grid_px_x;
             drop_y = ((g.mouse_y - g.hold_off_y) - grid->pos.y1) / Grid::grid_px_y;
@@ -3150,7 +3199,7 @@ void GridSystem::gsMouseUpEvent() {
             }
 
             // is this a real grid?
-            if(grid->hpinfo == NULL) {
+            if(grid->info == NULL || grid->info->noGrid == false) {
                 // bounds check items in grid
                 int blocks = 0;
                 for(auto& item : grid->items) {
@@ -3164,6 +3213,9 @@ void GridSystem::gsMouseUpEvent() {
                                      held->pos.y2 * Grid::grid_px_y)) {
                         blocks++;
                         if(item->storage != NULL) {
+                            // is this item compatible with the grid?
+                            if(item->storage->item_compatible(held) == false)
+                                goto blocked;
                             // we're blocked by an item but it has storage
                             // try to place the held item into it
                             Item *ret = item->storage->PlaceItem(held);
@@ -3198,28 +3250,31 @@ void GridSystem::gsMouseUpEvent() {
                     goto blocked;
             }
             // or a hardpoint?
-            else if(grid->hpinfo->maxItems < (int)grid->items.size() + held->cur_stack) {
+            else if(grid->info->maxItems < (int)grid->items.size() + held->cur_stack) {
                 // too many items on the hardpoint
                 goto blocked;
             } else {
+                // is this item compatible with the grid?
+                if(grid->item_compatible(held) == false)
+                    goto blocked;
                 // if it's a hardpoint, we always drop at 0, 0
                 drop_x = 0;
                 drop_y = 0;
                 // and un-rotate it
                 if(held->rotated == true) held->rotate();
                 // some hardpoints like shoulders rotate their items
-                if(grid->hpinfo->pleaseRotateIt == true)
+                if(grid->info->pleaseRotateIt == true)
                     held->rotate();
             }
 
             // is this item compatible with the grid?
             if(grid->item_compatible(held) == false)
-               goto blocked;
+                goto blocked;
 
             // if we put something on a body part, we need to emit a signal
             // so that the logic can take place
-            if(grid->hpinfo != NULL &&
-               grid->hpinfo->medical == true) {
+            if(grid->info != NULL &&
+               grid->info->medical == true) {
 
                 applied_params = make_pair(grid, held);
                 if(applied != NULL)
@@ -3313,12 +3368,12 @@ void GridSystem::gsMouseUpEvent() {
 }
 
 void Grid::draw(void) {
-    if(hpinfo != NULL && hpinfo->visible == false)
+    if(info != NULL && info->visible == false)
         goto draw_items;
 
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
 
-    if(hpinfo == NULL) {
+    if(info == NULL || info->noGrid == false) {
         for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x) {
             al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
         }
@@ -3328,7 +3383,8 @@ void Grid::draw(void) {
     }
 
     if(gsb_displayed == true)
-        gsb->draw();
+        if(gsb != NULL)
+            gsb->draw();
 
  draw_items:
     for (auto& i : items)
@@ -3361,7 +3417,7 @@ void Item::draw(void) {
             al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
         }
         else {
-            if(parent->hpinfo != NULL && sprite_on_hp != NULL) {
+            if(parent->info != NULL && parent->info->noGrid == true && sprite_on_hp != NULL) {
                 al_draw_bitmap(sprite_on_hp, x1, y1, 0);
             } else {
                 if(rotated == true) {
@@ -4835,7 +4891,7 @@ void ConditionGridSystem::draw(void) {
 
     for (auto& g : grids) {
         // skip medical hardpoints
-        if(g->hpinfo == NULL || g->hpinfo->medical == false) {
+        if(g->info == NULL || g->info->medical == false) {
             g->draw();
         }
     }
@@ -4862,34 +4918,34 @@ void ConditionGridSystem::draw(void) {
 void ConditionGridSystem::draw_medical_hardpoint(Grid *grid) {
     if(grid->items.size() == 0) {
         // TODO: draw wound if we're injured
-        if(grid->hpinfo == g.medical_upper_torso
+        if(grid->info == g.medical_upper_torso
            && g.map->player->wound_upper_torso.severity >= 1)
             al_draw_bitmap(g.bitmaps[70], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_lower_leg
+        else if(grid->info == g.medical_left_lower_leg
                 && g.map->player->wound_left_lower_leg.severity >= 1)
             al_draw_bitmap(g.bitmaps[71], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_lower_leg
+        else if(grid->info == g.medical_right_lower_leg
                 && g.map->player->wound_right_lower_leg.severity >= 1)
             al_draw_bitmap(g.bitmaps[72], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_upper_leg
+        else if(grid->info == g.medical_right_upper_leg
                 && g.map->player->wound_right_upper_leg.severity >= 1)
             al_draw_bitmap(g.bitmaps[73], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_upper_leg
+        else if(grid->info == g.medical_left_upper_leg
                 && g.map->player->wound_left_upper_leg.severity >= 1)
             al_draw_bitmap(g.bitmaps[74], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_lower_arm
+        else if(grid->info == g.medical_right_lower_arm
                 && g.map->player->wound_right_lower_arm.severity >= 1)
             al_draw_bitmap(g.bitmaps[75], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_upper_arm
+        else if(grid->info == g.medical_right_upper_arm
                 && g.map->player->wound_right_upper_arm.severity >= 1)
             al_draw_bitmap(g.bitmaps[76], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_lower_torso
+        else if(grid->info == g.medical_lower_torso
                 && g.map->player->wound_lower_torso.severity >= 1)
             al_draw_bitmap(g.bitmaps[77], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_lower_arm
+        else if(grid->info == g.medical_left_lower_arm
                 && g.map->player->wound_left_lower_arm.severity >= 1)
             al_draw_bitmap(g.bitmaps[78], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_upper_arm
+        else if(grid->info == g.medical_left_upper_arm
                 && g.map->player->wound_left_upper_arm.severity >= 1)
             al_draw_bitmap(g.bitmaps[79], grid->pos.x1, grid->pos.y1, 0);
         return;
@@ -4897,25 +4953,25 @@ void ConditionGridSystem::draw_medical_hardpoint(Grid *grid) {
 
     if(grid->items.front()->info_index == 15) {
         // clean rag applied to body part
-        if(grid->hpinfo == g.medical_upper_torso)
+        if(grid->info == g.medical_upper_torso)
             al_draw_bitmap(g.bitmaps[60], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_lower_leg)
+        else if(grid->info == g.medical_left_lower_leg)
             al_draw_bitmap(g.bitmaps[61], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_lower_leg)
+        else if(grid->info == g.medical_right_lower_leg)
             al_draw_bitmap(g.bitmaps[62], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_upper_leg)
+        else if(grid->info == g.medical_right_upper_leg)
             al_draw_bitmap(g.bitmaps[63], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_upper_leg)
+        else if(grid->info == g.medical_left_upper_leg)
             al_draw_bitmap(g.bitmaps[64], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_lower_arm)
+        else if(grid->info == g.medical_right_lower_arm)
             al_draw_bitmap(g.bitmaps[65], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_right_upper_arm)
+        else if(grid->info == g.medical_right_upper_arm)
             al_draw_bitmap(g.bitmaps[66], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_lower_torso)
+        else if(grid->info == g.medical_lower_torso)
             al_draw_bitmap(g.bitmaps[67], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_lower_arm)
+        else if(grid->info == g.medical_left_lower_arm)
             al_draw_bitmap(g.bitmaps[68], grid->pos.x1, grid->pos.y1, 0);
-        else if(grid->hpinfo == g.medical_left_upper_arm)
+        else if(grid->info == g.medical_left_upper_arm)
             al_draw_bitmap(g.bitmaps[69], grid->pos.x1, grid->pos.y1, 0);
     }
 }
@@ -5345,7 +5401,7 @@ vector<Grid *> *ground_at_character(Character *character) {
 
     if((*ground).empty()) {
         // create first grid if it doesn't exist
-        Grid *ground_grid = new Grid (105, 25, 20, 30, NULL);
+        Grid *ground_grid = new Grid (105, 25, 20, 30, g.ground);
         assert(ground_grid != NULL);
         ground->push_back(ground_grid);
         // test items
@@ -5679,6 +5735,8 @@ void load_bitmaps(void) {
     /* 82 */ filenames.push_back("media/items/hand_combat.png");
     /* 83 */ filenames.push_back("media/characters/unknown.png");
     /* 84 */ filenames.push_back("media/items/makeshift_wood_bow.png");
+    /* 85 */ filenames.push_back("media/items/right_shoe_grid.png");
+    /* 86 */ filenames.push_back("media/items/left_shoe_grid.png");
     // /* 85 */ filenames.push_back("media/tile/crackedground.png");
     // /* 86 */ filenames.push_back("media/tile/hill.png");
 
