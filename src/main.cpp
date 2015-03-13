@@ -5740,8 +5740,10 @@ void load_bitmaps(void) {
     /* 84 */ filenames.push_back("media/items/makeshift_wood_bow.png");
     /* 85 */ filenames.push_back("media/items/right_shoe_grid.png");
     /* 86 */ filenames.push_back("media/items/left_shoe_grid.png");
-    // /* 85 */ filenames.push_back("media/tile/crackedground.png");
-    // /* 86 */ filenames.push_back("media/tile/hill.png");
+    /* 87 */ filenames.push_back("media/tile/hillygrass.png");
+    /* 88 */ filenames.push_back("media/tile/dirt.png");
+    /* 89 */ filenames.push_back("media/tile/crackedground.png");
+    /* 90 */ filenames.push_back("media/characters/dog.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -6011,22 +6013,33 @@ void init_tilemap(int sx, int sy) {
     i.has_locations = true;
     i.name = "Swamp";
     g.map->tile_info.push_back(i);
-    // // crackedground
-    // i.minimap_color = al_map_rgb(0, 0, 200);
-    // i.sprite = g.bitmaps[85];
-    // i.blocks_los = false;
-    // i.blocks_movement = false;
-    // i.has_locations = true;
-    // i.name = "Cracked ground";
-    // g.map->tile_info.push_back(i);
-    // // Hill
-    // i.minimap_color = al_map_rgb(0, 0, 200);
-    // i.sprite = g.bitmaps[86];
-    // i.blocks_los = false;
-    // i.blocks_movement = false;
-    // i.has_locations = true;
-    // i.name = "Hill";
-    // g.map->tile_info.push_back(i);
+    // Hilly grass
+    i.minimap_color = al_map_rgb(0, 0, 100);
+    i.sprite = g.bitmaps[87];
+    i.blocks_los = true;
+    i.blocks_movement = false;
+    i.has_locations = false;
+    i.name = "Hill";
+    g.map->tile_info.push_back(i);
+    // Dirt
+    /*
+      TODO: set colors
+    */
+    i.minimap_color = al_map_rgb(0, 0, 100);
+    i.sprite = g.bitmaps[88];
+    i.blocks_los = false;
+    i.blocks_movement = false;
+    i.has_locations = true;
+    i.name = "Dirt";
+    g.map->tile_info.push_back(i);
+    // crackedground
+    i.minimap_color = al_map_rgb(0, 0, 200);
+    i.sprite = g.bitmaps[89];
+    i.blocks_los = false;
+    i.blocks_movement = false;
+    i.has_locations = true;
+    i.name = "Cracked ground";
+    g.map->tile_info.push_back(i);
 
     g.map->generate();
 }
@@ -6049,6 +6062,7 @@ MiniMapUI::~MiniMapUI(void) {
 // creates the player and npcs
 // must be called after init_tilemap();
 void init_characters(void) {
+    const int n_chars = 15;
     const char *names[] = { "Herb Bert",
                             "Jepson Parker",
                             "Farley Rigby",
@@ -6068,19 +6082,25 @@ void init_characters(void) {
     uniform_int_distribution<> dist(0, g.map->max_t);
 
     for(int i = 0; i < 15; i++) {
-        int n = dist(*g.rng);
+        int char_pos = dist(*g.rng);
 
         Character *c = new Character;
+
+        c->n = char_pos;
 
         if(i == 0) { // player is character 0
             g.map->player = c;
         }
         else { // everyone else is an NPC
+            if(i < n_chars / 2) {
+                c->name = names[(i - 1) % 14];
+                c->sprite = g.bitmaps[21];
+            } else { // half of them are dogs
+                c->name = "Lassie";
+                c->sprite = g.bitmaps[90];
+            }
             g.map->characters.push_back(c);
-            c->name = names[(i - 1) % 14];
         }
-
-        c->n = n;
 
         // add starting items
         Item *backpack = new Item("backpack");
