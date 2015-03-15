@@ -41,6 +41,7 @@ struct SkillsUI;
 struct ConditionUI;
 struct CampUI;
 struct ScavengeUI;
+struct InteractUI;
 struct GridInfo;
 struct ItemInfo;
 struct LocationInfo;
@@ -149,6 +150,7 @@ struct Game {
     VehicleUI *ui_Vehicle;
     EncounterUI *ui_Encounter;
     ScavengeUI *ui_Scavenge;
+    InteractUI *ui_Interact;
 
     bool encounterInterrupt; // player
     int ai_encounterInterrupt; // AI at index
@@ -4725,6 +4727,63 @@ void ScavengeUI::setup(void) {
     widgets.push_back(gridsystem);
 }
 
+/*
+  TODO: stuff
+*/
+struct InteractGridSystem : public GridSystem {
+    Grid *options;
+    Grid *selected;
+
+    InteractGridSystem();
+};
+
+struct InteractPage {
+    ALLEGRO_BITMAP *bg;
+    vector<const char *> description;
+    vector<pair<Item *, int>> choices;
+};
+
+struct Interact {
+    int current_page;
+    vector<InteractPage *> pages;
+};
+
+struct InteractUI : public UI {
+    InteractGridSystem *gridsystem;
+    Interact *story;
+
+    InteractUI(void);
+
+    void draw(void) override;
+};
+
+InteractGridSystem::InteractGridSystem() {
+    options = new Grid (97 + 105, 300, 16, 10, NULL);
+    selected = new Grid (97 + 398, 300, 16, 10, g.encounter_selected);
+
+    grids.push_back(options);
+    grids.push_back(selected);
+}
+
+InteractUI::InteractUI(void) {
+    gridsystem = new InteractGridSystem;
+}
+
+void InteractUI::draw(void) {
+
+}
+
+void init_interactions(void) {
+    Interact *test_interact = new Interact;
+    InteractPage *page1 = new InteractPage;
+    page1->bg = NULL;
+    InteractPage *page2 = new InteractPage;
+    page2->bg = NULL;
+
+    test_interact->pages.push_back(page1);
+    test_interact->pages.push_back(page2);
+}
+
 struct InventoryGridSystem;
 struct VehicleGridSystem;
 struct ConditionGridSystem;
@@ -6299,6 +6358,7 @@ int main(int argc, char **argv) {
     init_indicators();
     init_timedisplay();
     init_misc();
+    init_interactions();
 
     {
         g.ui_MainMap   = new MainMapUI;
@@ -6311,7 +6371,7 @@ int main(int argc, char **argv) {
         g.ui_Condition = new ConditionUI;
         g.ui_Camp      = new CampUI;
         g.ui_Scavenge  = new ScavengeUI;
-
+        g.ui_Interact  = new InteractUI;
         // start on the main map
         button_MainMap_press();
     }
