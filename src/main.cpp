@@ -1455,7 +1455,7 @@ struct TileMap : public Widget {
 
     void updateCharsByPos(void);
     void removeCharacter(Character *to_kill);
-    void addRandomCharacter(void);
+    Character *addRandomCharacter(const char *name);
 
     float getCurrentTemperature(int n);
     const char *getTileName(int n);
@@ -1480,24 +1480,39 @@ bool good_index(int n) {
 
 int dir_transform(int n, int dir);
 
-void TileMap::addRandomCharacter(void) {
+Character *TileMap::addRandomCharacter(const char *name) {
     Character *new_char = new Character;
 
+    new_char->name = name;
+
+    vector<int> character_sprite_map = { 21, 90, 91 };
+    uniform_int_distribution<> sprite_dist(0, character_sprite_map.size() - 1);
+    new_char->sprite = g.bitmaps[character_sprite_map[sprite_dist(*g.rng)]];
+
     uniform_int_distribution<> position_dist(0, max_t);
-    new_char->move( position_dist(*g.rng) );
+    new_char->n = position_dist(*g.rng);
 
-    uniform_int_distribution<> delay_dist(-500,500);
-    new_char->nextMove = characters.front()->nextMove + delay_dist(*g.rng);
+    uniform_int_distribution<> delay_dist(0, 500);
+    new_char->nextMove = g.map->player->nextMove + delay_dist(*g.rng);
 
-    Item *pill_bottle = new Item("Pill bottle");
-    Item *shopping_trolley = new Item("Shopping trolley");
-    Item *first_aid_kit = new Item("First aid kit");
+    // add starting items
+    Item *backpack = new Item("backpack");
+    new_char->back->PlaceItem(backpack);
+    Item *first_aid_kit1 = new Item("first aid kit");
+    backpack->storage->PlaceItem(first_aid_kit1);
+    Item *first_aid_kit2 = new Item("first aid kit");
+    new_char->left_hand_hold->PlaceItem(first_aid_kit2);
+    Item *pill_bottle2 = new Item("pill bottle");
+    first_aid_kit1->storage->PlaceItem(pill_bottle2);
+    Item *pill_bottle3 = new Item("pill bottle");
+    first_aid_kit2->storage->PlaceItem(pill_bottle3);
 
-    new_char->left_hand_hold->PlaceItem(pill_bottle);
-    new_char->vehicle->PlaceItem(shopping_trolley);
-    new_char->right_hand_hold->PlaceItem(first_aid_kit);
+    backpack->storage->PlaceItem(new Item("bullet", 5));
+    backpack->storage->PlaceItem(new Item("bullet", 3));
 
     characters.push_back(new_char);
+
+    return new_char;
 }
 
 void TileMap::removeCharacter(Character *to_kill) {
@@ -1859,9 +1874,9 @@ void TimeDisplay::calculate_tod(void) {
 void TimeDisplay::draw(void) {
     calculate_tod();
 
-    if(tod > 0 && tod <= 6000)
+    if(tod > 0 && tod <= 9000)
         al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, "Morning");
-    else if(tod > 6000 && tod <= 12000)
+    else if(tod > 9000 && tod <= 12000)
         al_draw_text(g.font, g.color_white, pos.x1, pos.y1, 0, "Midday");
     else if(tod > 12000 && tod <= 18000)
         al_draw_text(g.font, g.color_grey2, pos.x1, pos.y1, 0, "Afternoon");
@@ -5803,6 +5818,7 @@ void load_bitmaps(void) {
     /* 88 */ filenames.push_back("media/tile/dirt.png");
     /* 89 */ filenames.push_back("media/tile/crackedground.png");
     /* 90 */ filenames.push_back("media/characters/dog.png");
+    /* 91 */ filenames.push_back("media/characters/char1.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -6118,75 +6134,68 @@ MiniMapUI::~MiniMapUI(void) {
     info("~MiniMapUI()");
 }
 
+void init_player(void) {
+    Character *c = new Character;
+
+    c->name = "Player";
+    c->nextMove = 9000;
+
+    uniform_int_distribution<> position_dist(0, g.map->max_t);
+    c->n = position_dist(*g.rng);
+    c->sprite = g.bitmaps[21];
+
+    // add player starting items
+    Item *backpack = new Item("backpack");
+    c->back->PlaceItem(backpack);
+    Item *crowbar = new Item("crowbar");
+    c->right_hand_hold->PlaceItem(crowbar);
+
+    c->enableSkill(0);
+    c->enableSkill(1);
+    c->enableSkill(32);
+    c->enableSkill(33);
+    c->recomputeCarryWeight();
+    c->recomputeWarmth();
+
+    g.map->player = c;
+}
+
 // creates the player and npcs
-// must be called after init_tilemap();
 void init_characters(void) {
-    const int n_chars = 15;
-    const char *names[] = { "Herb Bert",
-                            "Jepson Parker",
-                            "Farley Rigby",
-                            "Homer Brooke",
-                            "Eustace Chamberlain",
-                            "Piers Moore",
-                            "Sonnie Aitken",
-                            "Alycia Burke",
-                            "Suzie Martinson",
-                            "Lilibeth Beasley",
-                            "Nat Corra",
-                            "Keanna Lowe",
-                            "Jordyn Auttenberg",
-                            "Cary Lamar" };
+    // must be called after init_tilemap();
+    assert(g.map != NULL);
 
+    init_player();
 
-    uniform_int_distribution<> dist(0, g.map->max_t);
+    // npc names
+    auto names = { "Herb Bert",
+                   "Jepson Parker",
+                   "Farley Rigby",
+                   "Homer Brooke",
+                   "Eustace Chamberlain",
+                   "Piers Moore",
+                   "Sonnie Aitken",
+                   "Alycia Burke",
+                   "Suzie Martinson",
+                   "Lilibeth Beasley",
+                   "Nat Corra",
+                   "Keanna Lowe",
+                   "Jordyn Auttenberg",
+                   "Cary Lamar" };
 
-    for(int i = 0; i < 15; i++) {
-        int char_pos = dist(*g.rng);
+    // create npcs
+    char buf[100];
+    sprintf(buf, "Adding %lu NPCs", names.size());
+    info(buf);
 
-        Character *c = new Character;
-
-        c->n = char_pos;
-
-        if(i == 0) { // player is character 0
-            g.map->player = c;
-        }
-        else { // everyone else is an NPC
-            if(i < n_chars / 2) {
-                c->name = names[(i - 1) % 14];
-                c->sprite = g.bitmaps[21];
-            } else { // half of them are dogs
-                c->name = "Lassie";
-                c->sprite = g.bitmaps[90];
-            }
-            g.map->characters.push_back(c);
-        }
-
-        // add starting items
-        Item *backpack = new Item("backpack");
-        c->back->PlaceItem(backpack);
-        Item *first_aid_kit1 = new Item("first aid kit");
-        backpack->storage->PlaceItem(first_aid_kit1);
-        Item *first_aid_kit2 = new Item("first aid kit");
-        c->left_hand_hold->PlaceItem(first_aid_kit2);
-        Item *pill_bottle2 = new Item("pill bottle");
-        first_aid_kit1->storage->PlaceItem(pill_bottle2);
-        Item *pill_bottle3 = new Item("pill bottle");
-        first_aid_kit2->storage->PlaceItem(pill_bottle3);
-
-        backpack->storage->PlaceItem(new Item("bullet", 5));
-        backpack->storage->PlaceItem(new Item("bullet", 3));
+    for(auto& name : names) {
+        g.map->addRandomCharacter(name);
     }
 
+    // init map stuff
     g.map->updateCharsByPos();
-    g.map->player->name = "Player";
     g.map->player->update_visibility();
     g.map->focusOnPlayer();
-    g.map->player->enableSkill(0);
-    g.map->player->enableSkill(1);
-    g.map->player->enableSkill(32);
-    g.map->player->enableSkill(33);
-    g.map->player->recomputeCarryWeight();
-    g.map->player->recomputeWarmth();
 }
 
 MainMapUI::MainMapUI() {
