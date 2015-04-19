@@ -49,6 +49,7 @@ struct Item;
 struct BarIndicator;
 struct TimeDisplay;
 struct WeaponSwitcher;
+struct Interact;
 
 // global state
 struct Game {
@@ -151,6 +152,8 @@ struct Game {
     EncounterUI *ui_Encounter;
     ScavengeUI *ui_Scavenge;
     InteractUI *ui_Interact;
+
+    vector<Interact *> stories;
 
     bool encounterInterrupt; // player
     int ai_encounterInterrupt; // AI at index
@@ -4756,19 +4759,28 @@ struct InteractPage {
     ALLEGRO_BITMAP *bg;
     vector<const char *> description;
     vector<pair<Item *, int>> choices;
+
+    InteractPage();
+    void draw(void);
 };
 
 struct Interact {
-    int current_page;
+    InteractPage *current_page;
     vector<InteractPage *> pages;
+
+    Interact();
+    void draw(void);
 };
 
 struct InteractUI : public UI {
+    const int off_x = 97;
+
     InteractGridSystem *gridsystem;
-    Interact *story;
+    Interact *current_interact;
+    Button *button_confirm;
 
     InteractUI(void);
-
+    void setup(void);
     void draw(void) override;
 };
 
@@ -4780,23 +4792,116 @@ InteractGridSystem::InteractGridSystem() {
     grids.push_back(selected);
 }
 
+void runInteractStepCB(void);
+
 InteractUI::InteractUI(void) {
     gridsystem = new InteractGridSystem;
+
+    button_confirm = new Button ("Commit selection");
+    button_confirm->pos.x1 = off_x + 691;
+    button_confirm->pos.y1 = 300;
+    button_confirm->pos.x2 = 75;
+    button_confirm->pos.y2 = 45;
+    button_confirm->up = g.bitmaps[33];
+    button_confirm->down = NULL;
+    button_confirm->onMouseDown = runInteractStepCB;
+
+    current_interact = NULL;
+
+}
+
+void InteractUI::setup(void) {
+    gridsystem->selected->items.clear();
+    gridsystem->options->items.clear();
+
+    widgets.clear();
+
+    widgets.push_back(button_confirm);
+    widgets.push_back(g.log);
+    widgets.push_back(gridsystem);
+
+    addIndicatorWidgets();
+    g.color_bg = g.color_grey;
+}
+
+Interact::Interact(void) {
+    current_page = NULL;
+}
+
+InteractPage::InteractPage(void) {
 }
 
 void InteractUI::draw(void) {
+    assert(current_interact != NULL);
+    al_draw_filled_rectangle(off_x + 105, 25, off_x + 540, 295, g.color_grey2);
+    al_draw_filled_rectangle(off_x + 545, 25, off_x + 985, 295, g.color_grey2);
+    current_interact->draw();
+    UI::draw();
+}
 
+void Interact::draw(void) {
+    assert(current_page != NULL);
+    current_page->draw();
+}
+
+void InteractPage::draw(void) {
+    if(bg != NULL) {
+        al_draw_bitmap(bg, 97 + 550, 30, 0);
+    }
+
+    float y = 5;
+    for(auto&& line : description) {
+        al_draw_text(g.font, g.color_black, 97 + 105 + 5, 25 + y, 0, line);
+        y += 8;
+    }
+}
+
+void runInteractStep(InteractPage *x);
+
+void runInteract(Interact *x) {
+    g.ui_Interact->current_interact = x;
+    g.ui = g.ui_Interact;
+
+    runInteractStep(x->pages.front());
+}
+
+void runInteractStep(InteractPage *x) {
+    g.ui_Interact->setup();
+    // add page choices to the options pane
+    for(auto&& choice : x->choices) {
+        g.ui_Interact->gridsystem->options->PlaceItem(choice.first);
+    }
+}
+
+void runInteractStepCB(void) {
+    // find the page we're on
+    // find page that the choice switches to
+    // switch page to new page
 }
 
 void init_interactions(void) {
-    Interact *test_interact = new Interact;
+    Item *opt1 = new Item("Single attack");
+    Item *opt2 = new Item("Flee");
+
     InteractPage *page1 = new InteractPage;
-    page1->bg = NULL;
+    page1->bg = g.bitmaps[0];
+    page1->choices.push_back({ opt1, 1 });
+    page1->choices.push_back({ opt2, 0 });
+    page1->description.push_back("You're in a dark room.");
+    page1->description.push_back("\"Hello?\"");
+    page1->description.push_back("");
+    page1->description.push_back("... who was that?");
+
     InteractPage *page2 = new InteractPage;
     page2->bg = NULL;
+    page2->choices.push_back({ opt1, 0 });
 
+    Interact *test_interact = new Interact;
     test_interact->pages.push_back(page1);
     test_interact->pages.push_back(page2);
+    test_interact->current_page = page1;
+
+    g.stories.push_back(test_interact);
 }
 
 struct InventoryGridSystem;
@@ -6384,6 +6489,8 @@ int main(int argc, char **argv) {
         // start on the main map
         button_MainMap_press();
     }
+
+    // runInteract(g.stories.front());
 
     bool redraw = true;
     bool was_mouse_down = false;
