@@ -4756,17 +4756,30 @@ struct InteractGridSystem : public GridSystem {
 };
 
 struct InteractPage {
+    // image shown upper right
     ALLEGRO_BITMAP *bg;
+
+    // page description, shown upper left
     vector<const char *> description;
+
+    // choices that can be made on this page
     vector<pair<Item *, int>> choices;
+
+    // functions that run when coming into and leaving the page
+    void (*pre)(void);
+    void (*post)(void);
 
     InteractPage();
     void draw(void);
 };
 
+// an "interact" is a collection of pages, i.e. a short CYOA
 struct Interact {
     InteractPage *current_page;
     vector<InteractPage *> pages;
+
+    // additional state
+    void *data;
 
     Interact();
     void draw(void);
@@ -4787,6 +4800,8 @@ struct InteractUI : public UI {
 InteractGridSystem::InteractGridSystem() {
     options = new Grid (97 + 105, 300, 16, 10, NULL);
     selected = new Grid (97 + 398, 300, 16, 10, g.encounter_selected);
+
+    auto_target = selected;
 
     grids.push_back(options);
     grids.push_back(selected);
@@ -4829,6 +4844,8 @@ Interact::Interact(void) {
 }
 
 InteractPage::InteractPage(void) {
+    pre = NULL;
+    post = NULL;
 }
 
 void InteractUI::draw(void) {
@@ -4866,6 +4883,11 @@ void runInteract(Interact *x) {
 }
 
 void runInteractStep(InteractPage *x) {
+    if(x->pre != NULL) {
+        x->pre();
+    }
+
+    g.ui_Interact->current_interact->current_page = x;
     g.ui_Interact->setup();
     // add page choices to the options pane
     for(auto&& choice : x->choices) {
@@ -4875,31 +4897,83 @@ void runInteractStep(InteractPage *x) {
 
 void runInteractStepCB(void) {
     // find the page we're on
+    InteractPage *p = g.ui_Interact->current_interact->current_page;
+
+    if(g.ui_Interact->gridsystem->selected->items.empty()) {
+        cout << "runInteractStepCB: nothing selected" << endl;
+        return;
+    }
+
     // find page that the choice switches to
+    Item *choice = g.ui_Interact->gridsystem->selected->items.front();
+
+    // -1: exit
+    // -2: choice pair not found
+    int new_page = -2;
+    for(auto&& c : p->choices) {
+        if(c.first == choice) {
+            new_page = c.second;
+            break;
+        }
+    }
+    cout << "Switching to interact page " << new_page << endl;
     // switch page to new page
+    g.ui_Interact->setup();
+
+    if(p->post != NULL) {
+        p->post();
+    }
+
+    if(new_page >= 0) {
+        runInteractStep(g.ui_Interact->current_interact->pages.at(new_page));
+    } else {
+        if(new_page != -1) {
+            info("Interact Error: couldn't find new interact page index");
+        }
+        button_MainMap_press();
+     }
+}
+
+struct test_interact_data {
+    int counter;
+
+    test_interact_data() { counter = 0; }
+};
+
+void pre0test(void) {
+    auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
+
+    cout << "counter: " << data->counter << endl;
+    data->counter++;
 }
 
 void init_interactions(void) {
     Item *opt1 = new Item("Single attack");
-    Item *opt2 = new Item("Flee");
+    Item *opt2 = new Item("Retreat");
+    Item *opt3 = new Item("Flee");
 
     InteractPage *page1 = new InteractPage;
     page1->bg = g.bitmaps[0];
     page1->choices.push_back({ opt1, 1 });
-    page1->choices.push_back({ opt2, 0 });
+    page1->choices.push_back({ opt3, -1 });
     page1->description.push_back("You're in a dark room.");
     page1->description.push_back("\"Hello?\"");
     page1->description.push_back("");
     page1->description.push_back("... who was that?");
+    page1->pre = pre0test;
 
     InteractPage *page2 = new InteractPage;
     page2->bg = NULL;
-    page2->choices.push_back({ opt1, 0 });
+    page2->choices.push_back({ opt2, 0 });
+    page2->description.push_back("You slash and stab at the dark.");
+    page2->description.push_back("...");
+    page2->description.push_back("It has no effect.");
 
     Interact *test_interact = new Interact;
     test_interact->pages.push_back(page1);
     test_interact->pages.push_back(page2);
     test_interact->current_page = page1;
+    test_interact->data = new test_interact_data;
 
     g.stories.push_back(test_interact);
 }
@@ -6490,7 +6564,7 @@ int main(int argc, char **argv) {
         button_MainMap_press();
     }
 
-    // runInteract(g.stories.front());
+    runInteract(g.stories.front());
 
     bool redraw = true;
     bool was_mouse_down = false;
