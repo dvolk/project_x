@@ -1452,6 +1452,7 @@ struct TileMap : public Widget {
     void mouseToTileXY(int &x, int &y);
 
     int mouseToTileN(void);
+    void focusOn(int n);
     void focusOnPlayer(void);
     Character *characterAt(int n);
     bool playerSees(int n);
@@ -1463,7 +1464,18 @@ struct TileMap : public Widget {
     float getCurrentTemperature(int n);
     const char *getTileName(int n);
     ALLEGRO_BITMAP *getBitmap(int n);
+
+    bool blocks_movement(int n);
+    bool blocks_los(int n);
 };
+
+bool TileMap::blocks_movement(int n) {
+    return tile_info[tiles[n].info_index].blocks_movement;
+}
+
+bool TileMap::blocks_los(int n) {
+    return tile_info[tiles[n].info_index].blocks_los;
+}
 
 ALLEGRO_BITMAP *TileMap::getBitmap(int n) {
     return tile_info[tiles[n].info_index].sprite;
@@ -1715,7 +1727,7 @@ void Character::randomMove(void) {
     do {
         new_n = dir_transform(n, dist(*g.rng));
     } while(good_index(new_n) == false ||
-            g.map->tile_info[g.map->tiles[new_n].info_index].blocks_movement == true);
+            g.map->blocks_movement(new_n) == true);
 
     move(new_n);
 }
@@ -2189,8 +2201,12 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
 }
 
 void TileMap::focusOnPlayer(void) {
-    int p_x = player->n % size_x;
-    int p_y = player->n / size_x;
+    focusOn(player->n);
+}
+
+void TileMap::focusOn(int n) {
+    int p_x = n % size_x;
+    int p_y = n / size_x;
     view_x = max(0, p_x - cols/2 + 1);
     view_y = max(0, p_y - rows/2 + 2);
     view_x = max(0, min(view_x, size_x - cols));
@@ -2308,32 +2324,41 @@ void end_turn(void);
 void TileMap::mouseDown(void) {
     int clicked_n = mouseToTileN();
     int player_n = player->n;
-
-    if(clicked_n == player_n ||
-       clicked_n == -1)
-        return;
-
     int clicked_nearby = -1;
-    for(int dir = 1; dir <= 6; dir++) {
-        if(dir_transform(player_n, dir) == clicked_n) {
-            clicked_nearby = clicked_n;
-        }
-    }
 
-    if(clicked_nearby == -1)
+    if(clicked_n == -1)
         return;
-    else {
-        if(g.map->tile_info[g.map->tiles[clicked_nearby].info_index].blocks_movement == false) {
-            player->move(clicked_nearby);
-            end_turn();
-            player->update_visibility();
+
+    // LMB - movement
+    if(g.mouse_button == 1) {
+        if(clicked_n == player_n)
+            return;
+
+        for(int dir = 1; dir <= 6; dir++) {
+            if(dir_transform(player_n, dir) == clicked_n) {
+                clicked_nearby = clicked_n;
+            }
+        }
+
+        if(clicked_nearby == -1)
+            return;
+        else {
+            if(g.map->tile_info[g.map->tiles[clicked_nearby].info_index].blocks_movement == false) {
+                player->move(clicked_nearby);
+                end_turn();
+                player->update_visibility();
+            }
         }
     }
+    // RMB - focus
+    else if(g.mouse_button == 2) {
+        focusOn(clicked_n);
+    }
 
-    // char buf[100];
-    // snprintf(buf, sizeof(buf), "clicked on n=%d %d %d %f %f %f %f",
-    //          clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
-    // g.AddMessage(buf);
+    char buf[100];
+    snprintf(buf, sizeof(buf), "clicked on n=%d %d %d %f %f %f %f",
+             clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
+    info(buf);
 }
 
 bool tile_blocks_los(int n) {
@@ -4745,9 +4770,6 @@ void ScavengeUI::setup(void) {
     widgets.push_back(gridsystem);
 }
 
-/*
-  TODO: stuff
-*/
 struct InteractGridSystem : public GridSystem {
     Grid *options;
     Grid *selected;
@@ -4756,8 +4778,9 @@ struct InteractGridSystem : public GridSystem {
 };
 
 struct InteractPage {
-    // image shown upper right
-    ALLEGRO_BITMAP *bg;
+    // top left and right panes
+    ALLEGRO_BITMAP *left;
+    ALLEGRO_BITMAP *right;
 
     // page description, shown upper left
     vector<const char *> description;
@@ -4765,11 +4788,19 @@ struct InteractPage {
     // choices that can be made on this page
     vector<pair<Item *, int>> choices;
 
+    InteractPage();
+
     // functions that run when coming into and leaving the page
+    // and per frame
     void (*pre)(void);
+    void (*frame)(void);
     void (*post)(void);
 
-    InteractPage();
+    // creates and destroys the left bitmap
+    void switch_to(void);
+    void switch_from(void);
+
+    void draw_description(void);
     void draw(void);
 };
 
@@ -4786,7 +4817,9 @@ struct Interact {
 };
 
 struct InteractUI : public UI {
-    const int off_x = 97;
+    static const int off_x = 97;
+    static const int top_off_y = 40;
+    static const int top_size = 300;
 
     InteractGridSystem *gridsystem;
     Interact *current_interact;
@@ -4798,8 +4831,11 @@ struct InteractUI : public UI {
 };
 
 InteractGridSystem::InteractGridSystem() {
-    options = new Grid (97 + 105, 300, 16, 10, NULL);
-    selected = new Grid (97 + 398, 300, 16, 10, g.encounter_selected);
+    options = new Grid (97 + 105, InteractUI::top_off_y
+                        + InteractUI::top_size + 5, 16, 10, NULL);
+    selected = new Grid (97 + 398, InteractUI::top_off_y
+                         + InteractUI::top_size + 5, 16, 10,
+                         g.encounter_selected);
 
     auto_target = selected;
 
@@ -4814,7 +4850,7 @@ InteractUI::InteractUI(void) {
 
     button_confirm = new Button ("Commit selection");
     button_confirm->pos.x1 = off_x + 691;
-    button_confirm->pos.y1 = 300;
+    button_confirm->pos.y1 = top_off_y + top_size + 5;
     button_confirm->pos.x2 = 75;
     button_confirm->pos.y2 = 45;
     button_confirm->up = g.bitmaps[33];
@@ -4846,14 +4882,39 @@ Interact::Interact(void) {
 InteractPage::InteractPage(void) {
     pre = NULL;
     post = NULL;
+    left = NULL;
+    frame = NULL;
+    right = NULL;
+}
+
+void InteractPage::switch_to(void) {
+    left = al_create_bitmap(555, InteractUI::top_size);
+    draw_description();
+}
+
+void InteractPage::switch_from(void) {
+    al_destroy_bitmap(left);
+}
+
+void InteractPage::draw_description(void) {
+    al_set_target_bitmap(left);
+    al_clear_to_color(g.color_grey2);
+
+    float y = 5;
+    for(auto&& line : description) {
+        al_draw_text(g.font, g.color_black, 5, y, 0, line);
+        y += 8;
+    }
+
+    al_set_target_backbuffer(g.display);
 }
 
 void InteractUI::draw(void) {
     assert(current_interact != NULL);
-    al_draw_filled_rectangle(off_x + 105, 25, off_x + 540, 295, g.color_grey2);
-    al_draw_filled_rectangle(off_x + 545, 25, off_x + 985, 295, g.color_grey2);
-    current_interact->draw();
+    al_draw_filled_rectangle(off_x + 595, top_off_y, off_x + 1035,
+                             top_off_y + top_size, g.color_grey2);
     UI::draw();
+    current_interact->draw();
 }
 
 void Interact::draw(void) {
@@ -4862,14 +4923,16 @@ void Interact::draw(void) {
 }
 
 void InteractPage::draw(void) {
-    if(bg != NULL) {
-        al_draw_bitmap(bg, 97 + 550, 30, 0);
+    if(right != NULL) {
+        al_draw_bitmap(right, InteractUI::off_x + 600,
+                       InteractUI::top_off_y + 5, 0);
     }
-
-    float y = 5;
-    for(auto&& line : description) {
-        al_draw_text(g.font, g.color_black, 97 + 105 + 5, 25 + y, 0, line);
-        y += 8;
+    if(left != NULL) {
+        al_draw_bitmap(left, InteractUI::off_x + 35,
+                       InteractUI::top_off_y, 0);
+    }
+    if(frame != NULL) {
+        frame();
     }
 }
 
@@ -4883,6 +4946,8 @@ void runInteract(Interact *x) {
 }
 
 void runInteractStep(InteractPage *x) {
+    x->switch_to();
+
     if(x->pre != NULL) {
         x->pre();
     }
@@ -4926,6 +4991,7 @@ void runInteractStepCB(void) {
 
     if(new_page >= 0) {
         runInteractStep(g.ui_Interact->current_interact->pages.at(new_page));
+        p->switch_from();
     } else {
         if(new_page != -1) {
             info("Interact Error: couldn't find new interact page index");
@@ -4935,16 +5001,45 @@ void runInteractStepCB(void) {
 }
 
 struct test_interact_data {
-    int counter;
+    struct circle {
+        float x, y, r, s;
+        const float max_size = 10.0;
 
-    test_interact_data() { counter = 0; }
+        circle() { generate(); }
+
+        void generate(void) {
+            uniform_real_distribution<> gx(50.0, 1220.0);
+            uniform_real_distribution<> gy(50.0, 670.0);
+            uniform_real_distribution<> gr(0.0, max_size - 2.0);
+            uniform_real_distribution<> gs(0.2, 0.5);
+            x = gx(*g.rng);
+            y = gy(*g.rng);
+            r = gr(*g.rng);
+            s = gs(*g.rng);
+        }
+        void draw(void) { al_draw_filled_circle(x, y, r, g.color_white); }
+        void update(void) { r += s; if(r > max_size) { generate(); } }
+    };
+
+    vector<circle> circles;
+
+    test_interact_data() { circles.resize(15); }
 };
 
-void pre0test(void) {
+void frame0test(void) {
     auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
+    for(auto&& c : data->circles) {
+        c.draw();
+        c.update();
+    }
+}
 
-    cout << "counter: " << data->counter << endl;
-    data->counter++;
+void pre0test(void) {
+    InteractPage *p = g.ui_Interact->current_interact->current_page;
+    ALLEGRO_BITMAP *left = p->left;
+    al_set_target_bitmap(left);
+    // al_draw_filled_circle(100, 100, 100, g.color_white);
+    al_set_target_backbuffer(g.display);
 }
 
 void init_interactions(void) {
@@ -4953,17 +5048,19 @@ void init_interactions(void) {
     Item *opt3 = new Item("Flee");
 
     InteractPage *page1 = new InteractPage;
-    page1->bg = g.bitmaps[0];
+    page1->right = g.bitmaps[92];
     page1->choices.push_back({ opt1, 1 });
     page1->choices.push_back({ opt3, -1 });
-    page1->description.push_back("You're in a dark room.");
-    page1->description.push_back("\"Hello?\"");
+    page1->description.push_back("You're on a desolate field.");
+    page1->description.push_back("Suddenly you hear a raspy voice from behind you.");
+    page1->description.push_back("\"Hello?\" it says");
     page1->description.push_back("");
     page1->description.push_back("... who was that?");
     page1->pre = pre0test;
+    page1->frame = frame0test;
 
     InteractPage *page2 = new InteractPage;
-    page2->bg = NULL;
+    page2->right = NULL;
     page2->choices.push_back({ opt2, 0 });
     page2->description.push_back("You slash and stab at the dark.");
     page2->description.push_back("...");
@@ -5998,6 +6095,7 @@ void load_bitmaps(void) {
     /* 89 */ filenames.push_back("media/tile/crackedground.png");
     /* 90 */ filenames.push_back("media/characters/dog.png");
     /* 91 */ filenames.push_back("media/characters/char1.png");
+    /* 92 */ filenames.push_back("media/backgrounds/story-field1.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -6570,11 +6668,16 @@ int main(int argc, char **argv) {
     bool was_mouse_down = false;
     bool draw_hover = false;
 
-    // counter;
-    int i = 0;
+    double frame_start;
+    double frame_end;
+    double frame_time;
+    int8_t frame_counter;
+    double dt;
 
     // main loop
     while(1) {
+        frame_start = al_current_time();
+
         al_get_mouse_state(&mouse_state);
         al_get_keyboard_state(&keyboard_state);
 
@@ -6636,8 +6739,18 @@ int main(int argc, char **argv) {
                     g.ui->hoverOverEvent();
             }
             al_flip_display();
+            frame_counter++;
         }
-        i++;
+
+        frame_end = al_current_time();
+        dt = frame_end - frame_start;
+        frame_time += dt;
+        if(frame_time >= 1.0) {
+            printf("drew %d frames in %f seconds\n",
+                   frame_counter, frame_time);
+            frame_time = 0;
+            frame_counter = 0;
+        }
     }
 
     unload_bitmaps();
