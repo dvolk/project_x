@@ -10,14 +10,14 @@ struct Widget {
     void (*onMouseUp)(void);
     void (*onKeyDown)(void);
 
-    virtual void mouseDown(void) = 0;
-    virtual void mouseUp(void) = 0;
-    virtual void keyDown(void) = 0;
+    virtual void mouseDown(void) { };
+    virtual void mouseUp(void) { };
+    virtual void keyDown(void) { };
     virtual void hoverOver(void) { };
 
     Widget();
     virtual ~Widget();
 
-    virtual void draw(void) = 0;
-    virtual void update() { };
+    virtual void draw(void) { };
+    virtual void update(void) { };
 };

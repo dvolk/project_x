@@ -172,6 +172,8 @@ struct Game {
     int hold_off_x;
     int hold_off_y;
     int key;
+    // time in seconds since last ui update
+    double dt;
 
     // the main 8 buttons
     set<Button *> main_buttons;
@@ -4791,21 +4793,25 @@ struct InteractPage {
     InteractPage();
 
     // functions that run when coming into and leaving the page
-    // and per frame
     void (*pre)(void);
-    void (*frame)(void);
     void (*post)(void);
+
+    void (*frame_draw)(void);
+    void (*frame_update)(void);
 
     // creates and destroys the left bitmap
     void switch_to(void);
     void switch_from(void);
+
+    // add a line to the description
+    void tell(const char *line);
 
     void draw_description(void);
     void draw(void);
 };
 
 // an "interact" is a collection of pages, i.e. a short CYOA
-struct Interact {
+struct Interact : public Widget {
     InteractPage *current_page;
     vector<InteractPage *> pages;
 
@@ -4813,7 +4819,8 @@ struct Interact {
     void *data;
 
     Interact();
-    void draw(void);
+    void draw(void) override;
+    void update(void) override;
 };
 
 struct InteractUI : public UI {
@@ -4870,6 +4877,7 @@ void InteractUI::setup(void) {
     widgets.push_back(button_confirm);
     widgets.push_back(g.log);
     widgets.push_back(gridsystem);
+    widgets.push_back(current_interact);
 
     addIndicatorWidgets();
     g.color_bg = g.color_grey;
@@ -4883,8 +4891,13 @@ InteractPage::InteractPage(void) {
     pre = NULL;
     post = NULL;
     left = NULL;
-    frame = NULL;
+    frame_draw = NULL;
+    frame_update = NULL;
     right = NULL;
+}
+
+void InteractPage::tell(const char *line) {
+    description.push_back(line);
 }
 
 void InteractPage::switch_to(void) {
@@ -4914,7 +4927,14 @@ void InteractUI::draw(void) {
     al_draw_filled_rectangle(off_x + 595, top_off_y, off_x + 1035,
                              top_off_y + top_size, g.color_grey2);
     UI::draw();
-    current_interact->draw();
+    // current_interact->draw();
+}
+
+void Interact::update(void) {
+    void (*update_func)(void) = current_page->frame_update;
+    if(update_func != NULL) {
+        update_func();
+    }
 }
 
 void Interact::draw(void) {
@@ -4931,8 +4951,8 @@ void InteractPage::draw(void) {
         al_draw_bitmap(left, InteractUI::off_x + 35,
                        InteractUI::top_off_y, 0);
     }
-    if(frame != NULL) {
-        frame();
+    if(frame_draw != NULL) {
+        frame_draw();
     }
 }
 
@@ -5011,14 +5031,17 @@ struct test_interact_data {
             uniform_real_distribution<> gx(50.0, 1220.0);
             uniform_real_distribution<> gy(50.0, 670.0);
             uniform_real_distribution<> gr(0.0, max_size - 2.0);
-            uniform_real_distribution<> gs(0.2, 0.5);
+            uniform_real_distribution<> gs(1, 2);
             x = gx(*g.rng);
             y = gy(*g.rng);
             r = gr(*g.rng);
             s = gs(*g.rng);
         }
         void draw(void) { al_draw_filled_circle(x, y, r, g.color_white); }
-        void update(void) { r += s; if(r > max_size) { generate(); } }
+        void update(void) {
+            r += g.dt * s * 3;
+            if(r > max_size) { generate(); }
+        }
     };
 
     vector<circle> circles;
@@ -5026,10 +5049,16 @@ struct test_interact_data {
     test_interact_data() { circles.resize(15); }
 };
 
-void frame0test(void) {
+void frame0_draw_test(void) {
     auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
     for(auto&& c : data->circles) {
         c.draw();
+    }
+}
+
+void frame0_update_test(void) {
+    auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
+    for(auto&& c : data->circles) {
         c.update();
     }
 }
@@ -5051,20 +5080,26 @@ void init_interactions(void) {
     page1->right = g.bitmaps[92];
     page1->choices.push_back({ opt1, 1 });
     page1->choices.push_back({ opt3, -1 });
-    page1->description.push_back("You're on a desolate field.");
-    page1->description.push_back("Suddenly you hear a raspy voice from behind you.");
-    page1->description.push_back("\"Hello?\" it says");
-    page1->description.push_back("");
-    page1->description.push_back("... who was that?");
+    page1->tell("You wake up.");
+    page1->tell("");
+    page1->tell("In front is a desolate field. You wonder if it's really black and");
+    page1->tell("white or if that's the result of the severe headache you're just");
+    page1->tell("becoming aware of.");
+    page1->tell("");
+    page1->tell("A raspy voice behind you says \"hello?\"");
+    page1->tell("");
+    page1->tell("... who was that? Where am I?");
     page1->pre = pre0test;
-    page1->frame = frame0test;
+    page1->frame_draw = frame0_draw_test;
+    page1->frame_update = frame0_update_test;
 
     InteractPage *page2 = new InteractPage;
     page2->right = NULL;
     page2->choices.push_back({ opt2, 0 });
-    page2->description.push_back("You slash and stab at the dark.");
-    page2->description.push_back("...");
-    page2->description.push_back("It has no effect.");
+    page2->tell("You slash and stab at the dark.");
+    page2->tell("...");
+    page2->tell("It has no effect.");
+    page2->tell("");
 
     Interact *test_interact = new Interact;
     test_interact->pages.push_back(page1);
@@ -6671,8 +6706,7 @@ int main(int argc, char **argv) {
     double frame_start;
     double frame_end;
     double frame_time;
-    int8_t frame_counter;
-    double dt;
+    int8_t frame_counter = 0;
 
     // main loop
     while(1) {
@@ -6743,8 +6777,8 @@ int main(int argc, char **argv) {
         }
 
         frame_end = al_current_time();
-        dt = frame_end - frame_start;
-        frame_time += dt;
+        g.dt = frame_end - frame_start;
+        frame_time += g.dt;
         if(frame_time >= 1.0) {
             printf("drew %d frames in %f seconds\n",
                    frame_counter, frame_time);
