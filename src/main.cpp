@@ -6714,7 +6714,7 @@ int main(int argc, char **argv) {
 
     double frame_start;
     double frame_end;
-    double frame_time;
+    double frame_time = 0;
     int8_t frame_counter = 0;
 
     // main loop
