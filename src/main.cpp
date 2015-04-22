@@ -178,8 +178,6 @@ struct Game {
     // the main 8 buttons
     set<Button *> main_buttons;
 
-    set<Widget *> all_widgets;
-
     // add a message to the message log
     void AddMessage(string str);
 };
@@ -563,6 +561,7 @@ Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h) {
 Grid::~Grid() {
     // info("~Grid()");
     // a grid owns its items
+    delete gsb;
     for(auto &item : items)
         delete item;
 }
@@ -2145,17 +2144,25 @@ Character *TileMap::characterAt(int n) {
 }
 
 TileMap::~TileMap() {
+    info("~TileMap");
     // tilemap owns characters
     delete player;
-    player = NULL;
     for(auto& character : characters) {
         delete character;
-        character = NULL;
     }
-    for(auto& tile : tiles)
-        if(tile.ground_items != NULL)
+    // delete ground item and location vectors and their contents
+    for(auto& tile : tiles) {
+        if(tile.ground_items != NULL) {
             for(auto& grid : *tile.ground_items)
                 delete grid;
+            delete tile.ground_items;
+        }
+        if(tile.locations != NULL) {
+            for(auto& loc : *tile.locations)
+                delete loc;
+            delete tile.locations;
+        }
+    }
 }
 
 TileMap::TileMap(int sx, int sy, int c, int r) {
@@ -2888,7 +2895,7 @@ void mkRingM(int n, int m) {
 void TileMap::generate(void) {
     uniform_int_distribution<> tile_type_dist(0, tile_info.size() - 1);
 
-    tiles.reserve(size_x * size_y);
+    tiles.resize(size_x * size_y);
 
     for(int i = 0; i <= max_t; i++) {
         tiles[i].visible = false;
@@ -5598,6 +5605,7 @@ ConditionUI::ConditionUI() {
 }
 
 ItemsUI::~ItemsUI() {
+    delete gridsystem;
     info("~ItemsUI()");
 }
 
@@ -5784,23 +5792,22 @@ vector<Grid *> *ground_at_character(Character *character) {
 
     if(ground == NULL) {
         ground = new vector<Grid *>;
+        assert(ground != NULL);
     }
-    assert(ground);
 
-    if((*ground).empty()) {
+    if(ground->empty() == true) {
         // create first grid if it doesn't exist
         Grid *ground_grid = new Grid (105, 25, 20, 30, g.ground);
         assert(ground_grid != NULL);
-        ground->push_back(ground_grid);
         // test items
-        ground_grid->PlaceItem(new Item("crowbar"));
-        ground_grid->PlaceItem(new Item("shopping trolley"));
-        ground_grid->PlaceItem(new Item("pill bottle"));
-        ground_grid->PlaceItem(new Item("arrow", 4));
-        ground_grid->PlaceItem(new Item("arrow", 3));
-        ground_grid->PlaceItem(new Item("whiskey", 10));
-        ground_grid->PlaceItem(new Item("clean rag", 10));
-        ground_grid->PlaceItem(new Item("clean rag", 10));
+        ground_grid->PlaceItem(new Item ("crowbar"));
+        ground_grid->PlaceItem(new Item ("shopping trolley"));
+        ground_grid->PlaceItem(new Item ("pill bottle"));
+        ground_grid->PlaceItem(new Item ("arrow", 4));
+        ground_grid->PlaceItem(new Item ("arrow", 3));
+        ground_grid->PlaceItem(new Item ("whiskey", 10));
+        ground_grid->PlaceItem(new Item ("clean rag", 10));
+        ground_grid->PlaceItem(new Item ("clean rag", 10));
         ground_grid->PlaceItem(new Item ("water bottle"));
         ground_grid->PlaceItem(new Item ("red hoodie"));
         ground_grid->PlaceItem(new Item ("blue jeans"));
@@ -5810,8 +5817,10 @@ vector<Grid *> *ground_at_character(Character *character) {
         ground_grid->PlaceItem(new Item ("right shoe"));
         ground_grid->PlaceItem(new Item ("left shoe"));
         ground_grid->PlaceItem(new Item ("makeshift wood bow"));
+
+        ground->push_back(ground_grid);
+        g.map->tiles[character->n].ground_items = ground;
     }
-    g.map->tiles[character->n].ground_items = ground;
     return ground;
 }
 
@@ -5868,8 +5877,8 @@ void InventoryGridSystem::reset(void) {
     g.map->player->addInventoryHardpoints(this);
 
     vector<Grid *> *ground = ground_at_player();
-    (*ground)[current_ground_page]->gsb_displayed = true;
-    grids.push_back((*ground)[current_ground_page]);
+    ground->at(current_ground_page)->gsb_displayed = true;
+    grids.push_back(ground->at(current_ground_page));
     // reparent();
 
     countTotalItems();
@@ -6794,8 +6803,13 @@ int main(int argc, char **argv) {
       al_uninstall_system();
     */
 
-    for(auto& widget : g.all_widgets) {
-        delete widget;
+    delete g.map;
+
+    for(auto&& recipe : recipes) {
+        delete recipe;
+    }
+    for(auto&& loc : g.location_info) {
+        delete loc.location_item;
     }
 
     info("Exiting");
