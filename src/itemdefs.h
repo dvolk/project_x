@@ -702,4 +702,27 @@ void init_iteminfo(void) {
     tmp.weapon_damage = 0.2;
     tmp.weapon_range = 8;
     g.item_info.push_back(tmp);
+
+    /* 30 */
+    tmp.name = "moldy bread";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = 300;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = g.bitmaps[96];
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = -1;
+    tmp.container_size_y = -1;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = true;
+    tmp.canBeDamaged = true;
+    tmp.slot = SLOT_NONE;
+    tmp.warmth = 0.0;
+    tmp.weapon_damage = 0.0001;
+    tmp.weapon_range = 1;
+    g.item_info.push_back(tmp);
 }
