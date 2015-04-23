@@ -1347,6 +1347,7 @@ void init_locationdata(void) {
     tmp.add_loot("clean rag", 0.5);
     tmp.add_loot("water bottle", 0.2);
     tmp.add_loot("whiskey", 0.4);
+    tmp.add_loot("moldy bread", 0.4);
     tmp.add_loot("red hoodie", 0.05);
     tmp.add_loot("ski mask", 0.05);
     tmp.add_loot("right glove", 0.05);
@@ -1505,7 +1506,7 @@ Character *TileMap::addRandomCharacter(const char *name) {
 
     new_char->name = name;
 
-    vector<int> character_sprite_map = { 21, 90, 91 };
+    vector<int> character_sprite_map = { 21, 90, 91, 94, 95 };
     uniform_int_distribution<> sprite_dist(0, character_sprite_map.size() - 1);
     new_char->sprite = g.bitmaps[character_sprite_map[sprite_dist(*g.rng)]];
 
@@ -5953,7 +5954,7 @@ struct MainMenuUI : public UI {
 };
 
 void MainMenuUI::draw(void) {
-    // al_draw_bitmap(background, 0, 0, 0);
+    al_draw_bitmap(background, 0, 0, 0);
     UI::draw();
 }
 
@@ -6283,6 +6284,9 @@ void load_bitmaps(void) {
     /* 91 */ filenames.push_back("media/characters/char1.png");
     /* 92 */ filenames.push_back("media/backgrounds/story-field1.png");
     /* 93 */ filenames.push_back("media/backgrounds/mainmenubg.png");
+    /* 94 */ filenames.push_back("media/characters/char2.png");
+    /* 95 */ filenames.push_back("media/characters/char3.png");
+    /* 96 */ filenames.push_back("media/items/moldy_bread.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -6610,6 +6614,7 @@ void init_player(void) {
 
     // add player starting items
     Item *backpack = new Item("backpack");
+    backpack->storage->PlaceItem(new Item ("moldy bread"));
     c->back->PlaceItem(backpack);
     Item *crowbar = new Item("crowbar");
     c->right_hand_hold->PlaceItem(crowbar);
@@ -6849,8 +6854,8 @@ int main(int argc, char **argv) {
     }
 
     button_MainMap_press();
-    runMainMenu();
-    // runInteract(g.stories.front());
+    // runMainMenu();
+    runInteract(g.stories.front());
 
     bool redraw = true;
     bool was_mouse_down = false;
