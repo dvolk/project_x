@@ -50,9 +50,12 @@ struct BarIndicator;
 struct TimeDisplay;
 struct WeaponSwitcher;
 struct Interact;
+struct MainMenuUI;
 
 // global state
 struct Game {
+    bool running;
+
     // display dimensions
     int display_x;
     int display_y;
@@ -152,6 +155,7 @@ struct Game {
     EncounterUI *ui_Encounter;
     ScavengeUI *ui_Scavenge;
     InteractUI *ui_Interact;
+    MainMenuUI *ui_MainMenu;
 
     vector<Interact *> stories;
 
@@ -3517,7 +3521,7 @@ void Item::drawHeld(void) {
 }
 
 /*
-  valgrind reports a loss here
+  valgrind reports a loss here (still?)
 */
 // this does a lot more than unstack now
 void Grid::unstack_item(int x, int y) {
@@ -4762,7 +4766,7 @@ void ScavengeUI::setup(void) {
                 // we make a map from location items to locations
                 // so runScavenging can know which location we're looting
                 // based on the item selected
-                items_to_locations.insert(pair<Item *, Location *>(loc_item, location));
+                items_to_locations.insert({ loc_item, location });
             }
         }
     } else if(current_stage == 1) {
@@ -5781,9 +5785,6 @@ vector<Location *> *locations_at_character(Character *character) {
     return locations;
 }
 
-/*
-  TODO: valgrind reports a loss here
-*/
 vector<Grid *> *ground_at_character(Character *character) {
     // get ground inventory at player position
     assert(character != NULL);
@@ -5915,6 +5916,135 @@ void ConditionGridSystem::reset(void) {
     GridSystem::reset();
 }
 
+vector<ALLEGRO_COLOR> menu_fade;
+
+struct MenuEntry : public Widget {
+    const char *name;
+
+    float text_offset_x;
+    float text_offset_y;
+    size_t fade_level;
+
+    void draw(void) override;
+    void update(void) override;
+
+    void hoverOver(void) override;
+    void mouseDown(void) override;
+};
+
+struct MainMenuUI : public UI {
+    const float x = 590;
+    const float y = 250;
+    const float sx = 100;
+    const float sy = 50;
+
+    ALLEGRO_BITMAP *background;
+    vector <MenuEntry *> entries;
+
+    MainMenuUI();
+
+    void draw(void) override;
+
+    void addEntry(const char *name);
+    void handlePress(const char *name);
+
+    void setFadeColors(void);
+    void resetFadeLevels(void);
+};
+
+void MainMenuUI::draw(void) {
+    // al_draw_bitmap(background, 0, 0, 0);
+    UI::draw();
+}
+
+void MenuEntry::update(void) {
+    if(fade_level < menu_fade.size() - 1)
+        fade_level++;
+}
+
+void MenuEntry::draw(void) {
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, menu_fade[fade_level]);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 1);
+    al_draw_text(g.font, g.color_white,
+                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+void MenuEntry::hoverOver(void) {
+    fade_level = 0;
+
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, menu_fade[0]);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 1);
+    al_draw_text(g.font, g.color_white,
+                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+void MenuEntry::mouseDown(void) {
+    g.ui_MainMenu->handlePress(name);
+}
+
+void MainMenuUI::handlePress(const char *name) {
+    if(strcmp(name, "Quit") == 0) {
+        g.running = false;
+    } else if(strcmp(name, "New") == 0) {
+        button_MainMap_press();
+    } else if(strcmp(name, "Continue") == 0) {
+        button_MainMap_press();
+    } else {
+        info("That button doesn't do anything yet");
+    }
+}
+
+void MainMenuUI::setFadeColors(void) {
+    menu_fade.resize(25);
+    int i = 0;
+    for(auto&& color : menu_fade) {
+        int level = 175 - i*4;
+        color = al_map_rgb(level, level, level);
+        i++;
+    }
+}
+void MainMenuUI::resetFadeLevels(void) {
+    for(auto&& entry : entries) {
+        entry->fade_level = menu_fade.size() - 1;
+    }
+}
+
+void MainMenuUI::addEntry(const char *name) {
+    float offset_y = sy * entries.size();
+    MenuEntry *e = new MenuEntry;
+    e->name = name;
+    e->pos.x1 = x;
+    e->pos.y1 = y + offset_y;
+    e->pos.x2 = 100;
+    e->pos.y2 = sy - 5; // 5px spacing
+    e->text_offset_x = round((e->pos.x2 - strlen(name) * 8) / 2); // center the text
+    // rounded, otherwise al_draw_text produces artifacts
+    e->text_offset_y = round((e->pos.y2 - 8) / 2);
+    e->fade_level = 24;
+    entries.push_back(e);
+    widgets.push_back(e);
+}
+
+MainMenuUI::MainMenuUI() {
+    background = g.bitmaps[93];
+    setFadeColors();
+
+    addEntry("New");
+    addEntry("Continue");
+    /*
+      TODO: do I want loading/saving?
+    */
+    addEntry("Load");
+    addEntry("Save");
+    addEntry("Options");
+    addEntry("Help");
+    addEntry("Quit");
+}
+
 void main_buttons_update(void) {
     for(auto& b : g.main_buttons)
         b->pressed = false;
@@ -5937,6 +6067,18 @@ void main_buttons_update(void) {
 }
 
 // these could probably be a single function
+// update: let's just face it. It's not happening
+void runMainMenu(void) {
+    if(g.ui == g.ui_MainMap ||
+       g.ui == g.ui_MiniMap) {
+        g.ui_MainMenu->resetFadeLevels();
+        g.color_bg = g.color_black;
+        g.ui = g.ui_MainMenu;
+    } else {
+        info("You can only go to the main menu from the map or minimap");
+    }
+}
+
 void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
         if(g.ui == g.ui_Crafting)
@@ -6140,6 +6282,7 @@ void load_bitmaps(void) {
     /* 90 */ filenames.push_back("media/characters/dog.png");
     /* 91 */ filenames.push_back("media/characters/char1.png");
     /* 92 */ filenames.push_back("media/backgrounds/story-field1.png");
+    /* 93 */ filenames.push_back("media/backgrounds/mainmenubg.png");
 
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
@@ -6702,11 +6845,12 @@ int main(int argc, char **argv) {
         g.ui_Camp      = new CampUI;
         g.ui_Scavenge  = new ScavengeUI;
         g.ui_Interact  = new InteractUI;
-        // start on the main map
-        button_MainMap_press();
+        g.ui_MainMenu  = new MainMenuUI;
     }
 
-    runInteract(g.stories.front());
+    button_MainMap_press();
+    runMainMenu();
+    // runInteract(g.stories.front());
 
     bool redraw = true;
     bool was_mouse_down = false;
@@ -6717,8 +6861,13 @@ int main(int argc, char **argv) {
     double frame_time = 0;
     int8_t frame_counter = 0;
 
+    g.running = true;
+
     // main loop
     while(1) {
+        if(g.running == false)
+            break;
+
         frame_start = al_current_time();
 
         al_get_mouse_state(&mouse_state);
@@ -6753,10 +6902,10 @@ int main(int argc, char **argv) {
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
             g.key = ev.keyboard.keycode;
             if(g.key == ALLEGRO_KEY_ESCAPE) {
-                if(g.ui == g.ui_MainMap) {
-                    break;
-                } else if(g.ui != g.ui_Encounter) {
+                if(g.ui == g.ui_MainMenu) {
                     button_MainMap_press();
+                } else {
+                    runMainMenu();
                 }
             } else {
                 g.ui->keyDownEvent();
