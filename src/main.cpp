@@ -228,11 +228,15 @@ struct Item {
     // when they're used float condition;
     float condition;
 
+    Item() { }
     Item(const Item& i);
     Item(int16_t info_index);
     Item(const char *item_name);
     Item(const char *item_name, int16_t num_stack);
     ~Item();
+
+    void save(ostream &os);
+    void load(istream &is);
 
     void init(int16_t info_index);
     void init_from_name(const char *name);
@@ -372,6 +376,8 @@ struct GridInfo {
     }
 };
 
+vector<GridInfo *> gridinfo_store;
+
 void init_hardpointinfo(void) {
     g.right_hand_hold = new GridInfo;
     g.left_hand_hold = new GridInfo;
@@ -434,6 +440,35 @@ void init_hardpointinfo(void) {
 
     g.right_shoulder->pleaseRotateIt = true;
     g.left_shoulder->pleaseRotateIt = true;
+
+    gridinfo_store.push_back(g.right_hand_hold);
+    gridinfo_store.push_back(g.left_hand_hold);
+    gridinfo_store.push_back(g.right_hand);
+    gridinfo_store.push_back(g.left_hand);
+    gridinfo_store.push_back(g.back);
+    gridinfo_store.push_back(g.head);
+    gridinfo_store.push_back(g.neck);
+    gridinfo_store.push_back(g.right_shoulder);
+    gridinfo_store.push_back(g.left_shoulder);
+    gridinfo_store.push_back(g.torso);
+    gridinfo_store.push_back(g.legs);
+    gridinfo_store.push_back(g.right_foot);
+    gridinfo_store.push_back(g.left_foot);
+    gridinfo_store.push_back(g.vehicle);
+    gridinfo_store.push_back(g.encounter_selected);
+    gridinfo_store.push_back(g.medical_upper_torso);
+    gridinfo_store.push_back(g.medical_lower_torso);
+    gridinfo_store.push_back(g.medical_left_upper_leg);
+    gridinfo_store.push_back(g.medical_right_upper_leg);
+    gridinfo_store.push_back(g.medical_left_lower_leg);
+    gridinfo_store.push_back(g.medical_right_lower_leg);
+    gridinfo_store.push_back(g.medical_left_upper_arm);
+    gridinfo_store.push_back(g.medical_right_upper_arm);
+    gridinfo_store.push_back(g.medical_left_lower_arm);
+    gridinfo_store.push_back(g.medical_right_lower_arm);
+    gridinfo_store.push_back(g.default_info);
+    gridinfo_store.push_back(g.ground);
+    gridinfo_store.push_back(g.bottle);
 }
 
 struct Button : public Widget {
@@ -530,8 +565,12 @@ struct Grid {
 
     static bool PlaceItemWantsStacking;
 
+    Grid() { }
     Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h);
     ~Grid();
+
+    void save(ostream &os);
+    void load(istream &is);
 
     void draw(void);
     void drawAt(float x, float y);
@@ -932,7 +971,10 @@ enum ActivityKind {
 };
 
 struct Wound {
-    int severity;
+    int8_t severity;
+
+    void save(ostream &os);
+    void load(istream &is);
 
     Wound();
 };
@@ -1385,6 +1427,9 @@ void init_locationdata(void) {
 struct Location {
     int16_t info_index; // index into LocationInfo
     int last_looted;
+
+    void save(ostream &os);
+    void load(istream &is);
 
     int getResetTime(void);
     vector<pair<float, int>> getLootTable(void);
@@ -2643,6 +2688,9 @@ void toggleMsgLogVisibility(void) {
         g.weapon_switcher->visible = true;
     }
 }
+
+void save_game();
+void load_game();
 
 void TileMap::handleKeyDown(void) {
     if(g.key == ALLEGRO_KEY_UP) {
@@ -6073,7 +6121,9 @@ void MainMenuUI::handlePress(const char *name) {
         new_game();
         button_MainMap_press();
     } else if(strcmp(name, "Continue") == 0) {
-        button_MainMap_press();
+        if(g.running == true) {
+            button_MainMap_press();
+        }
     } else if(strcmp(name, "Save") == 0) {
         save_game();
         button_MainMap_press();
@@ -6943,12 +6993,124 @@ size_t find_bitmap_index(ALLEGRO_BITMAP *searched) {
             return i;
         i++;
     }
-    errorQuit("Invalid bitmap index");
+    return -1;
+}
+
+void Item::save(ostream &os) {
+    os << pos.x1 << ' ' << pos.y1 << ' ' << pos.x2 << ' ' << pos.y2 << ' ';
+    os << info_index << ' ' << cur_stack << ' ' << rotated << ' ';
+    os << condition << ' ';
+    if(storage != NULL) {
+        os << true << ' ';
+        storage->save(os);
+    } else {
+        os << false << ' ';
+    }
+}
+
+void Item::load(istream &is) {
+    is >> pos.x1 >> pos.y1 >> pos.x2 >> pos.y2;
+    is >> info_index >> cur_stack >> rotated;
+    is >> condition;
+    bool has_storage;
+    is >> has_storage;
+    if(has_storage == true) {
+        storage = new Grid;
+        storage->load(is);
+    } else {
+        storage = NULL;
+    }
+}
+
+int find_gridinfo_index(GridInfo *info) {
+    if(info == NULL)
+        return -1;
+    for(int i = 0; i <= 27; i++)
+        if(info == gridinfo_store[i])
+            return i;
+    return -1;
+}
+
+void Grid::save(ostream &os) {
+    os << pos.x1 << ' ' << pos.y1 << ' ' << pos.x2 << ' ' << pos.y2 << ' ';
+    os << (int)grid_size_x << ' ' << (int)grid_size_y << ' ';
+    os << find_gridinfo_index(info) << ' ';
+    os << (int)items.size() << ' ';
+    for(auto&& item : items) {
+        item->save(os);
+    }
+}
+
+void Grid::load(istream &is) {
+    int gx, gy;
+    is >> pos.x1 >> pos.y1 >> pos.x2 >> pos.y2 >> gx >> gy;
+    grid_size_x = gx;
+    grid_size_y = gy;
+    int index;
+    is >> index;
+    if(index == -1)
+        info = NULL;
+    else
+        info = gridinfo_store[index];
+    resetPos();
+    gsb = NULL;
+    if(info == NULL || info->noGrid == false)
+        gsb = new GridSortButton (this);
+    gsb_displayed = false;
+    int n_items;
+    is >> n_items;
+    items.resize(n_items);
+    for(auto&& item : items) {
+        item = new Item;
+        item->load(is);
+        item->parent = this;
+    }
+}
+
+void Wound::save(ostream &os) {
+    os << (int)severity << ' ';
+}
+void Wound::load(istream &is) {
+    int s;
+    is >> s;
+    severity = s;
 }
 
 void Character::save(ostream &os) {
     os << strlen(name) << ' ' << name << ' ' << n << ' ';
     os << find_bitmap_index(sprite) << ' ';
+
+    os << health << ' ' << pain << ' ' << temperature << ' '
+       << fatigue << ' ' << hydration << ' ' << satiety << ' '
+       << burden << ' ' << maxBurden << ' ' << skills << ' '
+       << (int)selected_weapon_slot << ' ' << nextMove << ' ';
+
+    for(auto&& hp : inventory_hardpoints) {
+        hp->save(os);
+    }
+    vehicle->save(os);
+
+    medical_upper_torso->save(os);
+    medical_lower_torso->save(os);
+    medical_left_upper_leg->save(os);
+    medical_right_upper_leg->save(os);
+    medical_left_lower_leg->save(os);
+    medical_right_lower_leg->save(os);
+    medical_left_upper_arm->save(os);
+    medical_right_upper_arm->save(os);
+    medical_left_lower_arm->save(os);
+    medical_right_lower_arm->save(os);
+
+    wound_upper_torso.save(os);
+    wound_lower_torso.save(os);
+    wound_left_upper_leg.save(os);
+    wound_right_upper_leg.save(os);
+    wound_left_lower_leg.save(os);
+    wound_right_lower_leg.save(os);
+    wound_left_upper_arm.save(os);
+    wound_right_upper_arm.save(os);
+    wound_left_lower_arm.save(os);
+    wound_right_lower_arm.save(os);
 }
 
 void Character::load(istream &is) {
@@ -6962,6 +7124,50 @@ void Character::load(istream &is) {
     size_t sprite_index;
     is >> n >> sprite_index;
     sprite = g.bitmaps[sprite_index];
+
+    int w_slot;
+
+    is >> health >> pain >> temperature
+       >> fatigue >> hydration >> satiety
+       >> burden >> maxBurden >> skills
+       >> w_slot >> nextMove;
+
+    selected_weapon_slot = w_slot;
+
+    for(auto&& hp :inventory_hardpoints) {
+        hp->load(is);
+    }
+    vehicle->load(is);
+
+    medical_upper_torso->load(is);
+    medical_lower_torso->load(is);
+    medical_left_upper_leg->load(is);
+    medical_right_upper_leg->load(is);
+    medical_left_lower_leg->load(is);
+    medical_right_lower_leg->load(is);
+    medical_left_upper_arm->load(is);
+    medical_right_upper_arm->load(is);
+    medical_left_lower_arm->load(is);
+    medical_right_lower_arm->load(is);
+
+    wound_upper_torso.load(is);
+    wound_lower_torso.load(is);
+    wound_left_upper_leg.load(is);
+    wound_right_upper_leg.load(is);
+    wound_left_lower_leg.load(is);
+    wound_right_lower_leg.load(is);
+    wound_left_upper_arm.load(is);
+    wound_right_upper_arm.load(is);
+    wound_left_lower_arm.load(is);
+    wound_right_lower_arm.load(is);
+}
+
+void Location::save(ostream &os) {
+    os << info_index << ' ' << last_looted << ' ';
+}
+
+void Location::load(istream &is) {
+    is >> info_index >> last_looted;
 }
 
 void TileMap::save(ostream &os) {
@@ -6973,6 +7179,24 @@ void TileMap::save(ostream &os) {
     os << tiles.size() << ' ';
     for(auto&& tile : tiles) {
         os << (int)tile.info_index << ' ' << (int)tile.visible << ' ';
+        if(tile.ground_items != NULL) {
+            os << true << ' ';
+            os << tile.ground_items->size() << ' ';
+            for(auto&& g : *tile.ground_items) {
+                g->save(os);
+            }
+        } else {
+            os << false << ' ';
+        }
+        if(tile.locations != NULL) {
+            os << true << ' ';
+            os << tile.locations->size() << ' ';
+            for(auto &&l : *tile.locations) {
+                l->save(os);
+            }
+        } else {
+            os << false << ' ';
+        }
     }
     os << '\n';
     player->save(os);
@@ -6996,8 +7220,34 @@ void TileMap::load(istream &is) {
         is >> ii >> v;
         tile.info_index = ii;
         tile.visible = v;
-        tile.ground_items = NULL;
-        tile.locations = NULL;
+        bool has_ground_items;
+        is >> has_ground_items;
+        if(has_ground_items == true) {
+            int n_pages;
+            is >> n_pages;
+            tile.ground_items = new vector<Grid *>;
+            (*tile.ground_items).resize(n_pages);
+            for(auto&& page : *tile.ground_items) {
+                page = new Grid;
+                page->load(is);
+            }
+        } else {
+            tile.ground_items = NULL;
+        }
+        bool has_locations;
+        is >> has_locations;
+        if(has_locations == true) {
+            int n_loc;
+            is >> n_loc;
+            tile.locations = new vector<Location *>;
+            (*tile.locations).resize(n_loc);
+            for(auto &&loc : *tile.locations) {
+                loc = new Location;
+                loc->load(is);
+            }
+        } else {
+            tile.locations = NULL;
+        }
     }
     player = new Character;
     player->load(is);
