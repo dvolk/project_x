@@ -11,6 +11,7 @@
 #include <vector>
 #include <set>
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <algorithm>
 
@@ -87,6 +88,9 @@ struct Game {
     Button *button_endturn;
     Button *button_scavenge;
     Button *button_sleep;
+
+    int tilemap_sx; // persistent over games
+    int tilemap_sy;
 
     TileMap *map;
     MiniMap *minimap;
@@ -940,7 +944,7 @@ Wound::Wound() {
 struct Character {
     int n; // position by offset
 
-    const char *name;
+    char *name;
 
     Grid *right_hand_hold;
     Grid *left_hand_hold;
@@ -1014,6 +1018,9 @@ struct Character {
 
     Character();
     ~Character();
+
+    void save(ostream &os);
+    void load(istream &is);
 
     void update_visibility(void);
 
@@ -1123,6 +1130,8 @@ Item *Character::getSelectedWeapon(void) {
 }
 
 Character::~Character() {
+    free(name);
+
     for(auto& hardpoint : inventory_hardpoints) {
         delete hardpoint;
     }
@@ -1443,6 +1452,9 @@ struct TileMap : public Widget {
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
 
+    void save(ostream &os);
+    void load(istream &is);
+
     void handleKeyDown(void);
 
     void mouseDown(void);
@@ -1465,7 +1477,7 @@ struct TileMap : public Widget {
 
     void updateCharsByPos(void);
     void removeCharacter(Character *to_kill);
-    Character *addRandomCharacter(const char *name);
+    Character *addRandomCharacter(char *name);
 
     float getCurrentTemperature(int n);
     const char *getTileName(int n);
@@ -1501,7 +1513,7 @@ bool good_index(int n) {
 
 int dir_transform(int n, int dir);
 
-Character *TileMap::addRandomCharacter(const char *name) {
+Character *TileMap::addRandomCharacter(char *name) {
     Character *new_char = new Character;
 
     new_char->name = name;
@@ -1934,7 +1946,7 @@ struct GridSystem : public Widget {
     pair<Grid*, Item*> applied_params;
 
     GridSystem(void);
-    ~GridSystem(void);
+    virtual ~GridSystem(void);
 
     // resets the visibility of the grid sort buttons
     virtual void reset(void);
@@ -2667,9 +2679,6 @@ struct UI {
 
     virtual ~UI() {
         info("~UI()");
-        for(auto& widget : widgets) {
-            delete widget;
-        }
     }
 
     static void switch_to(UI *to);
@@ -3959,6 +3968,10 @@ CraftingUI::CraftingUI() {
 }
 
 CraftingUI::~CraftingUI() {
+    delete craftGrids;
+    delete button_confirm;
+    delete button_next_recipe;
+    delete button_prev_recipe;
 }
 
 void CraftingGridSystem::reset(void) {
@@ -4434,6 +4447,8 @@ EncounterGridSystem::EncounterGridSystem() {
 
 EncounterGridSystem::~EncounterGridSystem() {
     info("~EncounterGridSystem()");
+    options->items.clear(); // deleted by EncounterUI
+    selected->items.clear();
     delete options;
     delete selected;
 }
@@ -4555,6 +4570,10 @@ void EncounterUI::draw(void) {
 }
 
 EncounterUI::~EncounterUI() {
+    delete encounterGrids;
+    delete button_confirm;
+    delete retreat;
+    delete advance;
     delete flee;
     delete single_attack;
 }
@@ -4738,7 +4757,10 @@ ScavengeUI::ScavengeUI() {
     button_confirm->onMouseDown = runScavenging;
 }
 
-ScavengeUI::~ScavengeUI() { }
+ScavengeUI::~ScavengeUI() {
+    delete gridsystem;
+    delete button_confirm;
+}
 
 vector<Location *> *locations_at_character(Character *character);
 
@@ -4774,7 +4796,7 @@ void ScavengeUI::setup(void) {
         /*
           TODO: grab scavenging tools from player's inventory and display them here
         */
-        gridsystem->options->PlaceItem(new Item ("crowbar")); // TODO: leak
+        // gridsystem->options->PlaceItem(new Item ("crowbar")); // TODO: leak
     } else if(current_stage == 2) {
         // we're done. ScavengeUI::draw is showing what we got
         gridsystem->visible = false;
@@ -4789,7 +4811,15 @@ struct InteractGridSystem : public GridSystem {
     Grid *selected;
 
     InteractGridSystem();
+    ~InteractGridSystem();
 };
+
+InteractGridSystem::~InteractGridSystem() {
+    options->items.clear(); // deleted by InteractPage
+    selected->items.clear();
+    delete options;
+    delete selected;
+}
 
 struct InteractPage {
     // top left and right panes
@@ -4803,6 +4833,7 @@ struct InteractPage {
     vector<pair<Item *, int>> choices;
 
     InteractPage();
+    ~InteractPage();
 
     // functions that run when coming into and leaving the page
     void (*pre)(void);
@@ -4822,6 +4853,11 @@ struct InteractPage {
     void draw(void);
 };
 
+InteractPage::~InteractPage() {
+    for(auto&& choice : choices)
+        delete choice.first;
+}
+
 // an "interact" is a collection of pages, i.e. a short CYOA
 struct Interact : public Widget {
     InteractPage *current_page;
@@ -4831,9 +4867,19 @@ struct Interact : public Widget {
     void *data;
 
     Interact();
+    ~Interact();
+
     void draw(void) override;
     void update(void) override;
 };
+
+Interact::~Interact() {
+    for(auto&& page : pages)
+        delete page;
+    /*
+      TODO: delete data
+     */
+}
 
 struct InteractUI : public UI {
     static const int off_x = 97;
@@ -4844,10 +4890,17 @@ struct InteractUI : public UI {
     Interact *current_interact;
     Button *button_confirm;
 
-    InteractUI(void);
+    InteractUI();
+    ~InteractUI();
+
     void setup(void);
     void draw(void) override;
 };
+
+InteractUI::~InteractUI() {
+    delete gridsystem;
+    delete button_confirm;
+}
 
 InteractGridSystem::InteractGridSystem() {
     options = new Grid (97 + 105, InteractUI::top_off_y
@@ -5084,6 +5137,9 @@ void pre0test(void) {
 }
 
 void init_interactions(void) {
+    /*
+      Items can't be shared
+     */
     Item *opt1 = new Item("Single attack");
     Item *opt2 = new Item("Retreat");
     Item *opt3 = new Item("Flee");
@@ -5200,6 +5256,8 @@ struct CampGridSystem : public GridSystem {
     };
 
     ~CampGridSystem() {
+        delete current_campsite;
+        delete available_campsites;
         info("~CampGridSystem()");
     };
 
@@ -5540,10 +5598,16 @@ CampUI::CampUI() {
 }
 
 VehicleUI::~VehicleUI() {
+    delete gridsystem;
+    delete ground_next_page;
+    delete ground_prev_page;
     info("~VehicleUI()");
 }
 
 CampUI::~CampUI() {
+    delete gridsystem;
+    delete ground_next_page;
+    delete ground_prev_page;
     info("~CampUI()");
 }
 
@@ -5611,10 +5675,15 @@ ConditionUI::ConditionUI() {
 
 ItemsUI::~ItemsUI() {
     delete gridsystem;
+    delete ground_next_page;
+    delete ground_prev_page;
     info("~ItemsUI()");
 }
 
 ConditionUI::~ConditionUI() {
+    delete gridsystem;
+    delete ground_next_page;
+    delete ground_prev_page;
     info("~ConditionUI()");
 }
 
@@ -5630,6 +5699,11 @@ struct SkillsGridSystem : public GridSystem {
     };
 
     ~SkillsGridSystem() {
+        // skills items are owned by struct Game
+        bad->items.clear();
+        good->items.clear();
+        delete good;
+        delete bad;
         info("~SkillsGridSystem()");
     };
 
@@ -5701,6 +5775,7 @@ SkillsUI::SkillsUI() {
 }
 
 SkillsUI::~SkillsUI() {
+    delete skillsGrid;
     info("~SkillsUI()");
 }
 
@@ -5987,15 +6062,30 @@ void MenuEntry::mouseDown(void) {
     g.ui_MainMenu->handlePress(name);
 }
 
+void new_game(void);
+void save_game(void);
+void load_game(void);
+
 void MainMenuUI::handlePress(const char *name) {
     if(strcmp(name, "Quit") == 0) {
         g.running = false;
     } else if(strcmp(name, "New") == 0) {
+        new_game();
         button_MainMap_press();
     } else if(strcmp(name, "Continue") == 0) {
         button_MainMap_press();
+    } else if(strcmp(name, "Save") == 0) {
+        save_game();
+        button_MainMap_press();
+    } else if(strcmp(name, "Load") == 0) {
+        load_game();
+        button_MainMap_press();
+    } else if(strcmp(name, "Options") == 0) {
+        button_MainMap_press();
+    } else if(strcmp(name, "Help") == 0) {
+        button_MainMap_press();
     } else {
-        info("That button doesn't do anything yet");
+        errorQuit("Uknown menu option selected");
     }
 }
 
@@ -6036,9 +6126,6 @@ MainMenuUI::MainMenuUI() {
 
     addEntry("New");
     addEntry("Continue");
-    /*
-      TODO: do I want loading/saving?
-    */
     addEntry("Load");
     addEntry("Save");
     addEntry("Options");
@@ -6507,7 +6594,6 @@ void init_indicators(void) {
     g.burden_indicator->quantity = &g.map->player->burden;
     g.burden_indicator->up = g.bitmaps[46];
     g.burden_indicator->bars = g.bitmaps[47];
-
 }
 
 void init_messagelog(void) {
@@ -6520,8 +6606,8 @@ void init_messagelog(void) {
     g.log->font = g.font;
 }
 
-void init_tilemap(int sx, int sy) {
-    g.map = new TileMap (sx, sy, 16, 16);
+void init_tileinfo(void) {
+    g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, 16, 16);
 
     TileInfo i;
     // grass
@@ -6583,7 +6669,10 @@ void init_tilemap(int sx, int sy) {
     i.has_locations = true;
     i.name = "Cracked ground";
     g.map->tile_info.push_back(i);
+}
 
+void init_tilemap(void) {
+    init_tileinfo();
     g.map->generate();
 }
 
@@ -6605,7 +6694,7 @@ MiniMapUI::~MiniMapUI(void) {
 void init_player(void) {
     Character *c = new Character;
 
-    c->name = "Player";
+    c->name = strdup("Player");
     c->nextMove = 9000;
 
     uniform_int_distribution<> position_dist(0, g.map->max_t);
@@ -6658,7 +6747,7 @@ void init_characters(void) {
     info(buf);
 
     for(auto& name : names) {
-        g.map->addRandomCharacter(name);
+        g.map->addRandomCharacter(strdup(name));
     }
 
     // init map stuff
@@ -6757,8 +6846,7 @@ void init_rng(int seed) {
         errorQuit("Failed to initialize random number generator");
 }
 
-void init_args(int argc, char **argv,
-               int *seed, int *tilemap_sx, int *tilemap_sy) {
+void init_args(int argc, char **argv, int *seed) {
 
     if(argc >= 2) {
         try {
@@ -6773,20 +6861,183 @@ void init_args(int argc, char **argv,
     }
     if(argc >= 4) {
         try {
-            *tilemap_sx = std::stoi(argv[2]);
-            *tilemap_sy = std::stoi(argv[3]);
+            g.tilemap_sx = std::stoi(argv[2]);
+            g.tilemap_sy = std::stoi(argv[3]);
         }
         catch (exception &e) {
             info("WARNING: couldn't parse tilemap dimension arguments");
-            *tilemap_sx = 50;
-            *tilemap_sy = 50;
+            g.tilemap_sx = 50;
+            g.tilemap_sy = 50;
         }
     } else {
-        *tilemap_sx = 50;
-        *tilemap_sy = 50;
+        g.tilemap_sx = 50;
+        g.tilemap_sy = 50;
     }
 }
 
+struct PerfTimer {
+    double start_time;
+    const char *name;
+
+    PerfTimer(const char *name) {
+        this->name = name;
+        start_time = al_current_time();
+    }
+    ~PerfTimer() {
+        printf("%s elapsed time: %fs\n", name, al_current_time() - start_time);
+    }
+};
+
+void unload_game(void) {
+    delete g.health_indicator;
+    delete g.pain_indicator;
+    delete g.temperature_indicator;
+    delete g.fatigue_indicator;
+    delete g.hydration_indicator;
+    delete g.satiety_indicator;
+    delete g.burden_indicator;
+    delete g.ui_MainMap;
+    delete g.ui_MiniMap;
+    delete g.ui_Items;
+    delete g.ui_Vehicle;
+    delete g.ui_Encounter;
+    delete g.ui_Crafting;
+    delete g.ui_Skills;
+    delete g.ui_Condition;
+    delete g.ui_Camp;
+    delete g.map;
+    delete g.minimap;
+    delete g.log;
+}
+
+void init_UIs(void) {
+    g.ui_MainMap   = new MainMapUI;
+    g.ui_MiniMap   = new MiniMapUI;
+    g.ui_Items     = new ItemsUI;
+    g.ui_Vehicle   = new VehicleUI;
+    g.ui_Encounter = new EncounterUI;
+    g.ui_Crafting  = new CraftingUI;
+    g.ui_Skills    = new SkillsUI;
+    g.ui_Condition = new ConditionUI;
+    g.ui_Camp      = new CampUI;
+}
+
+void new_game(void) {
+    PerfTimer t("New game");
+
+    unload_game();
+
+    init_tilemap();
+    init_characters();
+    init_minimap();
+    init_messagelog();
+    init_indicators();
+
+    init_UIs();
+}
+
+size_t find_bitmap_index(ALLEGRO_BITMAP *searched) {
+    size_t i = 0;
+    for(auto&& bitmap : g.bitmaps) {
+        if(bitmap == searched)
+            return i;
+        i++;
+    }
+    errorQuit("Invalid bitmap index");
+}
+
+void Character::save(ostream &os) {
+    os << strlen(name) << ' ' << name << ' ' << n << ' ';
+    os << find_bitmap_index(sprite) << ' ';
+}
+
+void Character::load(istream &is) {
+    int name_len;
+    is >> name_len;
+    char *name = (char *)malloc(name_len + 1);
+    is.ignore(1); // ignore the space
+    is.read(&name[0], name_len);
+    name[name_len] = '\0';
+    this->name = name;
+    size_t sprite_index;
+    is >> n >> sprite_index;
+    sprite = g.bitmaps[sprite_index];
+}
+
+void TileMap::save(ostream &os) {
+    os << cols << ' ' << rows << ' ' << view_x << ' ' << view_y << ' ';
+    os << size_x << ' ' << size_y << ' ' << r_off_x << ' ' << r_off_y << ' ';
+    os << max_t << ' ';
+    os << '\n';
+
+    os << tiles.size() << ' ';
+    for(auto&& tile : tiles) {
+        os << (int)tile.info_index << ' ' << (int)tile.visible << ' ';
+    }
+    os << '\n';
+    player->save(os);
+    os << characters.size() << ' ';
+    os << '\n';
+    for(auto&& ch : characters) {
+        ch->save(os);
+        os << '\n';
+    }
+}
+
+void TileMap::load(istream &is) {
+    is >> cols >> rows >> view_x >> view_y;
+    is >> size_x >> size_y >> r_off_x >> r_off_y;
+    is >> max_t;
+    size_t n;
+    is >> n;
+    tiles.resize(n);
+    for(auto&& tile : tiles) {
+        int ii, v;
+        is >> ii >> v;
+        tile.info_index = ii;
+        tile.visible = v;
+        tile.ground_items = NULL;
+        tile.locations = NULL;
+    }
+    player = new Character;
+    player->load(is);
+    is >> n;
+    characters.resize(n);
+    for(auto&& ch : characters) {
+        ch = new Character;
+        ch->load(is);
+    }
+    player->update_visibility();
+    updateCharsByPos();
+}
+
+void save_game(void) {
+    PerfTimer t("Save game");
+    // save data
+    ofstream out("test.sav", ios::out);
+    g.map->save(out);
+    out.close();
+}
+
+void load_game(void) {
+    PerfTimer t("Load game");
+
+    unload_game();
+
+    init_tileinfo();
+
+    // load data
+
+    ifstream in("test.sav", ios::in);
+    g.map->load(in);
+    in.close();
+
+    init_minimap();
+    init_messagelog();
+    init_indicators();
+
+    init_UIs();
+}
 
 int main(int argc, char **argv) {
     allegro_init();
@@ -6815,30 +7066,30 @@ int main(int argc, char **argv) {
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
     int seed;
-    int tilemap_sx;
-    int tilemap_sy;
-    init_args(argc, argv, &seed, &tilemap_sx, &tilemap_sy);
-
-    load_bitmaps();
-    init_rng( seed );
-    init_colors();
-    init_iteminfo();
-    init_tilemap( tilemap_sx, tilemap_sy );
-    init_hardpointinfo();
-    init_characters();
-    init_weaponswitcher();
-    init_buttons();
-    init_messagelog();
-    init_minimap();
-    init_recipes();
-    init_skills();
-    init_locationdata();
-    init_indicators();
-    init_timedisplay();
-    init_misc();
-    init_interactions();
+    init_args(argc, argv, &seed);
 
     {
+        PerfTimer t("Initialization");
+
+        load_bitmaps();
+        init_rng( seed );
+        init_colors();
+        init_iteminfo();
+        init_tilemap();
+        init_hardpointinfo();
+        init_characters();
+        init_weaponswitcher();
+        init_buttons();
+        init_messagelog();
+        init_minimap();
+        init_recipes();
+        init_skills();
+        init_locationdata();
+        init_indicators();
+        init_timedisplay();
+        init_misc();
+        init_interactions();
+
         g.ui_MainMap   = new MainMapUI;
         g.ui_MiniMap   = new MiniMapUI;
         g.ui_Items     = new ItemsUI;
