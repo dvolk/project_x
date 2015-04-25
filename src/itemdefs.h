@@ -9,7 +9,8 @@ enum ItemSlot {
     ARMOR_RIGHT_HAND,
     ARMOR_BACK,
     WATER_BOTTLE,
-    WEAPON_BOW
+    WEAPON_BOW,
+    AMMO_BOW
 };
 
 struct Grid;
@@ -275,7 +276,7 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
-    tmp.slot = SLOT_NONE;
+    tmp.slot = AMMO_BOW;
     tmp.weapon_damage = 0.005;
     g.item_info.push_back(tmp);
 

@@ -97,6 +97,7 @@ struct Game {
 
     vector<ItemInfo> item_info;
     vector<LocationInfo> location_info;
+    vector<GridInfo *> gridinfo_store;
 
     // Items UI
     GridInfo *right_hand_hold;
@@ -132,6 +133,7 @@ struct Game {
     GridInfo *default_info;
     GridInfo *ground;
     GridInfo *bottle;
+    GridInfo *ammo_bow;
 
     BarIndicator *health_indicator;
     BarIndicator *pain_indicator;
@@ -376,8 +378,6 @@ struct GridInfo {
     }
 };
 
-vector<GridInfo *> gridinfo_store;
-
 void init_hardpointinfo(void) {
     g.right_hand_hold = new GridInfo;
     g.left_hand_hold = new GridInfo;
@@ -405,6 +405,7 @@ void init_hardpointinfo(void) {
     g.medical_right_lower_arm = new GridInfo;
 
     g.bottle = new GridInfo;
+    g.ammo_bow = new GridInfo;
     g.ground = new GridInfo;
 
     g.encounter_selected = new GridInfo;
@@ -413,6 +414,7 @@ void init_hardpointinfo(void) {
     g.bottle->noGrid = false;
     g.ground->canHoldLiquid = true;
     g.ground->noGrid = false;
+    g.ammo_bow->noGrid = false;
 
     g.default_info = NULL;
     //    g.default_info->noGrid = false;
@@ -441,34 +443,35 @@ void init_hardpointinfo(void) {
     g.right_shoulder->pleaseRotateIt = true;
     g.left_shoulder->pleaseRotateIt = true;
 
-    gridinfo_store.push_back(g.right_hand_hold);
-    gridinfo_store.push_back(g.left_hand_hold);
-    gridinfo_store.push_back(g.right_hand);
-    gridinfo_store.push_back(g.left_hand);
-    gridinfo_store.push_back(g.back);
-    gridinfo_store.push_back(g.head);
-    gridinfo_store.push_back(g.neck);
-    gridinfo_store.push_back(g.right_shoulder);
-    gridinfo_store.push_back(g.left_shoulder);
-    gridinfo_store.push_back(g.torso);
-    gridinfo_store.push_back(g.legs);
-    gridinfo_store.push_back(g.right_foot);
-    gridinfo_store.push_back(g.left_foot);
-    gridinfo_store.push_back(g.vehicle);
-    gridinfo_store.push_back(g.encounter_selected);
-    gridinfo_store.push_back(g.medical_upper_torso);
-    gridinfo_store.push_back(g.medical_lower_torso);
-    gridinfo_store.push_back(g.medical_left_upper_leg);
-    gridinfo_store.push_back(g.medical_right_upper_leg);
-    gridinfo_store.push_back(g.medical_left_lower_leg);
-    gridinfo_store.push_back(g.medical_right_lower_leg);
-    gridinfo_store.push_back(g.medical_left_upper_arm);
-    gridinfo_store.push_back(g.medical_right_upper_arm);
-    gridinfo_store.push_back(g.medical_left_lower_arm);
-    gridinfo_store.push_back(g.medical_right_lower_arm);
-    gridinfo_store.push_back(g.default_info);
-    gridinfo_store.push_back(g.ground);
-    gridinfo_store.push_back(g.bottle);
+    g.gridinfo_store.push_back(g.right_hand_hold);
+    g.gridinfo_store.push_back(g.left_hand_hold);
+    g.gridinfo_store.push_back(g.right_hand);
+    g.gridinfo_store.push_back(g.left_hand);
+    g.gridinfo_store.push_back(g.back);
+    g.gridinfo_store.push_back(g.head);
+    g.gridinfo_store.push_back(g.neck);
+    g.gridinfo_store.push_back(g.right_shoulder);
+    g.gridinfo_store.push_back(g.left_shoulder);
+    g.gridinfo_store.push_back(g.torso);
+    g.gridinfo_store.push_back(g.legs);
+    g.gridinfo_store.push_back(g.right_foot);
+    g.gridinfo_store.push_back(g.left_foot);
+    g.gridinfo_store.push_back(g.vehicle);
+    g.gridinfo_store.push_back(g.encounter_selected);
+    g.gridinfo_store.push_back(g.medical_upper_torso);
+    g.gridinfo_store.push_back(g.medical_lower_torso);
+    g.gridinfo_store.push_back(g.medical_left_upper_leg);
+    g.gridinfo_store.push_back(g.medical_right_upper_leg);
+    g.gridinfo_store.push_back(g.medical_left_lower_leg);
+    g.gridinfo_store.push_back(g.medical_right_lower_leg);
+    g.gridinfo_store.push_back(g.medical_left_upper_arm);
+    g.gridinfo_store.push_back(g.medical_right_upper_arm);
+    g.gridinfo_store.push_back(g.medical_left_lower_arm);
+    g.gridinfo_store.push_back(g.medical_right_lower_arm);
+    g.gridinfo_store.push_back(g.default_info);
+    g.gridinfo_store.push_back(g.ground);
+    g.gridinfo_store.push_back(g.bottle);
+    g.gridinfo_store.push_back(g.ammo_bow);
 }
 
 struct Button : public Widget {
@@ -684,6 +687,8 @@ void Item::init(int16_t info_index) {
         // set any special grids here
         if(info_index == 18)
             info = g.bottle;
+        if(info_index == 29)
+            info = g.ammo_bow;
 
         storage = new Grid(0,
                            0,
@@ -903,6 +908,8 @@ bool Grid::item_compatible(Item *i) {
 
     ItemSlot slot = i->getItemSlot();
 
+    if(info == g.ammo_bow && slot != AMMO_BOW)
+        return false;
     if(info == g.back && slot != ARMOR_BACK)
         return false;
     if(info == g.torso && slot != ARMOR_TORSO)
@@ -3863,6 +3870,10 @@ void create_results(Recipe *recipe) {
         int amount = result.second;
         while(amount > 0) {
             Item *crafted = new Item (result.first);
+            /*
+              TODO: average condition over ingredient conditions
+             */
+            crafted->condition = 1.0;
             PlaceItemOnMultiGrid(ground_at_player(), crafted);
             amount--;
         }
@@ -3964,6 +3975,7 @@ void updateCraftingOutput(void) {
         int amount = result.second;
         while(amount > 0) {
             Item *crafted = new Item (result.first);
+            crafted->condition = 1.0;
             results->PlaceItem(crafted);
             amount--;
         }
@@ -4135,7 +4147,18 @@ public:
     bool isRunning(void);
     bool playerInRange(void);
     bool seesOpponent(int n);
+    void updateVisibility(void);
 };
+
+void Encounter::updateVisibility(void) {
+    if(range <= 6) {
+        ec1.visible = true;
+        ec2.visible = true;
+    } else {
+        ec1.visible = false;
+        ec2.visible = false;
+    }
+}
 
 struct EncounterGridSystem : public GridSystem {
     Grid *options;
@@ -4170,7 +4193,7 @@ struct EncounterUI : public UI {
 };
 
 EncounterCharacter::EncounterCharacter(void) {
-    visible = true;
+    visible = false;
     last_move = NULL;
 }
 
@@ -4318,6 +4341,8 @@ void Encounter::npcEncounterStep(void) {
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) {
+    updateVisibility();
+
     Character *_c1 = n == 0 ? c1 : c2;
     Character *_c2 = n == 0 ? c2 : c1;
     char buf[100];
@@ -4474,11 +4499,6 @@ void Encounter::runPlayerEncounterStep(void) {
     if(isEncounterNPCdead() == true) return;
     if(npcRelocated() == true) return;
 
-    if(range <= 6)
-        ec2.visible = true;
-    else
-        ec2.visible = false;
-
     g.ui_Encounter->setup();
 }
 
@@ -4556,6 +4576,7 @@ void EncounterUI::setup(void) {
     encounterGrids->options->PlaceItem(retreat);
     encounterGrids->options->PlaceItem(advance);
 
+    encounter.updateVisibility();
 }
 
 void EncounterUI::draw(void) {
@@ -6121,14 +6142,14 @@ void MainMenuUI::handlePress(const char *name) {
         new_game();
         button_MainMap_press();
     } else if(strcmp(name, "Continue") == 0) {
-        if(g.running == true) {
-            button_MainMap_press();
-        }
+        button_MainMap_press();
     } else if(strcmp(name, "Save") == 0) {
         save_game();
+        g.AddMessage("Game saved.");
         button_MainMap_press();
     } else if(strcmp(name, "Load") == 0) {
         load_game();
+        g.AddMessage("Game loaded.");
         button_MainMap_press();
     } else if(strcmp(name, "Options") == 0) {
         button_MainMap_press();
@@ -6693,7 +6714,7 @@ void init_tileinfo(void) {
     i.name = "Swamp";
     g.map->tile_info.push_back(i);
     // Hilly grass
-    i.minimap_color = al_map_rgb(0, 0, 100);
+    i.minimap_color = al_map_rgb(0, 150, 0);
     i.sprite = g.bitmaps[87];
     i.blocks_los = true;
     i.blocks_movement = false;
@@ -6701,10 +6722,7 @@ void init_tileinfo(void) {
     i.name = "Hill";
     g.map->tile_info.push_back(i);
     // Dirt
-    /*
-      TODO: set colors
-    */
-    i.minimap_color = al_map_rgb(0, 0, 100);
+    i.minimap_color = al_map_rgb(150, 75, 0);
     i.sprite = g.bitmaps[88];
     i.blocks_los = false;
     i.blocks_movement = false;
@@ -6712,7 +6730,7 @@ void init_tileinfo(void) {
     i.name = "Dirt";
     g.map->tile_info.push_back(i);
     // crackedground
-    i.minimap_color = al_map_rgb(0, 0, 200);
+    i.minimap_color = al_map_rgb(125, 50, 0);
     i.sprite = g.bitmaps[89];
     i.blocks_los = false;
     i.blocks_movement = false;
@@ -7025,9 +7043,12 @@ void Item::load(istream &is) {
 int find_gridinfo_index(GridInfo *info) {
     if(info == NULL)
         return -1;
-    for(int i = 0; i <= 27; i++)
-        if(info == gridinfo_store[i])
+    int i = 0;
+    for(auto&& grid_info : g.gridinfo_store) {
+        if(info == grid_info)
             return i;
+        i++;
+    }
     return -1;
 }
 
@@ -7051,7 +7072,7 @@ void Grid::load(istream &is) {
     if(index == -1)
         info = NULL;
     else
-        info = gridinfo_store[index];
+        info = g.gridinfo_store[index];
     resetPos();
     gsb = NULL;
     if(info == NULL || info->noGrid == false)
@@ -7177,6 +7198,7 @@ void TileMap::save(ostream &os) {
     os << '\n';
 
     os << tiles.size() << ' ';
+    int i = 0;
     for(auto&& tile : tiles) {
         os << (int)tile.info_index << ' ' << (int)tile.visible << ' ';
         if(tile.ground_items != NULL) {
@@ -7197,6 +7219,10 @@ void TileMap::save(ostream &os) {
         } else {
             os << false << ' ';
         }
+        if(i % size_x == 0) {
+            os << '\n';
+        }
+        i++;
     }
     os << '\n';
     player->save(os);
