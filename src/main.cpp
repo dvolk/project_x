@@ -20,6 +20,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
+const int COMPILED_VERSION = 1; // save game version
 
 using namespace std;
 
@@ -192,17 +193,7 @@ struct Game {
     void AddMessage(string str);
 };
 
-Game g;
-
-__attribute__ ((const))
-bool rectIntersect(int a_x, int a_y, int a_width, int a_height,
-                   int b_x, int b_y, int b_width, int b_height) {
-    return
-        !(b_x >= a_x + a_width
-          || b_x + b_width <= a_x
-          || b_y >= a_y + a_height
-          || b_y + b_height <= a_y);
-}
+static Game g;
 
 #include "./itemdefs.h"
 
@@ -641,8 +632,8 @@ void Grid::Sort(void) {
     Sort(BiggerItemsFirst);
 }
 
-vector<Grid *> *ground_at_player();
-void PlaceItemOnMultiGrid(vector<Grid *> *ground, Item *item);
+static vector<Grid *> *ground_at_player();
+static void PlaceItemOnMultiGrid(vector<Grid *> *ground, Item *item);
 
 void Grid::Sort(bool (*comp)(Item *l, Item *r)) {
     int num_items = items.size();
@@ -1251,7 +1242,7 @@ void Character::disableSkill(int n) {
     skills &= ~(uint64_t(1) << n);
 }
 
-bool isCraftingSkill(int n) {
+static bool isCraftingSkill(int n) {
     return
         n == 1 || // lockpicking
         n == 1;
@@ -1352,7 +1343,7 @@ Character::Character(void) {
     info("Character()");
 }
 
-int dir_transform(int n, int dir);
+static int dir_transform(int n, int dir);
 
 // data that's common to all tiles of the same type
 struct TileInfo {
@@ -1388,7 +1379,7 @@ void LocationInfo::add_loot(const char *item_name, float prob) {
     loot_table.push_back(make_pair(prob, Item::index_from_name(item_name)));
 }
 
-void init_locationdata(void) {
+static void init_locationdata(void) {
     LocationInfo tmp;
 
     Item *factory = new Item ("Factory");
@@ -1559,11 +1550,11 @@ float TileMap::getCurrentTemperature(__attribute__ ((unused)) int n) {
     return 0.7;
 }
 
-bool good_index(int n) {
+static bool good_index(int n) {
     return n >= 0 && n <= g.map->max_t;
 }
 
-int dir_transform(int n, int dir);
+static int dir_transform(int n, int dir);
 
 Character *TileMap::addRandomCharacter(char *name) {
     Character *new_char = new Character;
@@ -1644,7 +1635,7 @@ void Character::do_AI(void) {
     post_update();
 }
 
-vector<Grid *> *ground_at_character(Character *character);
+static vector<Grid *> *ground_at_character(Character *character);
 
 // decrease item's condition and destroy it if its condition is too low
 void Character::abuseItem(Item *item, float amount) {
@@ -1802,10 +1793,10 @@ void Character::randomMove(void) {
     move(new_n);
 }
 
-void runPlayerEncounter(void);
+static void runPlayerEncounter(void);
 
 // character c1 interrupts c2.
-void chInterruptsPlayer(Character *c1) {
+static void chInterruptsPlayer(Character *c1) {
     int playersNewDt = g.map->player->nextMove - c1->nextMove;
 
     cout << c1 << " interrupted player! nextMove: "
@@ -1822,7 +1813,7 @@ void chInterruptsPlayer(Character *c1) {
     g.map->player->update();
 }
 
-void runAIEncounter(int n);
+static void runAIEncounter(int n);
 
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
@@ -1866,7 +1857,7 @@ void Character::die(void) {
     g.map->removeCharacter(this);
 }
 
-void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
+static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
 
 void Character::drop_all_items(void) {
     cout << this << " drop_all_items at " << this->n << endl;
@@ -2055,7 +2046,7 @@ void GridSystem::reset(void) {
     }
 }
 
-vector<Grid *> *ground_at_player(void);
+static vector<Grid *> *ground_at_player(void);
 
 void GridSystem::keyDown(void) {
     if(g.key == ALLEGRO_KEY_R) {
@@ -2395,7 +2386,7 @@ int TileMap::mouseToTileN(void) {
     return size_x * y + x;
 }
 
-void end_turn(void);
+static void end_turn(void);
 
 // check if the clicked tile is next to the player
 // if so, move them there.
@@ -2439,7 +2430,7 @@ void TileMap::mouseDown(void) {
     info(buf);
 }
 
-bool tile_blocks_los(int n) {
+static bool tile_blocks_los(int n) {
     return g.map->tile_info[g.map->tiles[n].info_index].blocks_los;
 }
 
@@ -2563,7 +2554,7 @@ void Character::update_visibility(void) {
   /|\
  5 4 3
  */
-int dir_transform(int n, int dir) {
+static int dir_transform(int n, int dir) {
     if(n % 2 == 0) {
         // even
         switch(dir) {
@@ -2686,7 +2677,7 @@ void Character::drawOffset(int offset_x, int offset_y) {
     }
 }
 
-void toggleMsgLogVisibility(void) {
+static void toggleMsgLogVisibility(void) {
     if(g.log->visible) {
         g.log->visible = false;
         g.weapon_switcher->visible = false;
@@ -2695,9 +2686,6 @@ void toggleMsgLogVisibility(void) {
         g.weapon_switcher->visible = true;
     }
 }
-
-void save_game();
-void load_game();
 
 void TileMap::handleKeyDown(void) {
     if(g.key == ALLEGRO_KEY_UP) {
@@ -2952,14 +2940,14 @@ void Button::draw(void) {
 void Button::update() {
 }
 
-void mkRingM(int n, int m) {
-    for(int i = 1; i <= 6; i++) {
-        for(int j = 0; j < m; j++) {
-            g.map->tiles[n].info_index = 2;
-            n = dir_transform(n, i);
-        }
-    }
-}
+// static void mkRingM(int n, int m) {
+//     for(int i = 1; i <= 6; i++) {
+//         for(int j = 0; j < m; j++) {
+//             g.map->tiles[n].info_index = 2;
+//             n = dir_transform(n, i);
+//         }
+//     }
+// }
 
 void TileMap::generate(void) {
     uniform_int_distribution<> tile_type_dist(0, tile_info.size() - 1);
@@ -3654,7 +3642,7 @@ Item *Grid::grab_item(int x, int y) {
 */
 // find the next character that gets to move: it's the character
 // with the lowest nextMove value.
-Character *next(void) {
+static Character *next(void) {
     if(g.map->characters.empty() == true)
         return g.map->player;
 
@@ -3671,18 +3659,18 @@ Character *next(void) {
         return g.map->player;
 }
 
-void chr_debug_print(Character *c) {
-    cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
-}
+// static void chr_debug_print(Character *c) {
+//     cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
+// }
 
-void end_turn_debug_print(void) {
+static void end_turn_debug_print(void) {
     cout << "\"turn\" ends (" << g.map->player->nextMove << ") with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
     // g.map->player->print_stats();
 }
 
 // process AI's without caring about player encounter interrupts.
 // used when player is already in an encounter.
-void processAI(void) {
+static void processAI(void) {
     Character *c;
     while((c = next()) != g.map->player)
         {
@@ -3693,7 +3681,7 @@ void processAI(void) {
         }
 }
 
-void end_turn() {
+static void end_turn() {
     Character *c;
 
     // process characters until it's the player's turn again or we get
@@ -3779,7 +3767,7 @@ void CraftingUI::draw(void) {
 }
 
 // count the total number of item of type, taking into account stacking
-int countItemsOfType(Grid* grid, int searching_for) {
+static int countItemsOfType(Grid* grid, int searching_for) {
     int c = 0;
     for(auto& item : grid->items) {
         if(item->info_index == searching_for) {
@@ -3826,7 +3814,7 @@ bool Recipe::player_has_ingredients(Grid *on) {
     return true;
 }
 
-vector<Recipe *> find_craftable_recipe(Grid *ingredients) {
+static vector<Recipe *> find_craftable_recipe(Grid *ingredients) {
     vector<Recipe *> ret;
 
     for(auto& recipe : recipes) {
@@ -3836,7 +3824,7 @@ vector<Recipe *> find_craftable_recipe(Grid *ingredients) {
     return ret;
 }
 
-void remove_amount_from_grid(Grid *ingredients, int index, int16_t amount) {
+static void remove_amount_from_grid(Grid *ingredients, int index, int16_t amount) {
     // remove items' stack size
     for(auto& item : ingredients->items) {
         if(item->info_index == index) {
@@ -3864,7 +3852,7 @@ void remove_amount_from_grid(Grid *ingredients, int index, int16_t amount) {
     }
 }
 
-void create_results(Recipe *recipe) {
+static void create_results(Recipe *recipe) {
     // create and add crafted items to the ground
     for(auto& result : recipe->results) {
         int amount = result.second;
@@ -3886,7 +3874,7 @@ void create_results(Recipe *recipe) {
     }
 }
 
-void init_recipes(void) {
+static void init_recipes(void) {
     Recipe *two_arrows_to_kit = new Recipe;
     two_arrows_to_kit->name = "First aid kit";
     two_arrows_to_kit->time_cost = 1234;
@@ -3934,9 +3922,9 @@ CraftingGridSystem::~CraftingGridSystem() {
     delete results;
 }
 
-void runCrafting(void);
+static void runCrafting(void);
 
-void updateCraftingOutput(void) {
+static void updateCraftingOutput(void) {
     cout << "something changed! maybe" << endl;
 
     Grid *results = g.ui_Crafting->craftGrids->results;
@@ -3982,12 +3970,12 @@ void updateCraftingOutput(void) {
     }
 }
 
-void craftingNextRecipe(void) {
+static void craftingNextRecipe(void) {
     cout << g.ui_Crafting->current_recipe++ << endl;
     updateCraftingOutput();
 }
 
-void craftingPrevRecipe(void) {
+static void craftingPrevRecipe(void) {
     cout << g.ui_Crafting->current_recipe-- << endl;
     updateCraftingOutput();
 }
@@ -4073,7 +4061,7 @@ void CraftingUI::setup(void) {
     craftGrids->exit();
 }
 
-void runCrafting(void) {
+static void runCrafting(void) {
     Grid *in = g.ui_Crafting->craftGrids->ingredients;
     int selected_recipe = g.ui_Crafting->current_recipe;
 
@@ -4263,13 +4251,13 @@ void Encounter::setup(Character *c1, Character *c2) {
     range = 10;
 }
 
-void runPlayerEncounter(void) {
+static void runPlayerEncounter(void) {
     g.ui_Encounter->setup();
     g.ui_Encounter->encounter.do_encounter_messages();
     g.ui = g.ui_Encounter;
 }
 
-void runAIEncounter(int n) {
+static void runAIEncounter(int n) {
     Encounter e;
     e.runAIEncounter(n);
 }
@@ -4303,7 +4291,7 @@ void Encounter::runAIEncounter(int n) {
     g.ai_encounterInterrupt = -1;
 }
 
-void button_MainMap_press(void);
+static void button_MainMap_press(void);
 
 void Encounter::endEncounter(void) {
     running = false;
@@ -4521,7 +4509,7 @@ EncounterGridSystem::~EncounterGridSystem() {
     delete selected;
 }
 
-void runEncounterStepCB(void) {
+static void runEncounterStepCB(void) {
     g.ui_Encounter->encounter.runPlayerEncounterStep();
 }
 
@@ -4543,7 +4531,7 @@ EncounterUI::EncounterUI() {
     button_confirm->onMouseDown = runEncounterStepCB;
 }
 
-void button_MainMap_press(void);
+static void button_MainMap_press(void);
 
 void EncounterUI::setup(void) {
     g.color_bg = g.color_grey;
@@ -4742,7 +4730,7 @@ ScavengeGridSystem::~ScavengeGridSystem() {
     delete selected;
 }
 
-void runScavenging(void) {
+static void runScavenging(void) {
     g.ui_Scavenge->runScavengeStep();
 }
 
@@ -4831,7 +4819,7 @@ ScavengeUI::~ScavengeUI() {
     delete button_confirm;
 }
 
-vector<Location *> *locations_at_character(Character *character);
+static vector<Location *> *locations_at_character(Character *character);
 
 void ScavengeUI::setup(void) {
     g.color_bg = g.color_grey;
@@ -4984,7 +4972,7 @@ InteractGridSystem::InteractGridSystem() {
     grids.push_back(selected);
 }
 
-void runInteractStepCB(void);
+static void runInteractStepCB(void);
 
 InteractUI::InteractUI(void) {
     gridsystem = new InteractGridSystem;
@@ -5090,16 +5078,16 @@ void InteractPage::draw(void) {
     }
 }
 
-void runInteractStep(InteractPage *x);
+static void runInteractStep(InteractPage *x);
 
-void runInteract(Interact *x) {
+static void runInteract(Interact *x) {
     g.ui_Interact->current_interact = x;
     g.ui = g.ui_Interact;
 
     runInteractStep(x->pages.front());
 }
 
-void runInteractStep(InteractPage *x) {
+static void runInteractStep(InteractPage *x) {
     x->switch_to();
 
     if(x->pre != NULL) {
@@ -5114,7 +5102,7 @@ void runInteractStep(InteractPage *x) {
     }
 }
 
-void runInteractStepCB(void) {
+static void runInteractStepCB(void) {
     // find the page we're on
     InteractPage *p = g.ui_Interact->current_interact->current_page;
 
@@ -5183,21 +5171,21 @@ struct test_interact_data {
     test_interact_data() { circles.resize(15); }
 };
 
-void frame0_draw_test(void) {
+static void frame0_draw_test(void) {
     auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
     for(auto&& c : data->circles) {
         c.draw();
     }
 }
 
-void frame0_update_test(void) {
+static void frame0_update_test(void) {
     auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
     for(auto&& c : data->circles) {
         c.update();
     }
 }
 
-void pre0test(void) {
+static void pre0test(void) {
     InteractPage *p = g.ui_Interact->current_interact->current_page;
     ALLEGRO_BITMAP *left = p->left;
     al_set_target_bitmap(left);
@@ -5205,7 +5193,7 @@ void pre0test(void) {
     al_set_target_backbuffer(g.display);
 }
 
-void init_interactions(void) {
+static void init_interactions(void) {
     /*
       Items can't be shared
      */
@@ -5503,7 +5491,7 @@ void ConditionGridSystem::draw_medical_hardpoint(Grid *grid) {
     }
 }
 
-void appliedCB(void) {
+static void appliedCB(void) {
     Grid *applied_to = g.ui_Condition->gridsystem->applied_params.first;
     Item *was_applied = g.ui_Condition->gridsystem->applied_params.second;
 
@@ -5529,14 +5517,14 @@ ConditionGridSystem::ConditionGridSystem() {
 }
 
 // holy duplication
-void ConditionPrevGroundPage(void) {
+static void ConditionPrevGroundPage(void) {
     if(g.ui_Condition->gridsystem->current_ground_page > 0) {
         g.ui_Condition->gridsystem->current_ground_page--;
         g.ui_Condition->gridsystem->reset();
     }
 }
 
-void ConditionNextGroundPage(void) {
+static void ConditionNextGroundPage(void) {
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Condition->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Condition->gridsystem->current_ground_page++;
@@ -5544,14 +5532,14 @@ void ConditionNextGroundPage(void) {
     }
 }
 
-void CampPrevGroundPage(void) {
+static void CampPrevGroundPage(void) {
     if(g.ui_Camp->gridsystem->current_ground_page > 0) {
         g.ui_Camp->gridsystem->current_ground_page--;
         g.ui_Camp->gridsystem->reset();
     }
 }
 
-void CampNextGroundPage(void) {
+static void CampNextGroundPage(void) {
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Camp->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Camp->gridsystem->current_ground_page++;
@@ -5559,7 +5547,7 @@ void CampNextGroundPage(void) {
     }
 }
 
-void InventoryNextGroundPage(void) {
+static void InventoryNextGroundPage(void) {
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Items->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Items->gridsystem->current_ground_page++;
@@ -5567,14 +5555,14 @@ void InventoryNextGroundPage(void) {
     }
 }
 
-void InventoryPrevGroundPage(void) {
+static void InventoryPrevGroundPage(void) {
     if(g.ui_Items->gridsystem->current_ground_page > 0) {
         g.ui_Items->gridsystem->current_ground_page--;
         g.ui_Items->gridsystem->reset();
     }
 }
 
-void VehicleNextGroundPage(void) {
+static void VehicleNextGroundPage(void) {
     vector<Grid *> *ground = ground_at_player();
     if(g.ui_Vehicle->gridsystem->current_ground_page< (int)(*ground).size()-1) {
         g.ui_Vehicle->gridsystem->current_ground_page++;
@@ -5582,7 +5570,7 @@ void VehicleNextGroundPage(void) {
     }
 }
 
-void VehiclePrevGroundPage(void) {
+static void VehiclePrevGroundPage(void) {
     if(g.ui_Vehicle->gridsystem->current_ground_page > 0) {
         g.ui_Vehicle->gridsystem->current_ground_page--;
         g.ui_Vehicle->gridsystem->reset();
@@ -5680,7 +5668,7 @@ CampUI::~CampUI() {
     info("~CampUI()");
 }
 
-void InventoryChangeCallback(void) {
+static void InventoryChangeCallback(void) {
     g.map->player->recomputeCarryWeight();
     g.map->player->recomputeWarmth();
 }
@@ -5779,7 +5767,7 @@ struct SkillsGridSystem : public GridSystem {
     void reset(void);
 };
 
-void init_skills(void) {
+static void init_skills(void) {
     Item *metabolism = new Item ("Metabolism");
     Item *quick = new Item ("Quick");
     Item *lockpicking = new Item ("Lockpicking");
@@ -5848,7 +5836,7 @@ SkillsUI::~SkillsUI() {
     info("~SkillsUI()");
 }
 
-void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
+static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
     // try to place it on the existing pages
     for(auto& grid : *multigrid) {
         Item *returned = grid->PlaceItem(item);
@@ -5881,7 +5869,7 @@ void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
 }
 
 // resolve tile to location_info index
-vector<int> tile_to_locations_indexes(Tile t) {
+static vector<int> tile_to_locations_indexes(Tile t) {
     vector<int> ret;
     /*
       TODO: make helper functions to translate strings to indexes
@@ -5904,7 +5892,7 @@ vector<int> tile_to_locations_indexes(Tile t) {
 }
 
 // returns, or creates, locations at a tile
-vector<Location *> *locations_at_character(Character *character) {
+static vector<Location *> *locations_at_character(Character *character) {
     // get locations at player position
     assert(character != NULL);
     assert(good_index(character->n) == true);
@@ -5930,7 +5918,7 @@ vector<Location *> *locations_at_character(Character *character) {
     return locations;
 }
 
-vector<Grid *> *ground_at_character(Character *character) {
+static vector<Grid *> *ground_at_character(Character *character) {
     // get ground inventory at player position
     assert(character != NULL);
     assert(good_index(character->n) == true);
@@ -5970,7 +5958,7 @@ vector<Grid *> *ground_at_character(Character *character) {
     return ground;
 }
 
-vector<Grid *> *ground_at_player(void) {
+static vector<Grid *> *ground_at_player(void) {
     return ground_at_character(g.map->player);
 }
 
@@ -6131,9 +6119,9 @@ void MenuEntry::mouseDown(void) {
     g.ui_MainMenu->handlePress(name);
 }
 
-void new_game(void);
-void save_game(void);
-void load_game(void);
+static void new_game(void);
+static bool save_game(void);
+static bool load_game(void);
 
 void MainMenuUI::handlePress(const char *name) {
     if(strcmp(name, "Quit") == 0) {
@@ -6141,16 +6129,22 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "New") == 0) {
         new_game();
         button_MainMap_press();
+        runInteract(g.stories.front());
     } else if(strcmp(name, "Continue") == 0) {
-        button_MainMap_press();
+        if(g.map != NULL) {
+            button_MainMap_press();
+        }
     } else if(strcmp(name, "Save") == 0) {
-        save_game();
+        bool success = save_game();
         g.AddMessage("Game saved.");
-        button_MainMap_press();
+        if(success == true)
+            button_MainMap_press();
     } else if(strcmp(name, "Load") == 0) {
-        load_game();
+        bool success = load_game();
         g.AddMessage("Game loaded.");
-        button_MainMap_press();
+        if(success == true) {
+            button_MainMap_press();
+        }
     } else if(strcmp(name, "Options") == 0) {
         button_MainMap_press();
     } else if(strcmp(name, "Help") == 0) {
@@ -6204,7 +6198,7 @@ MainMenuUI::MainMenuUI() {
     addEntry("Quit");
 }
 
-void main_buttons_update(void) {
+static void main_buttons_update(void) {
     for(auto& b : g.main_buttons)
         b->pressed = false;
     if(g.ui == g.ui_MainMap)
@@ -6227,8 +6221,9 @@ void main_buttons_update(void) {
 
 // these could probably be a single function
 // update: let's just face it. It's not happening
-void runMainMenu(void) {
-    if(g.ui == g.ui_MainMap ||
+static void runMainMenu(void) {
+    if(g.ui == NULL ||
+       g.ui == g.ui_MainMap ||
        g.ui == g.ui_MiniMap) {
         g.ui_MainMenu->resetFadeLevels();
         g.color_bg = g.color_black;
@@ -6238,7 +6233,7 @@ void runMainMenu(void) {
     }
 }
 
-void button_MainMap_press(void) {
+static void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6248,7 +6243,7 @@ void button_MainMap_press(void) {
     main_buttons_update();
 }
 
-void button_Items_press(void) {
+static void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6259,7 +6254,7 @@ void button_Items_press(void) {
     main_buttons_update();
 }
 
-void button_Vehicle_press(void) {
+static void button_Vehicle_press(void) {
     if(g.ui != g.ui_Vehicle) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6270,7 +6265,7 @@ void button_Vehicle_press(void) {
     main_buttons_update();
 }
 
-void button_MiniMap_press(void) {
+static void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6281,7 +6276,7 @@ void button_MiniMap_press(void) {
     main_buttons_update();
 }
 
-void button_Skills_press(void) {
+static void button_Skills_press(void) {
     if(g.ui != g.ui_Skills) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6292,7 +6287,7 @@ void button_Skills_press(void) {
     main_buttons_update();
 }
 
-void button_Condition_press(void) {
+static void button_Condition_press(void) {
     if(g.ui != g.ui_Condition) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6303,7 +6298,7 @@ void button_Condition_press(void) {
     main_buttons_update();
 }
 
-void button_Camp_press(void) {
+static void button_Camp_press(void) {
     if(g.ui != g.ui_Camp) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6314,7 +6309,7 @@ void button_Camp_press(void) {
     main_buttons_update();
 }
 
-void button_Scavenge_press(void) {
+static void button_Scavenge_press(void) {
     if(g.ui != g.ui_Scavenge) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -6327,7 +6322,7 @@ void button_Scavenge_press(void) {
     main_buttons_update();
 }
 
-void button_Crafting_press(void) {
+static void button_Crafting_press(void) {
     if(g.ui != g.ui_Crafting) {
         g.ui_Crafting->craftGrids->reset();
         g.ui = g.ui_Crafting;
@@ -6336,17 +6331,17 @@ void button_Crafting_press(void) {
     main_buttons_update();
 }
 
-void button_endturn_press(void) {
+static void button_endturn_press(void) {
     g.map->player->wait();
     end_turn();
 }
 
-void button_Sleep_press(void) {
+static void button_Sleep_press(void) {
     g.map->player->sleep();
     end_turn();
 }
 
-void load_bitmaps(void) {
+static void load_bitmaps(void) {
     vector<string> filenames;
     /* 00 */ filenames.push_back("media/buttons/mainmap_up.png");
     /* 01 */ filenames.push_back("media/buttons/mainmap_down.png");
@@ -6446,22 +6441,24 @@ void load_bitmaps(void) {
     /* 95 */ filenames.push_back("media/characters/char3.png");
     /* 96 */ filenames.push_back("media/items/moldy_bread.png");
 
+    cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
         if(bitmap)
-            info("Loaded file: " + filename);
+            cout << '.';
         else
             errorQuit("Failed to load file: " + filename);
         g.bitmaps.push_back(bitmap);
     }
+    cout << " ok" << endl;
 }
 
-void unload_bitmaps(void) {
+static void unload_bitmaps(void) {
     for(auto& bitmap : g.bitmaps)
         al_destroy_bitmap(bitmap);
 }
 
-void init_buttons(void) {
+static void init_buttons(void) {
     g.button_MainMap   = new Button ("Main map");
     g.button_MiniMap   = new Button ("Mini map");
     g.button_Skills    = new Button ("Skills");
@@ -6576,7 +6573,7 @@ void init_buttons(void) {
     g.main_buttons.insert(g.button_Vehicle);
 }
 
-void init_weaponswitcher(void) {
+static void init_weaponswitcher(void) {
     g.weapon_switcher = new WeaponSwitcher;
     g.weapon_switcher->pos.x1 = 910;
     g.weapon_switcher->pos.y1 = 570;
@@ -6584,7 +6581,7 @@ void init_weaponswitcher(void) {
     g.weapon_switcher->pos.y2 = 150;
 }
 
-void init_timedisplay(void) {
+static void init_timedisplay(void) {
     g.time_display = new TimeDisplay;
     g.time_display->pos.x1 = 2;
     g.time_display->pos.y1 = 205;
@@ -6592,7 +6589,7 @@ void init_timedisplay(void) {
     g.time_display->pos.y2 = 25;
 }
 
-void init_indicators(void) {
+static void init_indicators(void) {
     int off_y = 3;
     int space_y = 3;
 
@@ -6667,7 +6664,7 @@ void init_indicators(void) {
     g.burden_indicator->bars = g.bitmaps[47];
 }
 
-void init_messagelog(void) {
+static void init_messagelog(void) {
     g.log = new(MessageLog);
     g.log->pos.x1 = 100;
     g.log->pos.y1 = 570;
@@ -6677,7 +6674,7 @@ void init_messagelog(void) {
     g.log->font = g.font;
 }
 
-void init_tileinfo(void) {
+static void init_tileinfo(void) {
     g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, 16, 16);
 
     TileInfo i;
@@ -6739,12 +6736,12 @@ void init_tileinfo(void) {
     g.map->tile_info.push_back(i);
 }
 
-void init_tilemap(void) {
+static void init_tilemap(void) {
     init_tileinfo();
     g.map->generate();
 }
 
-void init_minimap(void) {
+static void init_minimap(void) {
     g.minimap = new(MiniMap);
 }
 
@@ -6759,7 +6756,7 @@ MiniMapUI::~MiniMapUI(void) {
     info("~MiniMapUI()");
 }
 
-void init_player(void) {
+static void init_player(void) {
     Character *c = new Character;
 
     c->name = strdup("Player");
@@ -6787,7 +6784,7 @@ void init_player(void) {
 }
 
 // creates the player and npcs
-void init_characters(void) {
+static void init_characters(void) {
     // must be called after init_tilemap();
     assert(g.map != NULL);
 
@@ -6834,7 +6831,7 @@ MainMapUI::~MainMapUI(void) {
     info("~MainMapUI()");
 }
 
-void init_colors(void) {
+static void init_colors(void) {
     g.color_grey = al_color_name("grey");
     g.color_grey2 = al_map_rgb(200, 200, 200);
     g.color_grey3 = al_map_rgb(220, 220, 220);
@@ -6846,12 +6843,12 @@ void init_colors(void) {
     g.color_bg = g.color_black;
 }
 
-void init_misc(void) {
+static void init_misc(void) {
     g.hand_combat = new Item ("fist");
     g.ai_encounterInterrupt = -1;
 }
 
-void allegro_init(void) {
+static void allegro_init(void) {
     int ret = 0;
 
     al_init(); // no return value
@@ -6900,7 +6897,7 @@ void allegro_init(void) {
         info("Loaded builtin font.");
 }
 
-void init_rng(int seed) {
+static void init_rng(int seed) {
     if(seed != -1) {
         info("Using seed: " + to_string(seed));
         g.rng = new mt19937(seed);
@@ -6914,7 +6911,7 @@ void init_rng(int seed) {
         errorQuit("Failed to initialize random number generator");
 }
 
-void init_args(int argc, char **argv, int *seed) {
+static void init_args(int argc, char **argv, int *seed) {
 
     if(argc >= 2) {
         try {
@@ -6956,7 +6953,7 @@ struct PerfTimer {
     }
 };
 
-void unload_game(void) {
+static void unload_game(void) {
     delete g.health_indicator;
     delete g.pain_indicator;
     delete g.temperature_indicator;
@@ -6978,7 +6975,7 @@ void unload_game(void) {
     delete g.log;
 }
 
-void init_UIs(void) {
+static void init_UIs(void) {
     g.ui_MainMap   = new MainMapUI;
     g.ui_MiniMap   = new MiniMapUI;
     g.ui_Items     = new ItemsUI;
@@ -6990,10 +6987,11 @@ void init_UIs(void) {
     g.ui_Camp      = new CampUI;
 }
 
-void new_game(void) {
+static void new_game(void) {
     PerfTimer t("New game");
 
-    unload_game();
+    if(g.map != NULL)
+        unload_game();
 
     init_tilemap();
     init_characters();
@@ -7004,7 +7002,7 @@ void new_game(void) {
     init_UIs();
 }
 
-size_t find_bitmap_index(ALLEGRO_BITMAP *searched) {
+static size_t find_bitmap_index(ALLEGRO_BITMAP *searched) {
     size_t i = 0;
     for(auto&& bitmap : g.bitmaps) {
         if(bitmap == searched)
@@ -7040,7 +7038,7 @@ void Item::load(istream &is) {
     }
 }
 
-int find_gridinfo_index(GridInfo *info) {
+static int find_gridinfo_index(GridInfo *info) {
     if(info == NULL)
         return -1;
     int i = 0;
@@ -7287,25 +7285,71 @@ void TileMap::load(istream &is) {
     updateCharsByPos();
 }
 
-void save_game(void) {
+static bool save_game(void) {
     PerfTimer t("Save game");
-    // save data
+
+    if(g.map == NULL)
+        return false;
+
     ofstream out("test.sav", ios::out);
-    g.map->save(out);
+    if(out.fail() == true) {
+        info("Error: Couldn't open test.sav for writing");
+        cout << strerror(errno) << endl;
+        return false;
+    }
+
+    try {
+        out << "project_x " << COMPILED_VERSION << '\n';
+        g.map->save(out);
+    } catch (exception &e) {
+        out.close();
+        return false;
+    }
+
     out.close();
+    return true;
 }
 
-void load_game(void) {
+static bool load_game(void) {
     PerfTimer t("Load game");
 
-    unload_game();
-
-    init_tileinfo();
-
-    // load data
-
     ifstream in("test.sav", ios::in);
-    g.map->load(in);
+    if(in.fail() == true) {
+        info("Error: Couldn't open test.sav for reading");
+        cout << strerror(errno) << endl;
+        return false;
+    }
+
+    if(g.map != NULL) {
+        unload_game();
+    }
+
+    try {
+        char str[10] = { '\0' };
+        in.read(&str[0], 9);
+        if(strcmp(str, "project_x") != 0) {
+            info("Error: Invalid save game file: wrong starting string");
+            cout << "got: \"" << str << "\" expected: \"project_x\"" << endl;
+            in.close();
+            return false;
+        }
+        int loaded_version;
+        in >> loaded_version;
+        if(loaded_version != COMPILED_VERSION) {
+            info("Error: Wrong save game file version");
+            cout << "got: " << loaded_version << " expected: " << COMPILED_VERSION << endl;
+            in.close();
+            return false;
+        }
+
+        init_tileinfo();
+        g.map->load(in);
+    } catch (exception &e) {
+        g.map = NULL; // ?
+        in.close();
+        return false;
+    }
+
     in.close();
 
     init_minimap();
@@ -7313,6 +7357,8 @@ void load_game(void) {
     init_indicators();
 
     init_UIs();
+
+    return true;
 }
 
 int main(int argc, char **argv) {
@@ -7341,48 +7387,41 @@ int main(int argc, char **argv) {
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
     al_register_event_source(event_queue, al_get_keyboard_event_source());
 
-    int seed;
-    init_args(argc, argv, &seed);
-
     {
         PerfTimer t("Initialization");
 
+        int seed;
+        init_args(argc, argv, &seed);
         load_bitmaps();
+
+        // draw the background while we're loading
+        // al_draw_bitmap(g.bitmaps[93], 0, 0, 0);
+        // al_flip_display();
+
         init_rng( seed );
         init_colors();
         init_iteminfo();
-        init_tilemap();
         init_hardpointinfo();
-        init_characters();
         init_weaponswitcher();
         init_buttons();
-        init_messagelog();
-        init_minimap();
         init_recipes();
         init_skills();
         init_locationdata();
-        init_indicators();
         init_timedisplay();
         init_misc();
         init_interactions();
 
-        g.ui_MainMap   = new MainMapUI;
-        g.ui_MiniMap   = new MiniMapUI;
-        g.ui_Items     = new ItemsUI;
-        g.ui_Vehicle   = new VehicleUI;
-        g.ui_Encounter = new EncounterUI;
-        g.ui_Crafting  = new CraftingUI;
-        g.ui_Skills    = new SkillsUI;
-        g.ui_Condition = new ConditionUI;
-        g.ui_Camp      = new CampUI;
         g.ui_Scavenge  = new ScavengeUI;
         g.ui_Interact  = new InteractUI;
         g.ui_MainMenu  = new MainMenuUI;
+
+        g.map = NULL;
+        g.ui = NULL;
     }
 
-    button_MainMap_press();
-    // runMainMenu();
-    runInteract(g.stories.front());
+    // new_game();
+    // button_MainMap_press();
+    runMainMenu();
 
     bool redraw = true;
     bool was_mouse_down = false;
