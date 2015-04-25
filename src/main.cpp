@@ -15,6 +15,7 @@
 #include <cmath>
 #include <algorithm>
 
+#include "./version.h"
 #include "./util.h"
 #include "./rect.h"
 #include "./widget.h"
@@ -1188,7 +1189,7 @@ Character::~Character() {
     delete medical_right_lower_arm;
 
     delete vehicle;
-    info("~Character()");
+    // info("~Character()");
 }
 
 void Character::sleep(void) {
@@ -1340,7 +1341,7 @@ Character::Character(void) {
 
     selected_weapon_slot = 0;
 
-    info("Character()");
+    // info("Character()");
 }
 
 static int dir_transform(int n, int dir);
@@ -2031,7 +2032,7 @@ GridSystem::GridSystem(void) {
 
 GridSystem::~GridSystem(void) {
     delete held;
-    info("~GridSystem()");
+    // info("~GridSystem()");
 }
 
 void GridSystem::reset(void) {
@@ -2204,7 +2205,7 @@ Character *TileMap::characterAt(int n) {
 }
 
 TileMap::~TileMap() {
-    info("~TileMap");
+    // info("~TileMap");
     // tilemap owns characters
     delete player;
     for(auto& character : characters) {
@@ -2319,7 +2320,7 @@ MiniMap::MiniMap() {
 
 MiniMap::~MiniMap() {
     al_destroy_bitmap(buf);
-    info("~MiniMap()");
+    // info("~MiniMap()");
 }
 
 void MiniMap::recreate() {
@@ -2721,7 +2722,7 @@ struct UI {
     vector<Widget *> widgets;
 
     virtual ~UI() {
-        info("~UI()");
+        // info("~UI()");
     }
 
     static void switch_to(UI *to);
@@ -2901,11 +2902,11 @@ void Button::press(void) {
 }
 
 Button::~Button(void) {
-    info("~Button()");
+    // info("~Button()");
 }
 
 MessageLog::~MessageLog(void) {
-    info("~MessageLog()");
+    // info("~MessageLog()");
 }
 
 void MessageLog::draw(void) {
@@ -3688,13 +3689,13 @@ static void end_turn() {
     // an encounter interrupt
     while((c = next()) != g.map->player && g.encounterInterrupt == false && g.ai_encounterInterrupt == -1)
         {
-            cout << c << " (" << c->nextMove << ") ";
+            // cout << c << " (" << c->nextMove << ") ";
             c->do_AI();
             if(g.ai_encounterInterrupt != -1) {
                 runAIEncounter(g.ai_encounterInterrupt);
             }
         }
-    cout << endl;
+    // cout << endl;
 
     g.map->player->update_visibility();
 
@@ -3705,7 +3706,7 @@ static void end_turn() {
         }
 
     g.map->player->update();
-    end_turn_debug_print();
+    // end_turn_debug_print();
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -3917,7 +3918,7 @@ CraftingGridSystem::CraftingGridSystem() {
 }
 
 CraftingGridSystem::~CraftingGridSystem() {
-    info("~CraftingGridSystem()");
+    // info("~CraftingGridSystem()");
     delete ingredients;
     delete results;
 }
@@ -4044,7 +4045,7 @@ void CraftingGridSystem::reset(void) {
     grids.push_back((*ground)[current_ground_page]);
     interaction_forbidden.push_back(results);
 
-    countTotalItems();
+    // countTotalItems();
     GridSystem::reset();
 }
 
@@ -4502,7 +4503,7 @@ EncounterGridSystem::EncounterGridSystem() {
 }
 
 EncounterGridSystem::~EncounterGridSystem() {
-    info("~EncounterGridSystem()");
+    // info("~EncounterGridSystem()");
     options->items.clear(); // deleted by EncounterUI
     selected->items.clear();
     delete options;
@@ -5286,7 +5287,7 @@ struct VehicleGridSystem : public GridSystem {
     };
 
     ~VehicleGridSystem() {
-        info("~VehicleGridSystem()");
+        // info("~VehicleGridSystem()");
     };
 
     void reset(void);
@@ -5315,7 +5316,7 @@ struct CampGridSystem : public GridSystem {
     ~CampGridSystem() {
         delete current_campsite;
         delete available_campsites;
-        info("~CampGridSystem()");
+        // info("~CampGridSystem()");
     };
 
     void reset(void);
@@ -5368,7 +5369,7 @@ struct InventoryGridSystem : public GridSystem {
 
     InventoryGridSystem();
     ~InventoryGridSystem() {
-        info("~InventoryGridSystem()");
+        // info("~InventoryGridSystem()");
     };
 
     void reset(void);
@@ -5395,7 +5396,7 @@ struct ConditionGridSystem : public GridSystem {
 };
 
 ConditionGridSystem::~ConditionGridSystem() {
-    info("~ConditionGridSystem()");
+    // info("~ConditionGridSystem()");
 }
 
 void ConditionGridSystem::draw(void) {
@@ -5658,14 +5659,14 @@ VehicleUI::~VehicleUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    info("~VehicleUI()");
+    // info("~VehicleUI()");
 }
 
 CampUI::~CampUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    info("~CampUI()");
+    // info("~CampUI()");
 }
 
 static void InventoryChangeCallback(void) {
@@ -5734,14 +5735,14 @@ ItemsUI::~ItemsUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    info("~ItemsUI()");
+    // info("~ItemsUI()");
 }
 
 ConditionUI::~ConditionUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    info("~ConditionUI()");
+    // info("~ConditionUI()");
 }
 
 struct SkillsGridSystem : public GridSystem {
@@ -5761,7 +5762,7 @@ struct SkillsGridSystem : public GridSystem {
         good->items.clear();
         delete good;
         delete bad;
-        info("~SkillsGridSystem()");
+        // info("~SkillsGridSystem()");
     };
 
     void reset(void);
@@ -5804,7 +5805,7 @@ void SkillsGridSystem::reset(void) {
     interaction_forbidden.push_back(good);
     interaction_forbidden.push_back(bad);
 
-    countTotalItems();
+    // countTotalItems();
     GridSystem::reset();
 }
 
@@ -5833,7 +5834,7 @@ SkillsUI::SkillsUI() {
 
 SkillsUI::~SkillsUI() {
     delete skillsGrid;
-    info("~SkillsUI()");
+    // info("~SkillsUI()");
 }
 
 static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
@@ -5973,7 +5974,7 @@ void VehicleGridSystem::reset(void) {
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
-    countTotalItems();
+    // countTotalItems();
     GridSystem::reset();
 }
 
@@ -5987,7 +5988,7 @@ void CampGridSystem::reset(void) {
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
-    countTotalItems();
+    // countTotalItems();
     GridSystem::reset();
 }
 
@@ -6015,7 +6016,7 @@ void InventoryGridSystem::reset(void) {
     grids.push_back(ground->at(current_ground_page));
     // reparent();
 
-    countTotalItems();
+    // countTotalItems();
     GridSystem::reset();
 }
 
@@ -6045,7 +6046,7 @@ void ConditionGridSystem::reset(void) {
     grids.push_back((*ground)[current_ground_page]);
     // reparent();
 
-    countTotalItems();
+    // countTotalItems();
     GridSystem::reset();
 }
 
@@ -6087,6 +6088,8 @@ struct MainMenuUI : public UI {
 
 void MainMenuUI::draw(void) {
     al_draw_bitmap(background, 0, 0, 0);
+    al_draw_text(g.font, g.color_black, 5, 5, 0, "Project X");
+    al_draw_text(g.font, g.color_black, 5, 20, 0, "Website: https://github.io/dvolk/project_x");
     UI::draw();
 }
 
@@ -6753,7 +6756,7 @@ MiniMapUI::MiniMapUI(void) {
 }
 
 MiniMapUI::~MiniMapUI(void) {
-    info("~MiniMapUI()");
+    // info("~MiniMapUI()");
 }
 
 static void init_player(void) {
@@ -6828,7 +6831,7 @@ MainMapUI::MainMapUI() {
 }
 
 MainMapUI::~MainMapUI(void) {
-    info("~MainMapUI()");
+    // info("~MainMapUI()");
 }
 
 static void init_colors(void) {
@@ -7361,7 +7364,20 @@ static bool load_game(void) {
     return true;
 }
 
+static void logo(void) {
+    cout << " ____            _           _    __  __\n";
+    cout << "|  _ \\ _ __ ___ (_) ___  ___| |_  \\ \\/ /\n";
+    cout << "| |_) | '__/ _ \\| |/ _ \\/ __| __|  \\  / \n";
+    cout << "|  __/| | | (_) | |  __/ (__| |_   /  \\ \n";
+    cout << "|_|   |_|  \\___// |\\___|\\___|\\__| /_/\\_\\\n";
+    cout << "              |__/                      \n";
+
+    cout << "                     Build id: " << VERSION << "\n\n";
+}
+
 int main(int argc, char **argv) {
+    logo();
+
     allegro_init();
 
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
@@ -7393,11 +7409,6 @@ int main(int argc, char **argv) {
         int seed;
         init_args(argc, argv, &seed);
         load_bitmaps();
-
-        // draw the background while we're loading
-        // al_draw_bitmap(g.bitmaps[93], 0, 0, 0);
-        // al_flip_display();
-
         init_rng( seed );
         init_colors();
         init_iteminfo();
@@ -7435,10 +7446,7 @@ int main(int argc, char **argv) {
     g.running = true;
 
     // main loop
-    while(1) {
-        if(g.running == false)
-            break;
-
+    while(g.running) {
         frame_start = al_current_time();
 
         al_get_mouse_state(&mouse_state);
@@ -7474,7 +7482,8 @@ int main(int argc, char **argv) {
             g.key = ev.keyboard.keycode;
             if(g.key == ALLEGRO_KEY_ESCAPE) {
                 if(g.ui == g.ui_MainMenu) {
-                    button_MainMap_press();
+                    if(g.map != NULL)
+                        button_MainMap_press();
                 } else {
                     runMainMenu();
                 }
@@ -7508,9 +7517,9 @@ int main(int argc, char **argv) {
         frame_end = al_current_time();
         g.dt = frame_end - frame_start;
         frame_time += g.dt;
-        if(frame_time >= 1.0) {
-            printf("drew %d frames in %f seconds\n",
-                   frame_counter, frame_time);
+        if(frame_time >= 10.0) {
+            printf("FPS: %f\n",
+                   frame_counter / 10.0);
             frame_time = 0;
             frame_counter = 0;
         }

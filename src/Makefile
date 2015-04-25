@@ -12,10 +12,17 @@ LIBS=-lstdc++ `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_colo
 OBJS= \
 	util.o rect.o widget.o main.o
 
+version:
+	@( VERSION_STRING=$(VERSION) ; \
+            [ -e "../.git" ] && GITVERSION=$$( git describe --tags --always --dirty --match "[0-9A-Z]*.[0-9A-Z]*" ) && VERSION_STRING=$$GITVERSION ; \
+            [ -e "version.h" ] && OLDVERSION=$$(grep VERSION version.h|cut -d '"' -f2) ; \
+            if [ "x$$VERSION_STRING" != "x$$OLDVERSION" ]; then echo "#define VERSION \"$$VERSION_STRING\"" | tee version.h ; fi \
+         )
+
 default: all
 
-all: $(OBJS)
+all: version $(OBJS)
 	$(CXX) $(SANITIZE) -o ../project_x $(OBJS) $(LDFLAGS) $(LIBS)
 
 clean:
-	-$(RM) $(OBJS) ../project_x
+	-$(RM) $(OBJS) version.h ../project_x
