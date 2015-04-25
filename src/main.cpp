@@ -1807,7 +1807,7 @@ static void chInterruptsPlayer(Character *c1) {
     /*
       TODO: this fails
     */
-    assert(playersNewDt >= 0);
+    // assert(playersNewDt >= 0);
 
     g.map->player->dt = playersNewDt;
     g.map->player->nextMove = c1->nextMove;
@@ -2868,6 +2868,8 @@ void GridSortButton::reset(void) {
 }
 
 void GridSortButton::mouseDown(void) {
+    info("Sorting is disabled");
+    return;
     if(g.mouse_button == 1)
         parent->Sort(BiggerItemsFirst);
     else if(g.mouse_button == 2)
@@ -7441,7 +7443,7 @@ int main(int argc, char **argv) {
     double frame_start;
     double frame_end;
     double frame_time = 0;
-    int8_t frame_counter = 0;
+    int16_t frame_counter = 0;
 
     g.running = true;
 
