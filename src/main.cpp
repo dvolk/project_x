@@ -165,10 +165,15 @@ struct Game {
     InteractUI *ui_Interact;
     MainMenuUI *ui_MainMenu;
 
-    vector<Interact *> stories;
+    unordered_map<const char *, Interact *> stories;
+    //              ^^
+    //            story name
+    unordered_multimap<int, const char *> map_stories;
+    //                 ^^          ^^
+    //           map position     story name
 
     bool encounterInterrupt; // player
-    int ai_encounterInterrupt; // AI at index
+    int ai_encounterInterrupt; // AI at index (value is position)
 
     MessageLog *log;
 
@@ -1815,6 +1820,7 @@ static void chInterruptsPlayer(Character *c1) {
 }
 
 static void runAIEncounter(int n);
+static void runInteract(const char *name);
 
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
@@ -1830,6 +1836,11 @@ void Character::move(int new_n) {
                 /*
                   TODO: player interrupts AIs
                 */
+            } else {
+                // check if there are any interactions on this map tile
+                if(g.map_stories.count(n) > 0) {
+                    runInteract(g.map_stories.find(n)->second);
+                }
             }
         } else if(this->n == g.map->player->n) {
             // or if this npc moved into the player's position
@@ -4924,6 +4935,9 @@ struct Interact : public Widget {
     vector<InteractPage *> pages;
 
     // additional state
+    /*
+      TODO: how to not leak this
+    */
     void *data;
 
     Interact();
@@ -5083,7 +5097,9 @@ void InteractPage::draw(void) {
 
 static void runInteractStep(InteractPage *x);
 
-static void runInteract(Interact *x) {
+static void runInteract(const char *story_name) {
+    Interact *x = g.stories.at(story_name);
+
     g.ui_Interact->current_interact = x;
     g.ui = g.ui_Interact;
 
@@ -5109,13 +5125,23 @@ static void runInteractStepCB(void) {
     // find the page we're on
     InteractPage *p = g.ui_Interact->current_interact->current_page;
 
-    if(g.ui_Interact->gridsystem->selected->items.empty()) {
-        cout << "runInteractStepCB: nothing selected" << endl;
-        return;
-    }
-
     // find page that the choice switches to
-    Item *choice = g.ui_Interact->gridsystem->selected->items.front();
+    Item *choice;
+
+    if(g.ui_Interact->gridsystem->selected->items.empty()) {
+        // if the player hasn't selected anything
+        cout << "runInteractStepCB: nothing selected" << endl;
+        if(g.ui_Interact->gridsystem->options->items.size() > 1) {
+            // if there's more than one option, don't choose for the player
+            return;
+        } else {
+            // if there's only one option, just select whatever it is
+            choice = g.ui_Interact->gridsystem->options->items.front();
+        }
+    } else {
+        // player selected something
+        choice = g.ui_Interact->gridsystem->selected->items.front();
+    }
 
     // -1: exit
     // -2: choice pair not found
@@ -5171,7 +5197,7 @@ struct test_interact_data {
 
     vector<circle> circles;
 
-    test_interact_data() { circles.resize(15); }
+    void go(void) { circles.resize(15); }
 };
 
 static void frame0_draw_test(void) {
@@ -5188,54 +5214,94 @@ static void frame0_update_test(void) {
     }
 }
 
-static void pre0test(void) {
-    InteractPage *p = g.ui_Interact->current_interact->current_page;
-    ALLEGRO_BITMAP *left = p->left;
-    al_set_target_bitmap(left);
-    // al_draw_filled_circle(100, 100, 100, g.color_white);
-    al_set_target_backbuffer(g.display);
+static void drop_item_at_player(const char *item_name) {
+    PlaceItemOnMultiGrid(ground_at_player(), new Item (item_name));
 }
 
+/*
+ * Constructs CYOA like stories.
+ */
 static void init_interactions(void) {
-    /*
-      Items can't be shared
-     */
-    Item *opt1 = new Item("Single attack");
-    Item *opt2 = new Item("Retreat");
-    Item *opt3 = new Item("Flee");
+    Interact *intro = new Interact;
 
-    InteractPage *page1 = new InteractPage;
-    page1->right = g.bitmaps[92];
-    page1->choices.push_back({ opt1, 1 });
-    page1->choices.push_back({ opt3, -1 });
-    page1->tell("You wake up.");
-    page1->tell("");
-    page1->tell("In front is a desolate field. You wonder if it's really black and");
-    page1->tell("white or if that's the result of the severe headache you're just");
-    page1->tell("becoming aware of.");
-    page1->tell("");
-    page1->tell("A raspy voice behind you says \"hello?\"");
-    page1->tell("");
-    page1->tell("... who was that? Where am I?");
-    page1->pre = pre0test;
-    page1->frame_draw = frame0_draw_test;
-    page1->frame_update = frame0_update_test;
+    { // "intro"
+        // this plays when the game starts
 
-    InteractPage *page2 = new InteractPage;
-    page2->right = NULL;
-    page2->choices.push_back({ opt2, 0 });
-    page2->tell("You slash and stab at the dark.");
-    page2->tell("...");
-    page2->tell("It has no effect.");
-    page2->tell("");
+        { // page 0
+            Item *opt1 = new Item("Single attack");
+            Item *opt2 = new Item("Advance");
+            InteractPage *page = new InteractPage;
+            page->right = g.bitmaps[92];
+            page->choices.push_back({ opt1, 1 });
+            page->choices.push_back({ opt2, -1 });
 
-    Interact *test_interact = new Interact;
-    test_interact->pages.push_back(page1);
-    test_interact->pages.push_back(page2);
-    test_interact->current_page = page1;
-    test_interact->data = new test_interact_data;
+            page->tell("You wake up.");
+            page->tell("");
+            page->tell("In front is a desolate field. You wonder if it's really black and");
+            page->tell("white or if that's the result of the severe headache you are");
+            page->tell("becoming aware of.");
+            page->tell("");
+            page->tell("Your mind feel like a broken dam as questions form but find no");
+            page->tell("immediate answer. It seems that you have no memory of who you are");
+            page->tell("or of recent events.");
+            page->tell("");
+            page->tell("You brush off the dirt from your clothes and think.");
 
-    g.stories.push_back(test_interact);
+            page->pre = []()
+                {
+                    drop_item_at_player("pill bottle");
+                };
+            // page->frame_draw = frame0_draw_test;
+            // page->frame_update = frame0_update_test;
+            intro->pages.push_back(page);
+            intro->current_page = page;
+        }
+
+        { // page 1
+            Item *opt1 = new Item("Advance");
+            InteractPage *page = new InteractPage;
+            page->tell("You walk around the field and stumble on a backpack.");
+            page->tell("");
+            page->tell("There doesn't seem to be anything else here.");
+
+            page->right = g.bitmaps[92];
+            page->pre = []()
+                {
+                    drop_item_at_player("backpack");
+                };
+            page->choices.push_back({ opt1, -1 });
+            intro->pages.push_back(page);
+        }
+        intro->data = NULL;
+    }
+
+    Interact *fall_down = new Interact;
+
+    { // "fall_down"
+
+        { // page 0
+            Item *opt1 = new Item("Advance");
+            InteractPage *page = new InteractPage;
+            page->right = NULL;
+            page->choices.push_back({ opt1, -1 });
+
+            page->tell("You trip and fall down!");
+            page->tell("");
+            page->tell("It hurts, but at least nobody saw you.");
+
+            page->pre = []()
+                {
+                    g.map->player->hurt(0.1);
+                };
+            fall_down->pages.push_back(page);
+            fall_down->current_page = page;
+        }
+    }
+
+ g.stories.emplace("intro", intro);
+ g.stories.emplace("fall_down", fall_down);
+
+ g.map_stories.emplace(3, "fall_down");
 }
 
 struct InventoryGridSystem;
@@ -5937,23 +6003,23 @@ static vector<Grid *> *ground_at_character(Character *character) {
         Grid *ground_grid = new Grid (105, 25, 20, 30, g.ground);
         assert(ground_grid != NULL);
         // test items
-        ground_grid->PlaceItem(new Item ("crowbar"));
-        ground_grid->PlaceItem(new Item ("shopping trolley"));
-        ground_grid->PlaceItem(new Item ("pill bottle"));
-        ground_grid->PlaceItem(new Item ("arrow", 4));
-        ground_grid->PlaceItem(new Item ("arrow", 3));
-        ground_grid->PlaceItem(new Item ("whiskey", 10));
-        ground_grid->PlaceItem(new Item ("clean rag", 10));
-        ground_grid->PlaceItem(new Item ("clean rag", 10));
-        ground_grid->PlaceItem(new Item ("water bottle"));
-        ground_grid->PlaceItem(new Item ("red hoodie"));
-        ground_grid->PlaceItem(new Item ("blue jeans"));
-        ground_grid->PlaceItem(new Item ("ski mask"));
-        ground_grid->PlaceItem(new Item ("right glove"));
-        ground_grid->PlaceItem(new Item ("left glove"));
-        ground_grid->PlaceItem(new Item ("right shoe"));
-        ground_grid->PlaceItem(new Item ("left shoe"));
-        ground_grid->PlaceItem(new Item ("makeshift wood bow"));
+        // ground_grid->PlaceItem(new Item ("crowbar"));
+        // ground_grid->PlaceItem(new Item ("shopping trolley"));
+        // ground_grid->PlaceItem(new Item ("pill bottle"));
+        // ground_grid->PlaceItem(new Item ("arrow", 4));
+        // ground_grid->PlaceItem(new Item ("arrow", 3));
+        // ground_grid->PlaceItem(new Item ("whiskey", 10));
+        // ground_grid->PlaceItem(new Item ("clean rag", 10));
+        // ground_grid->PlaceItem(new Item ("clean rag", 10));
+        // ground_grid->PlaceItem(new Item ("water bottle"));
+        // ground_grid->PlaceItem(new Item ("red hoodie"));
+        // ground_grid->PlaceItem(new Item ("blue jeans"));
+        // ground_grid->PlaceItem(new Item ("ski mask"));
+        // ground_grid->PlaceItem(new Item ("right glove"));
+        // ground_grid->PlaceItem(new Item ("left glove"));
+        // ground_grid->PlaceItem(new Item ("right shoe"));
+        // ground_grid->PlaceItem(new Item ("left shoe"));
+        // ground_grid->PlaceItem(new Item ("makeshift wood bow"));
 
         ground->push_back(ground_grid);
         g.map->tiles[character->n].ground_items = ground;
@@ -6134,7 +6200,7 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "New") == 0) {
         new_game();
         button_MainMap_press();
-        runInteract(g.stories.front());
+        runInteract("intro");
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             button_MainMap_press();
@@ -6772,12 +6838,11 @@ static void init_player(void) {
     c->n = position_dist(*g.rng);
     c->sprite = g.bitmaps[21];
 
-    // add player starting items
-    Item *backpack = new Item("backpack");
-    backpack->storage->PlaceItem(new Item ("moldy bread"));
-    c->back->PlaceItem(backpack);
-    Item *crowbar = new Item("crowbar");
-    c->right_hand_hold->PlaceItem(crowbar);
+    // start the player with clothing
+    c->torso->PlaceItem(new Item ("red hoodie"));
+    c->legs->PlaceItem(new Item ("blue jeans"));
+    c->right_foot->PlaceItem(new Item ("right shoe"));
+    c->left_foot->PlaceItem(new Item ("left shoe"));
 
     c->enableSkill(0);
     c->enableSkill(1);
@@ -6976,6 +7041,8 @@ static void unload_game(void) {
     delete g.ui_Skills;
     delete g.ui_Condition;
     delete g.ui_Camp;
+    delete g.ui_Scavenge;
+    delete g.ui_Interact;
     delete g.map;
     g.map = NULL;
     delete g.minimap;
@@ -6992,6 +7059,8 @@ static void init_UIs(void) {
     g.ui_Skills    = new SkillsUI;
     g.ui_Condition = new ConditionUI;
     g.ui_Camp      = new CampUI;
+    g.ui_Scavenge  = new ScavengeUI;
+    g.ui_Interact  = new InteractUI;
 }
 
 static void new_game(void) {
@@ -7374,8 +7443,9 @@ static void logo(void) {
     cout << "|  __/| | | (_) | |  __/ (__| |_   /  \\ \n";
     cout << "|_|   |_|  \\___// |\\___|\\___|\\__| /_/\\_\\\n";
     cout << "              |__/                      \n";
-
+#ifdef VERSION
     cout << "                     Build id: " << VERSION << "\n\n";
+#endif
 }
 
 int main(int argc, char **argv) {
@@ -7425,8 +7495,6 @@ int main(int argc, char **argv) {
         init_misc();
         init_interactions();
 
-        g.ui_Scavenge  = new ScavengeUI;
-        g.ui_Interact  = new InteractUI;
         g.ui_MainMenu  = new MainMenuUI;
 
         g.map = NULL;
@@ -7529,14 +7597,16 @@ int main(int argc, char **argv) {
     }
 
     unload_bitmaps();
+    unload_game();
 
     /*
       allegro is automatically unloaded
       al_uninstall_system();
     */
 
-    delete g.map;
-
+    for(auto&& story : g.stories) {
+        delete story.second;
+    }
     for(auto&& recipe : recipes) {
         delete recipe;
     }
