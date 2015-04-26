@@ -6141,13 +6141,14 @@ void MainMenuUI::handlePress(const char *name) {
         }
     } else if(strcmp(name, "Save") == 0) {
         bool success = save_game();
-        g.AddMessage("Game saved.");
-        if(success == true)
+        if(success == true) {
+            g.AddMessage("Game saved.");
             button_MainMap_press();
+        }
     } else if(strcmp(name, "Load") == 0) {
         bool success = load_game();
-        g.AddMessage("Game loaded.");
         if(success == true) {
+            g.AddMessage("Game loaded.");
             button_MainMap_press();
         }
     } else if(strcmp(name, "Options") == 0) {
@@ -6976,6 +6977,7 @@ static void unload_game(void) {
     delete g.ui_Condition;
     delete g.ui_Camp;
     delete g.map;
+    g.map = NULL;
     delete g.minimap;
     delete g.log;
 }
@@ -7350,7 +7352,6 @@ static bool load_game(void) {
         init_tileinfo();
         g.map->load(in);
     } catch (exception &e) {
-        g.map = NULL; // ?
         in.close();
         return false;
     }
