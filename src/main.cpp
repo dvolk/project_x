@@ -268,12 +268,22 @@ struct Item {
 };
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
-    ALLEGRO_BITMAP *b = al_create_bitmap(72, 36);
-    float x = (72 - strlen(text) * 8) / 2;
+    int text_len = strlen(text) * 8;
+    int item_size_x;
+    for(int i = 1; i < 12; i++) {
+        if(text_len < i * 18) {
+            item_size_x = i * 18;
+            cout << text << ' ' << text_len << ' ' << item_size_x / 18 << endl;
+            break;
+        }
+    }
+
+    float offset_x = (item_size_x - text_len) / 2;
+
+    ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, 36);
     al_set_target_bitmap(b);
-    al_draw_filled_rounded_rectangle(0, 0, 72, 36, 7, 7, bg_col);
-    // al_draw_rectangle(1, 0, 72, 35, g.color_black, 1);
-    al_draw_text(g.font, g.color_white, x, 14, 0, text);
+    al_draw_filled_rounded_rectangle(0, 0, item_size_x, 36, 7, 7, bg_col);
+    al_draw_text(g.font, g.color_white, offset_x, 14, 0, text);
     al_set_target_backbuffer(g.display);
 
     ItemInfo tmp;
@@ -310,7 +320,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     Item *ret = new Item ("");
     ret->pos.x1 = 0;
     ret->pos.y1 = 0;
-    ret->pos.x2 = 4;
+    ret->pos.x2 = item_size_x / 18;
     ret->pos.y2 = 2;
     ret->cur_stack = 1;
     ret->rotated = false;
@@ -5322,7 +5332,7 @@ static void init_interactions(void) {
         // this plays when the game starts
 
         { // page 0
-            Item *opt1 = make_text_item("Explore", al_map_rgb(200, 100, 100));
+            Item *opt1 = make_text_item("Explore the field", al_map_rgb(200, 100, 100));
             Item *opt2 = make_text_item("Leave", al_map_rgb(100, 100, 200));
             InteractPage *page = new InteractPage;
             page->right = g.bitmaps[92];
