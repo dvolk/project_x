@@ -232,6 +232,7 @@ struct Item {
     Item(int16_t info_index);
     Item(const char *item_name);
     Item(const char *item_name, int16_t num_stack);
+    Item(const char *item_name, const char *text);
     ~Item();
 
     void save(ostream &os);
@@ -265,6 +266,65 @@ struct Item {
     float get_warmth(void);
     void getHpDims(float &x2, float &y2);
 };
+
+Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
+    ALLEGRO_BITMAP *b = al_create_bitmap(72, 36);
+    float x = (72 - strlen(text) * 8) / 2;
+    al_set_target_bitmap(b);
+    al_draw_filled_rounded_rectangle(0, 0, 72, 36, 7, 7, bg_col);
+    // al_draw_rectangle(1, 0, 72, 35, g.color_black, 1);
+    al_draw_text(g.font, g.color_white, x, 14, 0, text);
+    al_set_target_backbuffer(g.display);
+
+    ItemInfo tmp;
+    /* 00 */
+    tmp.name = text;
+    tmp.grid_size_x = 4;
+    tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = -1;
+    tmp.grid_size_on_hp_y = -1;
+    tmp.maxStack = 1;
+    tmp.sprite = b;
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.isLocation = false;
+    tmp.isEncounterAction = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.container_offset_x = 0;
+    tmp.container_offset_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.canBeDamaged = true;
+    tmp.slot = SLOT_NONE;
+    tmp.warmth = 0;
+    tmp.weapon_damage = 0.001;
+    tmp.weapon_range = 1;
+    tmp.is_text_item = true;
+    g.item_info.push_back(tmp);
+
+    Item *ret = new Item ("");
+    ret->pos.x1 = 0;
+    ret->pos.y1 = 0;
+    ret->pos.x2 = 4;
+    ret->pos.y2 = 2;
+    ret->cur_stack = 1;
+    ret->rotated = false;
+    ret->storage = NULL;
+    ret->parent = NULL;
+    ret->condition = -1;
+    ret->info_index = g.item_info.size() - 1;
+
+    return ret;
+}
+
+Item *make_text_item(const char *text) {
+    return make_text_item(text, g.color_darkgrey);
+}
 
 Item::Item(const Item& i) {
     this->pos = i.pos;
@@ -1819,8 +1879,31 @@ static void chInterruptsPlayer(Character *c1) {
     g.map->player->update();
 }
 
-static void runAIEncounter(int n);
 static void runInteract(const char *name);
+
+static void runRandomMoveEvents(void) {
+    uniform_int_distribution<> d100(0, 100);
+    int roll = d100(*g.rng);
+
+    if(roll == 0) {
+        g.AddMessage("You disturb a flock of birds and they fly away loudly.");
+    }
+}
+
+// return true if there was an event
+static bool runRandomScavengingEvents(void) {
+    uniform_int_distribution<> d100(0, 100);
+    int roll = d100(*g.rng);
+
+    if(roll > 80) {
+        // 1 in 5 chance of falling down and hurting yourself
+        runInteract("fall_down");
+        return true;
+    }
+    return false;
+}
+
+static void runAIEncounter(int n);
 
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
@@ -1840,6 +1923,8 @@ void Character::move(int new_n) {
                 // check if there are any interactions on this map tile
                 if(g.map_stories.count(n) > 0) {
                     runInteract(g.map_stories.find(n)->second);
+                } else {
+                    runRandomMoveEvents();
                 }
             }
         } else if(this->n == g.map->player->n) {
@@ -3121,6 +3206,9 @@ void GridSystem::drawItemTooltip(void) {
                item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= g.mouse_y &&
                item->parent->pos.x1 + (item->pos.x1 + sx) * Grid::grid_px_x >= g.mouse_x &&
                item->parent->pos.y1 + (item->pos.y1 + sy) * Grid::grid_px_y >= g.mouse_y) {
+
+                if(g.item_info[item->info_index].is_text_item == true)
+                    return;
 
                 int weight = g.item_info[item->info_index].weight;
                 bool display_weight = weight > 0;
@@ -4806,7 +4894,11 @@ void ScavengeUI::runScavengeStep(void) {
         resetLastLooted();
         player->activity = ACTIVITY_SCAVENGE;
         player->spendTime(1000);
-        button_MainMap_press();
+
+        if(runRandomScavengingEvents() == false)
+            // if we didn't get an event, manually return to the main map
+            button_MainMap_press();
+
         return;
     } else {
         errorQuit("invalid scavenge step");
@@ -5052,7 +5144,7 @@ void InteractPage::draw_description(void) {
     al_set_target_bitmap(left);
     al_clear_to_color(g.color_grey2);
 
-    float y = 5;
+    float y = (InteractUI::top_size - 8 * description.size()) / 3;
     for(auto&& line : description) {
         al_draw_text(g.font, g.color_black, 5, y, 0, line);
         y += 8;
@@ -5200,6 +5292,7 @@ struct test_interact_data {
     void go(void) { circles.resize(15); }
 };
 
+__attribute__ ((unused))
 static void frame0_draw_test(void) {
     auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
     for(auto&& c : data->circles) {
@@ -5207,6 +5300,7 @@ static void frame0_draw_test(void) {
     }
 }
 
+__attribute__ ((unused))
 static void frame0_update_test(void) {
     auto data = (test_interact_data *)g.ui_Interact->current_interact->data;
     for(auto&& c : data->circles) {
@@ -5228,8 +5322,8 @@ static void init_interactions(void) {
         // this plays when the game starts
 
         { // page 0
-            Item *opt1 = new Item("Single attack");
-            Item *opt2 = new Item("Advance");
+            Item *opt1 = make_text_item("Explore", al_map_rgb(200, 100, 100));
+            Item *opt2 = make_text_item("Leave", al_map_rgb(100, 100, 200));
             InteractPage *page = new InteractPage;
             page->right = g.bitmaps[92];
             page->choices.push_back({ opt1, 1 });
@@ -5241,11 +5335,11 @@ static void init_interactions(void) {
             page->tell("white or if that's the result of the severe headache you are");
             page->tell("becoming aware of.");
             page->tell("");
-            page->tell("Your mind feel like a broken dam as questions form but find no");
+            page->tell("Your mind feels like a broken dam as questions form but find no");
             page->tell("immediate answer. It seems that you have no memory of who you are");
             page->tell("or of recent events.");
             page->tell("");
-            page->tell("You brush off the dirt from your clothes and think.");
+            page->tell("You brush off the dirt from your clothes and look around.");
 
             page->pre = []()
                 {
@@ -5258,7 +5352,7 @@ static void init_interactions(void) {
         }
 
         { // page 1
-            Item *opt1 = new Item("Advance");
+            Item *opt1 = make_text_item("Leave");
             InteractPage *page = new InteractPage;
             page->tell("You walk around the field and stumble on a backpack.");
             page->tell("");
@@ -5280,7 +5374,7 @@ static void init_interactions(void) {
     { // "fall_down"
 
         { // page 0
-            Item *opt1 = new Item("Advance");
+            Item *opt1 = make_text_item("Leave");
             InteractPage *page = new InteractPage;
             page->right = NULL;
             page->choices.push_back({ opt1, -1 });
@@ -5298,10 +5392,10 @@ static void init_interactions(void) {
         }
     }
 
- g.stories.emplace("intro", intro);
- g.stories.emplace("fall_down", fall_down);
+    g.stories.emplace("intro", intro);
+    g.stories.emplace("fall_down", fall_down);
 
- g.map_stories.emplace(3, "fall_down");
+    g.map_stories.emplace(3, "fall_down");
 }
 
 struct InventoryGridSystem;
@@ -5987,6 +6081,26 @@ static vector<Location *> *locations_at_character(Character *character) {
     return locations;
 }
 
+static void PlaceStartingGroundItems(Grid *ground, int n) {
+    /*
+      should there ever be items on the ground without the player
+      having scavenged them?
+    */
+    const char *name = g.map->getTileName(n);
+
+    if(strcmp(name, "Grassland") == 0) {
+
+    } else if(strcmp(name, "Wood") == 0) {
+    } else if(strcmp(name, "City") == 0) {
+    } else if(strcmp(name, "Swamp") == 0) {
+    } else if(strcmp(name, "Hill") == 0) {
+    } else if(strcmp(name, "Dirt") == 0) {
+    } else if(strcmp(name, "Cracked ground") == 0) {
+    } else {
+        info("PlaceStartingGroundItems(): invalid tile name");
+    }
+}
+
 static vector<Grid *> *ground_at_character(Character *character) {
     // get ground inventory at player position
     assert(character != NULL);
@@ -6002,28 +6116,13 @@ static vector<Grid *> *ground_at_character(Character *character) {
         // create first grid if it doesn't exist
         Grid *ground_grid = new Grid (105, 25, 20, 30, g.ground);
         assert(ground_grid != NULL);
-        // test items
-        // ground_grid->PlaceItem(new Item ("crowbar"));
-        // ground_grid->PlaceItem(new Item ("shopping trolley"));
-        // ground_grid->PlaceItem(new Item ("pill bottle"));
-        // ground_grid->PlaceItem(new Item ("arrow", 4));
-        // ground_grid->PlaceItem(new Item ("arrow", 3));
-        // ground_grid->PlaceItem(new Item ("whiskey", 10));
-        // ground_grid->PlaceItem(new Item ("clean rag", 10));
-        // ground_grid->PlaceItem(new Item ("clean rag", 10));
-        // ground_grid->PlaceItem(new Item ("water bottle"));
-        // ground_grid->PlaceItem(new Item ("red hoodie"));
-        // ground_grid->PlaceItem(new Item ("blue jeans"));
-        // ground_grid->PlaceItem(new Item ("ski mask"));
-        // ground_grid->PlaceItem(new Item ("right glove"));
-        // ground_grid->PlaceItem(new Item ("left glove"));
-        // ground_grid->PlaceItem(new Item ("right shoe"));
-        // ground_grid->PlaceItem(new Item ("left shoe"));
-        // ground_grid->PlaceItem(new Item ("makeshift wood bow"));
+
+        PlaceStartingGroundItems(ground_grid, character->n);
 
         ground->push_back(ground_grid);
         g.map->tiles[character->n].ground_items = ground;
     }
+
     return ground;
 }
 
@@ -6414,7 +6513,7 @@ static void button_Sleep_press(void) {
 }
 
 static void load_bitmaps(void) {
-    vector<string> filenames;
+    vector<const char *> filenames;
     /* 00 */ filenames.push_back("media/buttons/mainmap_up.png");
     /* 01 */ filenames.push_back("media/buttons/mainmap_down.png");
     /* 02 */ filenames.push_back("media/buttons/minimap_up.png");
@@ -6515,11 +6614,11 @@ static void load_bitmaps(void) {
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
-        ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename.c_str());
+        ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename);
         if(bitmap)
             cout << '.';
         else
-            errorQuit("Failed to load file: " + filename);
+            errorQuit("Failed to load bitmap");
         g.bitmaps.push_back(bitmap);
     }
     cout << " ok" << endl;
@@ -7047,6 +7146,14 @@ static void unload_game(void) {
     g.map = NULL;
     delete g.minimap;
     delete g.log;
+
+    // remove the item info's created by make_text_item
+    remove_if(g.item_info.begin(), g.item_info.end(),
+              [](ItemInfo &i) { return i.is_text_item; });
+
+    for(auto&& s : g.stories) delete s.second;
+    g.stories.clear();
+    g.map_stories.clear();
 }
 
 static void init_UIs(void) {
@@ -7074,6 +7181,7 @@ static void new_game(void) {
     init_minimap();
     init_messagelog();
     init_indicators();
+    init_interactions();
 
     init_UIs();
 }
@@ -7430,6 +7538,7 @@ static bool load_game(void) {
     init_minimap();
     init_messagelog();
     init_indicators();
+    init_interactions();
 
     init_UIs();
 
@@ -7493,7 +7602,6 @@ int main(int argc, char **argv) {
         init_locationdata();
         init_timedisplay();
         init_misc();
-        init_interactions();
 
         g.ui_MainMenu  = new MainMenuUI;
 
@@ -7604,9 +7712,6 @@ int main(int argc, char **argv) {
       al_uninstall_system();
     */
 
-    for(auto&& story : g.stories) {
-        delete story.second;
-    }
     for(auto&& recipe : recipes) {
         delete recipe;
     }

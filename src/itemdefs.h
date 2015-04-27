@@ -60,6 +60,8 @@ struct ItemInfo {
     float weapon_damage;
     // weapon range [0-]
     int weapon_range;
+    // item with runtime text
+    bool is_text_item;
 
     // sprite when item is on a normal grid
     ALLEGRO_BITMAP *sprite;
@@ -96,6 +98,7 @@ void init_iteminfo(void) {
     tmp.warmth = 0;
     tmp.weapon_damage = 0.001;
     tmp.weapon_range = 1;
+    tmp.is_text_item = false;
     g.item_info.push_back(tmp);
 
     /* 01 */
