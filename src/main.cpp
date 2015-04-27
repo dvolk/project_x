@@ -286,34 +286,8 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     al_draw_text(g.font, g.color_white, offset_x, 14, 0, text);
     al_set_target_backbuffer(g.display);
 
-    ItemInfo tmp;
-    /* 00 */
-    tmp.name = text;
-    tmp.grid_size_x = 4;
-    tmp.grid_size_y = 2;
-    tmp.grid_size_on_hp_x = -1;
-    tmp.grid_size_on_hp_y = -1;
-    tmp.maxStack = 1;
+    ItemInfo tmp = g.item_info.at(0);
     tmp.sprite = b;
-    tmp.sprite_on_hp = NULL;
-    tmp.isLiquid = false;
-    tmp.isVehicle = false;
-    tmp.isContainer = false;
-    tmp.isLocation = false;
-    tmp.isEncounterAction = false;
-    tmp.container_size_x = 0;
-    tmp.container_size_y = 0;
-    tmp.container_offset_x = 0;
-    tmp.container_offset_y = 0;
-    tmp.isSkill = false;
-    tmp.apply_to_body = false;
-    tmp.consumed_on_application = false;
-    tmp.consumed_on_use = false;
-    tmp.canBeDamaged = true;
-    tmp.slot = SLOT_NONE;
-    tmp.warmth = 0;
-    tmp.weapon_damage = 0.001;
-    tmp.weapon_range = 1;
     tmp.is_text_item = true;
     g.item_info.push_back(tmp);
 
