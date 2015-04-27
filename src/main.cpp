@@ -273,7 +273,6 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     for(int i = 1; i < 12; i++) {
         if(text_len < i * 18) {
             item_size_x = i * 18;
-            cout << text << ' ' << text_len << ' ' << item_size_x / 18 << endl;
             break;
         }
     }
@@ -7133,9 +7132,16 @@ static void unload_game(void) {
     delete g.minimap;
     delete g.log;
 
-    // remove the item info's created by make_text_item
-    remove_if(g.item_info.begin(), g.item_info.end(),
-              [](ItemInfo &i) { return i.is_text_item; });
+    // remove item_info's created by make_text_item, freeing
+    // the sprites along the way
+    vector<ItemInfo>::iterator it = g.item_info.begin();
+    while(it != g.item_info.end()) {
+        if(it->is_text_item == true) {
+            al_destroy_bitmap(it->sprite);
+            it = g.item_info.erase(it);
+        } else
+            it++;
+    }
 
     for(auto&& s : g.stories) delete s.second;
     g.stories.clear();
