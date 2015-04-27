@@ -6327,9 +6327,11 @@ void MainMenuUI::handlePress(const char *name) {
             button_MainMap_press();
         }
     } else if(strcmp(name, "Options") == 0) {
-        button_MainMap_press();
+        if(g.map != NULL)
+            button_MainMap_press();
     } else if(strcmp(name, "Help") == 0) {
-        button_MainMap_press();
+        if(g.map != NULL)
+            button_MainMap_press();
     } else {
         errorQuit("Uknown menu option selected");
     }
