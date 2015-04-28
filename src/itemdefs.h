@@ -54,6 +54,8 @@ struct ItemInfo {
     bool consumed_on_application;
     // when used, is it consumed (i.e. food, water, medicine)?
     bool consumed_on_use;
+    float improves_hydration;
+    float improves_satiety;
     // how much warmth this item gives when equipped on a hardpoint
     float warmth;
     // weapon damage [0,1]
@@ -93,6 +95,8 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
     tmp.canBeDamaged = true;
     tmp.slot = SLOT_NONE;
     tmp.warmth = 0;
@@ -377,6 +381,8 @@ void init_iteminfo(void) {
     tmp.apply_to_body = true;
     tmp.consumed_on_application = true;
     tmp.consumed_on_use = true;
+    tmp.improves_hydration = 0.1;
+    tmp.improves_satiety = 0.05;
     tmp.slot = WATER_BOTTLE;
     g.item_info.push_back(tmp);
 
@@ -397,6 +403,8 @@ void init_iteminfo(void) {
     tmp.apply_to_body = true;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
     tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 
@@ -723,10 +731,34 @@ void init_iteminfo(void) {
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = true;
+    tmp.improves_hydration = 0.005;
+    tmp.improves_satiety = 0.1;
     tmp.canBeDamaged = true;
     tmp.slot = SLOT_NONE;
     tmp.warmth = 0.0;
     tmp.weapon_damage = 0.0001;
     tmp.weapon_range = 1;
+    g.item_info.push_back(tmp);
+
+    /* 31 */
+    tmp.name = "water";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 5;
+    tmp.weight = 50;
+    tmp.sprite = g.bitmaps[97];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = true;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = true;
+    tmp.consumed_on_application = true;
+    tmp.consumed_on_use = true;
+    tmp.improves_hydration = 0.3;
+    tmp.improves_satiety = 0.05;
+    tmp.slot = WATER_BOTTLE;
     g.item_info.push_back(tmp);
 }

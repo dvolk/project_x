@@ -232,7 +232,6 @@ struct Item {
     Item(int16_t info_index);
     Item(const char *item_name);
     Item(const char *item_name, int16_t num_stack);
-    Item(const char *item_name, const char *text);
     ~Item();
 
     void save(ostream &os);
@@ -1267,11 +1266,15 @@ void Character::spendTime(int _dt) {
 void Character::useItem(Item *i) {
     if(i->isConsumedOnUse()) {
         i->parent->RemoveItem(i);
+
+        float ih = g.item_info[i->info_index].improves_hydration;
+        float is = g.item_info[i->info_index].improves_satiety;
+
+        hydration = min(1.0, hydration + (double)ih);
+        satiety = min(1.0, satiety + (double)is);
+
         delete i;
-        hydration = min(1.0, hydration + 0.2);
-        satiety = min(1.0, satiety + 0.1);
     }
-    cout << "used " << i << endl;
     /*
       TODO: spent time should be item specific
     */
@@ -1438,19 +1441,27 @@ static void init_locationdata(void) {
     tmp.base_safety_level = 0.1;
     tmp.base_sneak_level = 0.2;
     tmp.reset_time = 10000;
-    tmp.add_loot("backpack", 0.1);
-    tmp.add_loot("first aid kit", 0.1);
-    tmp.add_loot("crowbar", 0.1);
-    tmp.add_loot("shopping trolley", 0.01);
+    tmp.add_loot("backpack", 0.15);
+    tmp.add_loot("first aid kit", 0.15);
+    tmp.add_loot("crowbar", 0.15);
+    tmp.add_loot("shopping trolley", 0.1);
+    tmp.add_loot("clean rag", 0.5);
+    tmp.add_loot("clean rag", 0.5);
     tmp.add_loot("clean rag", 0.5);
     tmp.add_loot("water bottle", 0.2);
+    tmp.add_loot("water bottle", 0.2);
     tmp.add_loot("whiskey", 0.4);
+    tmp.add_loot("water", 0.4);
+    tmp.add_loot("moldy bread", 0.4);
+    tmp.add_loot("moldy bread", 0.4);
     tmp.add_loot("moldy bread", 0.4);
     tmp.add_loot("red hoodie", 0.05);
     tmp.add_loot("ski mask", 0.05);
     tmp.add_loot("right glove", 0.05);
     tmp.add_loot("left glove", 0.05);
     tmp.add_loot("blue jeans", 0.05);
+    tmp.add_loot("left shoe", 0.1);
+    tmp.add_loot("right shoe", 0.01);
     g.location_info.push_back(tmp);
 
     tmp.loot_table.clear();
@@ -1464,8 +1475,35 @@ static void init_locationdata(void) {
     tmp.reset_time = 20000;
     tmp.add_loot("clean rag", 0.5);
     tmp.add_loot("water bottle", 0.2);
+    tmp.add_loot("water bottle", 0.2);
     tmp.add_loot("red hoodie", 0.2);
-    tmp.add_loot("whiskey", 0.5);
+    tmp.add_loot("whiskey", 0.2);
+    tmp.add_loot("water", 0.2);
+    tmp.add_loot("water", 0.2);
+    tmp.add_loot("water", 0.2);
+    tmp.add_loot("arrow", 0.2);
+    tmp.add_loot("arrow", 0.2);
+    tmp.add_loot("arrow", 0.2);
+    tmp.add_loot("arrow", 0.2);
+    tmp.add_loot("moldy bread", 0.2);
+    tmp.add_loot("moldy bread", 0.2);
+    tmp.add_loot("moldy bread", 0.2);
+    tmp.add_loot("moldy bread", 0.2);
+    g.location_info.push_back(tmp);
+    tmp.loot_table.clear();
+
+    tmp.description = "A small lake";
+    tmp.location_item = make_text_item("Small lake", al_map_rgb(50, 50, 200));
+    tmp.base_loot_level = 0.3;
+    tmp.base_safety_level = 0.3;
+    tmp.base_sneak_level = 0.5;
+    tmp.reset_time = 20000;
+    tmp.add_loot("water", 0.8);
+    tmp.add_loot("water", 0.8);
+    tmp.add_loot("water", 0.8);
+    tmp.add_loot("water", 0.8);
+    tmp.add_loot("water", 0.8);
+    tmp.add_loot("water", 0.8);
     g.location_info.push_back(tmp);
     tmp.loot_table.clear();
 }
@@ -1815,7 +1853,7 @@ void Character::update(void) {
         */
         for(auto& hp : inventory_hardpoints) {
             for(auto& item : hp->items) {
-                abuseItem(item, dt * 0.01 * 0.001);
+                abuseItem(item, dt * 0.002 * 0.001);
             }
         }
     }
@@ -2201,18 +2239,6 @@ void GridSystem::MouseAutoMoveItemToTarget() {
     assert(item != NULL);
     assert(from != NULL);
 
-    // if(auto_target->info != NULL && auto_target->info->noGrid == true) {
-    //     // if we're auto-moving to a hard point
-    //     if((int)auto_target->items.size() >= auto_target->info->maxItems) {
-
-    //         // and there's no space
-    //         Item *prev = auto_target->items.front();
-    //         assert(prev->old_parent);
-    //         // then replace the item that's already there.
-    //         prev->parent->PlaceItem(prev);
-    //         auto_target->RemoveItem(prev);
-    //     }
-    // }
     if(auto_target->PlaceItem(item) != NULL) {
         assert(item->parent != NULL);
         item->parent->AddItem(item);
@@ -2238,8 +2264,7 @@ void GridSystem::countTotalItems(void) {
     int g = 0;
     for(auto& grid : grids) {
         g++;
-        for(__attribute__ ((unused)) auto& item : grid->items)
-            i++;
+        i += grid->items.size();
     }
     cout << "GridSystem: " << g << " grids " << i << " items." << endl;
 }
@@ -3748,6 +3773,7 @@ static Character *next(void) {
 //     cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
 // }
 
+__attribute__ ((unused))
 static void end_turn_debug_print(void) {
     cout << "\"turn\" ends (" << g.map->player->nextMove << ") with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
     // g.map->player->print_stats();
@@ -3790,7 +3816,7 @@ static void end_turn() {
         }
 
     g.map->player->update();
-    // end_turn_debug_print();
+    end_turn_debug_print();
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -6031,7 +6057,7 @@ static vector<int> tile_to_locations_indexes(Tile t) {
         ret.push_back(0); // factory
         break;
     case 3: // swamp
-        // nothing
+        ret.push_back(2); // small lake
         break;
     }
     return ret;
@@ -6064,7 +6090,7 @@ static vector<Location *> *locations_at_character(Character *character) {
     return locations;
 }
 
-static void PlaceStartingGroundItems(Grid *ground, int n) {
+static void PlaceStartingGroundItems(__attribute__ ((unused)) Grid *ground, int n) {
     /*
       should there ever be items on the ground without the player
       having scavenged them?
@@ -6226,6 +6252,7 @@ struct MainMenuUI : public UI {
     vector <MenuEntry *> entries;
 
     MainMenuUI();
+    ~MainMenuUI();
 
     void draw(void) override;
 
@@ -6235,6 +6262,10 @@ struct MainMenuUI : public UI {
     void setFadeColors(void);
     void resetFadeLevels(void);
 };
+
+MainMenuUI::~MainMenuUI() {
+    for(auto&& entry : entries) delete entry;
+}
 
 void MainMenuUI::draw(void) {
     al_draw_bitmap(background, 0, 0, 0);
@@ -6596,14 +6627,19 @@ static void load_bitmaps(void) {
     /* 94 */ filenames.push_back("media/characters/char2.png");
     /* 95 */ filenames.push_back("media/characters/char3.png");
     /* 96 */ filenames.push_back("media/items/moldy_bread.png");
+    /* 97 */ filenames.push_back("media/items/water.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename);
         if(bitmap)
             cout << '.';
-        else
-            errorQuit("Failed to load bitmap");
+        else {
+            printf("\n*** ERROR! Failed to load bitmap: %s. If the file exists then it's possible that your graphics card doesn't support textures of its size. Making a 32x32 pink texture to replace it and hope for the best\n", filename);
+            bitmap = al_create_bitmap(32, 32);
+            al_set_target_bitmap(bitmap);
+            al_clear_to_color(al_color_name("pink"));
+        }
         g.bitmaps.push_back(bitmap);
     }
     cout << " ok" << endl;
@@ -6743,6 +6779,17 @@ static void init_timedisplay(void) {
     g.time_display->pos.y1 = 205;
     g.time_display->pos.x2 = 100;
     g.time_display->pos.y2 = 25;
+}
+
+__attribute__ ((unused))
+static void set_indicators_target(Character *t) {
+    g.health_indicator->quantity = &t->health;
+    g.pain_indicator->quantity = &t->pain;
+    g.temperature_indicator->quantity = &t->temperature;
+    g.fatigue_indicator->quantity = &t->fatigue;
+    g.hydration_indicator->quantity = &t->hydration;
+    g.satiety_indicator->quantity = &t->satiety;
+    g.burden_indicator->quantity = &t->burden;
 }
 
 static void init_indicators(void) {
@@ -6938,6 +6985,23 @@ static void init_player(void) {
     g.map->player = c;
 }
 
+static char *random_human_NPC_name(void) {
+    vector<string> first_names =
+        { "Herb", "Jepson", "Farley", "Homer", "Eustace", "Piers",
+          "Sonnie", "Alycia", "Suzie", "Lilibeth", "Nat", "Keanna",
+          "Jordyn", "Cary" };
+    vector<string> last_names =
+        { "Bert", "Parker", "Rigby", "Brooke", "Chamberlain", "Moore",
+          "Aitken", "Burke", "Martinson", "Beasley", "Corra", "Lowe",
+          "Auttenberg", "Lamar" };
+
+    uniform_int_distribution<> fnd(0, first_names.size() - 1);
+    uniform_int_distribution<> lnd(0, last_names.size() - 1);
+
+    string name = first_names.at(fnd(*g.rng)) + " " + last_names.at(lnd(*g.rng));
+    return strdup(name.c_str());
+}
+
 // creates the player and npcs
 static void init_characters(void) {
     // must be called after init_tilemap();
@@ -6945,29 +7009,12 @@ static void init_characters(void) {
 
     init_player();
 
-    // npc names
-    auto names = { "Herb Bert",
-                   "Jepson Parker",
-                   "Farley Rigby",
-                   "Homer Brooke",
-                   "Eustace Chamberlain",
-                   "Piers Moore",
-                   "Sonnie Aitken",
-                   "Alycia Burke",
-                   "Suzie Martinson",
-                   "Lilibeth Beasley",
-                   "Nat Corra",
-                   "Keanna Lowe",
-                   "Jordyn Auttenberg",
-                   "Cary Lamar" };
+    const int n_start_npcs = sqrt(g.map->max_t);
 
-    // create npcs
-    char buf[100];
-    sprintf(buf, "Adding %lu NPCs", names.size());
-    info(buf);
+    cout << "Spawning " << n_start_npcs << " NPCs" << endl;
 
-    for(auto& name : names) {
-        g.map->addRandomCharacter(strdup(name));
+    for(int i = 0; i < n_start_npcs; i++) {
+        g.map->addRandomCharacter(random_human_NPC_name());
     }
 
     // init map stuff
@@ -7108,6 +7155,7 @@ struct PerfTimer {
     }
 };
 
+// delets all the things that are created by new_game and load_game
 static void unload_game(void) {
     delete g.health_indicator;
     delete g.pain_indicator;
@@ -7571,7 +7619,6 @@ int main(int argc, char **argv) {
     ALLEGRO_KEYBOARD_STATE keyboard_state;
 
     al_start_timer(timer);
-    al_set_target_backbuffer(g.display);
 
     al_register_event_source(event_queue, al_get_display_event_source(g.display));
     al_register_event_source(event_queue, al_get_timer_event_source(timer));
@@ -7600,6 +7647,8 @@ int main(int argc, char **argv) {
         g.map = NULL;
         g.ui = NULL;
     }
+
+    al_set_target_backbuffer(g.display);
 
     // new_game();
     // button_MainMap_press();
@@ -7699,17 +7748,28 @@ int main(int argc, char **argv) {
     unload_bitmaps();
     unload_game();
 
-    /*
-      allegro is automatically unloaded
-      al_uninstall_system();
-    */
+    al_destroy_display(g.display);
+    al_destroy_font(g.font);
 
-    for(auto&& recipe : recipes) {
+    delete g.rng;
+    delete g.time_display;
+    delete g.weapon_switcher;
+    delete g.ui_MainMenu;
+    delete g.hand_combat;
+
+    for(auto&& button : g.main_buttons)
+        delete button;
+    for(auto&& skill : g.skills)
+        delete skill;
+    for(auto&& gridinfo : g.gridinfo_store)
+        delete gridinfo;
+    for(auto&& recipe : recipes)
         delete recipe;
-    }
-    for(auto&& loc : g.location_info) {
+    for(auto&& loc : g.location_info)
         delete loc.location_item;
-    }
+
+    g.item_info.clear();
+    g.location_info.clear();
 
     info("Exiting");
 
