@@ -289,7 +289,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     tmp.is_text_item = true;
     g.item_info.push_back(tmp);
 
-    Item *ret = new Item ("");
+    Item *ret = new Item ("none");
     ret->pos.x1 = 0;
     ret->pos.y1 = 0;
     ret->pos.x2 = item_size_x / 18;
@@ -780,14 +780,14 @@ void Item::getHpDims(float &x2, float &y2) {
 int Item::index_from_name(const char *item_name) {
     int i = 0;
     for(auto& info : g.item_info) {
-        if(info.name == item_name) {
+        if(strcmp(info.name, item_name) == 0) {
             return i;
         }
         i++;
     }
 
     char buf[75];
-    snprintf(buf, sizeof(buf), "Unknown item: %s", item_name);
+    snprintf(buf, sizeof(buf), "Unknown item: \"%s\"", item_name);
     errorQuit(buf);
     return -1;
 }
@@ -7226,7 +7226,7 @@ static void new_game(void) {
     init_UIs();
 }
 
-static size_t find_bitmap_index(ALLEGRO_BITMAP *searched) {
+static int find_bitmap_index(ALLEGRO_BITMAP *searched) {
     size_t i = 0;
     for(auto&& bitmap : g.bitmaps) {
         if(bitmap == searched)
@@ -7632,7 +7632,10 @@ int main(int argc, char **argv) {
         load_bitmaps();
         init_rng( seed );
         init_colors();
-        init_iteminfo();
+        // init_iteminfo();
+        // save_ItemInfo();
+        // g.item_info.clear();
+        load_ItemInfo();
         init_hardpointinfo();
         init_weaponswitcher();
         init_buttons();
@@ -7767,6 +7770,8 @@ int main(int argc, char **argv) {
         delete recipe;
     for(auto&& loc : g.location_info)
         delete loc.location_item;
+    for(auto&& ii : g.item_info)
+        free((char*)ii.name);
 
     g.item_info.clear();
     g.location_info.clear();
