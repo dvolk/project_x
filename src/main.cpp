@@ -45,6 +45,7 @@ struct ConditionUI;
 struct CampUI;
 struct ScavengeUI;
 struct InteractUI;
+struct HelpUI;
 struct GridInfo;
 struct ItemInfo;
 struct LocationInfo;
@@ -164,6 +165,7 @@ struct Game {
     ScavengeUI *ui_Scavenge;
     InteractUI *ui_Interact;
     MainMenuUI *ui_MainMenu;
+    HelpUI *ui_Help;
 
     unordered_map<const char *, Interact *> stories;
     //              ^^
@@ -6306,6 +6308,7 @@ void MenuEntry::mouseDown(void) {
 static void new_game(void);
 static bool save_game(void);
 static bool load_game(void);
+static void button_Help_press(void);
 
 void MainMenuUI::handlePress(const char *name) {
     if(strcmp(name, "Quit") == 0) {
@@ -6334,8 +6337,7 @@ void MainMenuUI::handlePress(const char *name) {
         if(g.map != NULL)
             button_MainMap_press();
     } else if(strcmp(name, "Help") == 0) {
-        if(g.map != NULL)
-            button_MainMap_press();
+        button_Help_press();
     } else {
         errorQuit("Uknown menu option selected");
     }
@@ -6385,6 +6387,99 @@ MainMenuUI::MainMenuUI() {
     addEntry("Quit");
 }
 
+struct TextButton : public Widget {
+    float text_offset_x;
+    float text_offset_y;
+    const char *name;
+
+    TextButton(const char *name, float x, float y, float sx, float sy);
+
+    void draw(void) override;
+    void hoverOver(void) override;
+};
+
+TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
+    this->name = name;
+    pos.x1 = x;
+    pos.y1 = y;
+    pos.x2 = sx;
+    pos.y2 = sy;
+    text_offset_x = round((pos.x2 - strlen(name) * 8) / 2);
+    text_offset_y = round((pos.y2 - 8) / 2);
+}
+
+void TextButton::draw(void) {
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, g.color_darkgrey);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 1);
+    al_draw_text(g.font, g.color_white,
+                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+void TextButton::hoverOver(void) {
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, g.color_grey2);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 1);
+    al_draw_text(g.font, g.color_white,
+                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+struct HelpUI : public UI {
+    ALLEGRO_BITMAP *background;
+    TextButton *button_back;
+
+    HelpUI();
+    ~HelpUI();
+
+    void draw(void) override;
+};
+
+void HelpUI::draw(void) {
+    if(background != NULL) {
+        al_draw_bitmap(background, 0, 0, 0);
+    }
+    UI::draw();
+}
+
+static void runMainMenu(void);
+
+static void press_Help_back(void) {
+    delete g.ui_Help;
+    runMainMenu();
+}
+
+static ALLEGRO_BITMAP *little_pink_bitmap(void) {
+    ALLEGRO_BITMAP *b = al_create_bitmap(32, 32);
+    al_set_target_bitmap(b);
+    al_clear_to_color(al_color_name("pink"));
+    al_set_target_backbuffer(g.display);
+    return b;
+}
+
+HelpUI::HelpUI() {
+    button_back = new TextButton("Back", round(g.display_x - 75) / 2, 630, 85, 45);
+    button_back->onMouseDown = press_Help_back;
+    background = al_load_bitmap("media/backgrounds/help.png");
+    if(background == NULL) {
+        info("Error: Couldn't load media/backgrounds/help.png");
+        background = little_pink_bitmap();
+    }
+    widgets.push_back(button_back);
+}
+
+HelpUI::~HelpUI() {
+    delete button_back;
+    al_destroy_bitmap(background);
+}
+
+static void button_Help_press(void) {
+    g.color_bg = g.color_grey;
+    g.ui_Help = new HelpUI;
+    g.ui = g.ui_Help;
+}
+
 static void main_buttons_update(void) {
     for(auto& b : g.main_buttons)
         b->pressed = false;
@@ -6411,7 +6506,8 @@ static void main_buttons_update(void) {
 static void runMainMenu(void) {
     if(g.ui == NULL ||
        g.ui == g.ui_MainMap ||
-       g.ui == g.ui_MiniMap) {
+       g.ui == g.ui_MiniMap ||
+       g.ui == g.ui_Help) {
         g.ui_MainMenu->resetFadeLevels();
         g.color_bg = g.color_black;
         g.ui = g.ui_MainMenu;
@@ -6636,9 +6732,7 @@ static void load_bitmaps(void) {
             cout << '.';
         else {
             printf("\n*** ERROR! Failed to load bitmap: %s. If the file exists then it's possible that your graphics card doesn't support textures of its size. Making a 32x32 pink texture to replace it and hope for the best\n", filename);
-            bitmap = al_create_bitmap(32, 32);
-            al_set_target_bitmap(bitmap);
-            al_clear_to_color(al_color_name("pink"));
+            bitmap = little_pink_bitmap();
         }
         g.bitmaps.push_back(bitmap);
     }
