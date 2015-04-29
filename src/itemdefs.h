@@ -175,8 +175,8 @@ void load_ItemInfo(void) {
     int item_info_size;
     in >> item_info_size;
 
+    ItemInfo tmp;
     for(int i = 0; i <= item_info_size; i++) {
-        ItemInfo tmp;
         tmp.load(in);
         g.item_info.push_back(tmp);
     }
