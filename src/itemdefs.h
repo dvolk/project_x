@@ -160,6 +160,8 @@ void ItemInfo::load(istream &is) {
 
 void save_ItemInfo(void) {
     ofstream out("data/item_info.txt", ios::out);
+    if(out.fail() == true)
+        errorQuit("failed to open data/item_info.txt for writing");
 
     out << g.item_info.size() - 1 << endl;
 
@@ -171,6 +173,8 @@ void save_ItemInfo(void) {
 
 void load_ItemInfo(void) {
     ifstream in("data/item_info.txt", ios::in);
+    if(in.fail() == true)
+        errorQuit("failed to open data/item_info.txt for reading");
 
     int item_info_size;
     in >> item_info_size;
