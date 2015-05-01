@@ -287,6 +287,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
 
     ItemInfo tmp = g.item_info.at(0);
     tmp.sprite = b;
+    tmp.name = strdup(text);
     tmp.is_text_item = true;
     g.item_info.push_back(tmp);
 
@@ -4899,6 +4900,8 @@ ScavengeGridSystem::ScavengeGridSystem() {
 }
 
 ScavengeGridSystem::~ScavengeGridSystem() {
+    options->items.clear();
+    selected->items.clear();
     delete options;
     delete selected;
 }
@@ -7361,21 +7364,6 @@ static void unload_game(void) {
     g.map = NULL;
     delete g.minimap;
     delete g.log;
-
-    // remove item_info's created by make_text_item, freeing
-    // the sprites along the way
-    vector<ItemInfo>::iterator it = g.item_info.begin();
-    while(it != g.item_info.end()) {
-        if(it->is_text_item == true) {
-            al_destroy_bitmap(it->sprite);
-            it = g.item_info.erase(it);
-        } else
-            it++;
-    }
-
-    for(auto&& s : g.stories) delete s.second;
-    g.stories.clear();
-    g.map_stories.clear();
 }
 
 static void init_UIs(void) {
@@ -7403,7 +7391,6 @@ static void new_game(void) {
     init_minimap();
     init_messagelog();
     init_indicators();
-    init_interactions();
 
     init_UIs();
 }
@@ -7760,7 +7747,6 @@ static bool load_game(void) {
     init_minimap();
     init_messagelog();
     init_indicators();
-    init_interactions();
 
     init_UIs();
 
@@ -7826,6 +7812,7 @@ int main(int argc, char **argv) {
         init_locationdata();
         init_timedisplay();
         init_misc();
+        init_interactions();
 
         g.ui_MainMenu  = new MainMenuUI;
 
@@ -7952,6 +7939,10 @@ int main(int argc, char **argv) {
         delete recipe;
     for(auto&& loc : g.location_info)
         delete loc.location_item;
+    for(auto&& s : g.stories)
+        delete s.second;
+    g.stories.clear();
+    g.map_stories.clear();
     for(auto&& ii : g.item_info)
         free((char*)ii.name);
 
