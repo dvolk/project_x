@@ -1539,6 +1539,10 @@ struct Tile {
     ALLEGRO_BITMAP *getBitmap(void);
 };
 
+struct Ecology {
+    int want_creatures;
+};
+
 struct TileMap : public Widget {
     // display dimensions
     int cols;
@@ -1574,6 +1578,8 @@ struct TileMap : public Widget {
     vector<Character *> characters;
     Character *player;
 
+    Ecology eco;
+
     // array of size_x * size_y tiles, allocated in constructor
     // TODO: would a 2D array be better?
     vector<Tile> tiles;
@@ -1589,8 +1595,7 @@ struct TileMap : public Widget {
     void handleKeyDown(void);
 
     void mouseDown(void);
-    void mouseUp(void) { }
-    void keyDown(void) { handleKeyDown(); }
+    void keyDown(void);
 
     // must be called after the bitmaps vector is filled
     void generate(void);
@@ -1616,7 +1621,17 @@ struct TileMap : public Widget {
 
     bool blocks_movement(int n);
     bool blocks_los(int n);
+
+    void runEcology();
 };
+
+static char *random_human_NPC_name(void);
+
+void TileMap::runEcology() {
+    if((int)characters.size() < eco.want_creatures) {
+        addRandomCharacter(random_human_NPC_name());
+    }
+}
 
 bool TileMap::blocks_movement(int n) {
     return tile_info[tiles[n].info_index].blocks_movement;
@@ -1655,6 +1670,9 @@ Character *TileMap::addRandomCharacter(char *name) {
 
     uniform_int_distribution<> position_dist(0, max_t);
     new_char->n = position_dist(*g.rng);
+
+    uniform_real_distribution<> health_dist(0.1, 1);
+    new_char->health = health_dist(*g.rng);
 
     uniform_int_distribution<> delay_dist(0, 500);
     new_char->nextMove = g.map->player->nextMove + delay_dist(*g.rng);
@@ -2393,6 +2411,8 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
 
     cout << "Tilemap rendering dimensions: "
          << pos.x1 << " " << pos.y1 << " " << pos.x2 << " " << pos.y2 << endl;
+
+    eco.want_creatures = sqrt(max_t);
 }
 
 void TileMap::focusOnPlayer(void) {
@@ -2813,7 +2833,7 @@ static void toggleMsgLogVisibility(void) {
     }
 }
 
-void TileMap::handleKeyDown(void) {
+void TileMap::keyDown(void) {
     if(g.key == ALLEGRO_KEY_UP) {
         if(view_y > 0) { view_y--; }
     }
@@ -3854,6 +3874,8 @@ static void end_turn() {
         g.map->removeCharacter(g.map->player);
     }
     player_hurt_messages();
+
+    g.map->runEcology();
 
     end_turn_debug_print();
 }
@@ -7169,7 +7191,7 @@ static void init_characters(void) {
 
     init_player();
 
-    const int n_start_npcs = sqrt(g.map->max_t);
+    const int n_start_npcs = g.map->eco.want_creatures;
 
     cout << "Spawning " << n_start_npcs << " NPCs" << endl;
 
