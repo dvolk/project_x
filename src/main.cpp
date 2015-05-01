@@ -1078,7 +1078,7 @@ struct Character {
     // allowed range: 0 - 1
     float health;
     float pain;
-    float temperature;
+    float warmth;
     float fatigue;
     float hydration;
     float satiety;
@@ -1370,7 +1370,7 @@ Character::Character(void) {
 
     health = 1.0;
     pain = 0.95;
-    temperature = 0.22;
+    warmth = 0.22;
     fatigue = 0.87;
     hydration = 0.43;
     satiety = 0.72;
@@ -1680,12 +1680,15 @@ Character *TileMap::addRandomCharacter(char *name) {
     return new_char;
 }
 
+static void runInteract(const char *name);
+
 void TileMap::removeCharacter(Character *to_kill) {
     assert(to_kill != NULL);
 
-    if(to_kill == player)
-        // this comes later
+    if(to_kill == player) {
+        runInteract("player_dead");
         return;
+    }
 
     to_kill->drop_all_items();
 
@@ -1787,7 +1790,7 @@ void Character::post_update(void) {
 }
 
 void Character::recomputeWarmth(void) {
-    float warmth = 0.0;
+    float warmth_sum = 0.0;
     float map_temperature = g.map->getCurrentTemperature(this->n);
 
     for(auto& point : clothing) {
@@ -1796,12 +1799,12 @@ void Character::recomputeWarmth(void) {
         }
     }
 
-    this->temperature = 1.0 - (map_temperature - warmth);
+    this->warmth = 1.0 - (map_temperature - warmth_sum);
 
     /*
       TODO: care about overheating?
     */
-    this->temperature = min((float)1.0, this->temperature);
+    this->warmth = min((float)1.0, this->warmth);
 }
 
 void Character::recomputeCarryWeight(void) {
@@ -1848,9 +1851,28 @@ void Character::update(void) {
     float satietyChange = 0.02 * 0.001 * dt;
     satiety = max((float)0.0, satiety - satietyChange);
 
+    // decrease health if the character is dangerously low on some
+    // resource
+    if(hydration < 0.15) {
+        float hydration_damage = (0.15 - hydration) * dt / 4000;
+        health = max((float)0.0, health - hydration_damage);
+    }
+    if(satiety < 0.15) {
+        float satiety_damage = (0.15 - satiety) * dt / 4000;
+        health = max((float)0.0, health - satiety_damage);
+    }
+    if(fatigue < 0.15) {
+        float fatigue_damage = (0.15 - fatigue) * dt / 4000;
+        health = max((float)0.0, health - fatigue_damage);
+    }
+    if(warmth < 0.15) {
+        float warmth_damage = (0.15 - warmth) * dt / 4000;
+        health = max((float)0.0, health - warmth_damage);
+    }
+
     if(activity == ACTIVITY_MOVE) {
         /*
-          TODO: decrease condition of items that the player is carrying
+          decrease condition of items that the player is carrying
           on inventory hardpoints
         */
         for(auto& hp : inventory_hardpoints) {
@@ -1901,8 +1923,6 @@ static void chInterruptsPlayer(Character *c1) {
     g.map->player->nextMove = c1->nextMove;
     g.map->player->update();
 }
-
-static void runInteract(const char *name);
 
 static void runRandomMoveEvents(void) {
     uniform_int_distribution<> d100(0, 100);
@@ -3794,6 +3814,18 @@ static void processAI(void) {
         }
 }
 
+static void player_hurt_messages(void) {
+    if(g.map->player->hydration < 0.15) {
+        g.AddMessage("Water...");
+    } else if(g.map->player->satiety < 0.15) {
+        g.AddMessage("Food...");
+    } else if(g.map->player->warmth < 0.15) {
+        g.AddMessage("Warmth...");
+    } else if(g.map->player->fatigue < 0.15) {
+        g.AddMessage("Rest...");
+    }
+}
+
 static void end_turn() {
     Character *c;
 
@@ -3818,6 +3850,12 @@ static void end_turn() {
         }
 
     g.map->player->update();
+
+    if(g.map->player->health < 0.01) {
+        g.map->removeCharacter(g.map->player);
+    }
+    player_hurt_messages();
+
     end_turn_debug_print();
 }
 
@@ -4475,7 +4513,6 @@ void Encounter::npcEncounterStep(int n) {
 
         if(g.map->playerSees(_c1->n))
             g.AddMessage(buf);
-
     } else {
         if(_c2->health > 0.8) {
             if(range <= _c2->getSelectedWeapon()->get_weapon_range() && seesOpponent(n) && _c2->hasAmmoForWeapon()) {
@@ -4516,6 +4553,8 @@ void Encounter::npcEncounterStep(int n) {
             retreat(1);
         }
     }
+    if(involvesPlayer() == true && _c1->health < 0.01)
+        g.map->removeCharacter(g.map->player);
 }
 
 bool Encounter::isEncounterNPCdead(void) {
@@ -5224,6 +5263,8 @@ static void runInteractStep(InteractPage *x) {
     }
 }
 
+static void switchToMainMenu(void);
+
 static void runInteractStepCB(void) {
     // find the page we're on
     InteractPage *p = g.ui_Interact->current_interact->current_page;
@@ -5247,8 +5288,9 @@ static void runInteractStepCB(void) {
     }
 
     // -1: exit
-    // -2: choice pair not found
-    int new_page = -2;
+    // -2: exit to main menu
+    // -3: choice pair not found
+    int new_page = -3;
     for(auto&& c : p->choices) {
         if(c.first == choice) {
             new_page = c.second;
@@ -5266,11 +5308,13 @@ static void runInteractStepCB(void) {
     if(new_page >= 0) {
         runInteractStep(g.ui_Interact->current_interact->pages.at(new_page));
         p->switch_from();
-    } else {
-        if(new_page != -1) {
-            info("Interact Error: couldn't find new interact page index");
-        }
+    } else if(new_page == -1) {
         button_MainMap_press();
+    } else if(new_page == -2) {
+        switchToMainMenu();
+    } else {
+        info("Interact Error: couldn't find new interact page index");
+        switchToMainMenu();
      }
 }
 
@@ -5403,8 +5447,26 @@ static void init_interactions(void) {
         }
     }
 
+    Interact *player_dead = new Interact;
+
+    { // "player_dead"
+
+        { // page 0
+            Item *opt1 = make_text_item("Poor me", al_map_rgb(0, 0, 0));
+            InteractPage *page = new InteractPage;
+            page->right = NULL;
+            page->choices.push_back({ opt1, -2 });
+
+            page->tell("Like most humans in these cursed times you too have perished.");
+
+            player_dead->pages.push_back(page);
+            player_dead->current_page = page;
+        }
+    }
+
     g.stories.emplace("intro", intro);
     g.stories.emplace("fall_down", fall_down);
+    g.stories.emplace("player_dead", player_dead);
 
     g.map_stories.emplace(3, "fall_down");
 }
@@ -6501,6 +6563,12 @@ static void main_buttons_update(void) {
         g.button_Camp->pressed = true;
 }
 
+static void switchToMainMenu(void) {
+    g.ui_MainMenu->resetFadeLevels();
+    g.color_bg = g.color_black;
+    g.ui = g.ui_MainMenu;
+}
+
 // these could probably be a single function
 // update: let's just face it. It's not happening
 static void runMainMenu(void) {
@@ -6508,9 +6576,7 @@ static void runMainMenu(void) {
        g.ui == g.ui_MainMap ||
        g.ui == g.ui_MiniMap ||
        g.ui == g.ui_Help) {
-        g.ui_MainMenu->resetFadeLevels();
-        g.color_bg = g.color_black;
-        g.ui = g.ui_MainMenu;
+        switchToMainMenu();
     } else {
         info("You can only go to the main menu from the map or minimap");
     }
@@ -6879,7 +6945,7 @@ __attribute__ ((unused))
 static void set_indicators_target(Character *t) {
     g.health_indicator->quantity = &t->health;
     g.pain_indicator->quantity = &t->pain;
-    g.temperature_indicator->quantity = &t->temperature;
+    g.temperature_indicator->quantity = &t->warmth;
     g.fatigue_indicator->quantity = &t->fatigue;
     g.hydration_indicator->quantity = &t->hydration;
     g.satiety_indicator->quantity = &t->satiety;
@@ -6911,12 +6977,12 @@ static void init_indicators(void) {
     g.pain_indicator->bars = g.bitmaps[47];
 
     g.temperature_indicator = new BarIndicator;
-    g.temperature_indicator->indicator_name = "Temperature:";
+    g.temperature_indicator->indicator_name = "Warmth:";
     g.temperature_indicator->pos.x1 = 0;
     g.temperature_indicator->pos.y1 = off_y + 50 + space_y * 2;
     g.temperature_indicator->pos.x2 = 100;
     g.temperature_indicator->pos.y2 = 25;
-    g.temperature_indicator->quantity = &g.map->player->temperature;
+    g.temperature_indicator->quantity = &g.map->player->warmth;
     g.temperature_indicator->up = g.bitmaps[46];
     g.temperature_indicator->bars = g.bitmaps[47];
 
@@ -7075,6 +7141,7 @@ static void init_player(void) {
     c->enableSkill(33);
     c->recomputeCarryWeight();
     c->recomputeWarmth();
+    c->health = 0.2;
 
     g.map->player = c;
 }
@@ -7417,7 +7484,7 @@ void Character::save(ostream &os) {
     os << strlen(name) << ' ' << name << ' ' << n << ' ';
     os << find_bitmap_index(sprite) << ' ';
 
-    os << health << ' ' << pain << ' ' << temperature << ' '
+    os << health << ' ' << pain << ' ' << warmth << ' '
        << fatigue << ' ' << hydration << ' ' << satiety << ' '
        << burden << ' ' << maxBurden << ' ' << skills << ' '
        << (int)selected_weapon_slot << ' ' << nextMove << ' ';
@@ -7464,7 +7531,7 @@ void Character::load(istream &is) {
 
     int w_slot;
 
-    is >> health >> pain >> temperature
+    is >> health >> pain >> warmth
        >> fatigue >> hydration >> satiety
        >> burden >> maxBurden >> skills
        >> w_slot >> nextMove;
