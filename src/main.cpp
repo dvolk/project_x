@@ -5,14 +5,13 @@
 #include <allegro5/allegro_font.h>
 
 #include <cstdint>
+#include <cmath>
 
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <set>
 #include <iostream>
 #include <fstream>
-#include <cmath>
 #include <algorithm>
 
 #include "./version.h"
@@ -195,7 +194,7 @@ struct Game {
     double dt;
 
     // the main 8 buttons
-    set<Button *> main_buttons;
+    vector<Button *> main_buttons;
 
     // add a message to the message log
     void AddMessage(string str);
@@ -6915,14 +6914,14 @@ static void init_buttons(void) {
     g.button_sleep->down = NULL;
     g.button_sleep->onMouseDown = button_Sleep_press;
 
-    g.main_buttons.insert(g.button_MainMap);
-    g.main_buttons.insert(g.button_MiniMap);
-    g.main_buttons.insert(g.button_Skills);
-    g.main_buttons.insert(g.button_Crafting);
-    g.main_buttons.insert(g.button_Items);
-    g.main_buttons.insert(g.button_Condition);
-    g.main_buttons.insert(g.button_Camp);
-    g.main_buttons.insert(g.button_Vehicle);
+    g.main_buttons.push_back(g.button_MainMap);
+    g.main_buttons.push_back(g.button_MiniMap);
+    g.main_buttons.push_back(g.button_Skills);
+    g.main_buttons.push_back(g.button_Crafting);
+    g.main_buttons.push_back(g.button_Items);
+    g.main_buttons.push_back(g.button_Condition);
+    g.main_buttons.push_back(g.button_Camp);
+    g.main_buttons.push_back(g.button_Vehicle);
 }
 
 static void init_weaponswitcher(void) {
