@@ -2413,7 +2413,7 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     cout << "Tilemap rendering dimensions: "
          << pos.x1 << " " << pos.y1 << " " << pos.x2 << " " << pos.y2 << endl;
 
-    eco.want_creatures = sqrt(max_t);
+    eco.want_creatures = sqrt(max_t) / 2;
 }
 
 void TileMap::focusOnPlayer(void) {
@@ -5399,7 +5399,6 @@ static void init_interactions(void) {
 
     { // "intro"
         // this plays when the game starts
-
         { // page 0
             Item *opt1 = make_text_item("Explore the field", al_map_rgb(200, 100, 100));
             Item *opt2 = make_text_item("Leave", al_map_rgb(100, 100, 200));
@@ -5410,9 +5409,7 @@ static void init_interactions(void) {
 
             page->tell("You wake up.");
             page->tell("");
-            page->tell("In front is a desolate field. You wonder if it's really black and");
-            page->tell("white or if that's the result of the severe headache you are");
-            page->tell("becoming aware of.");
+            page->tell("In front is a desolate field.");
             page->tell("");
             page->tell("Your mind feels like a broken dam as questions form but find no");
             page->tell("immediate answer. It seems that you have no memory of who you are");
@@ -5432,15 +5429,44 @@ static void init_interactions(void) {
 
         { // page 1
             Item *opt1 = make_text_item("Leave");
+            Item *opt2 = make_text_item("Offer to help", al_map_rgb(100, 150, 100));
             InteractPage *page = new InteractPage;
-            page->tell("You walk around the field and stumble on a backpack.");
+            page->tell("You walk around the field and come upon a body. It's turned away");
+            page->tell("from you. As you draw closer, the noise of your moment stirs it");
+            page->tell("and it rolls to face you. The hoarse voice of a man obviously in");
+            page->tell("pain yells at you:");
             page->tell("");
-            page->tell("There doesn't seem to be anything else here.");
+            page->tell("\"What are you doing? Get away!\"");
+
+            page->right = g.bitmaps[92];
+            page->choices.push_back({ opt1, -1 });
+            page->choices.push_back({ opt2, 2 });
+            intro->pages.push_back(page);
+        }
+        { // page 2
+            Item *opt1 = make_text_item("Leave");
+            InteractPage *page = new InteractPage;
+            page->tell("\"Help?\" says the man, \"Are you insane? There's no help for me");
+            page->tell("now\" He stops looking at you and turns his head toward the sky");
+            page->tell("\"Don't you get it? I'm infected. I'll be dead soon, like");
+            page->tell("everyone who gets the virus.\"");
+            page->tell("");
+            page->tell("He rolls his head again and looks at you. \"You too, probably.\"");
+            page->tell("");
+            page->tell("\"But since you're here you can take my gear. It should be");
+            page->tell("clean. The virus doesn't live long without the host.\"");
+            page->tell("");
+            page->tell("\"Now leave me\" He looks toward the sky again.");
 
             page->right = g.bitmaps[92];
             page->pre = []()
                 {
                     drop_item_at_player("backpack");
+                    drop_item_at_player("blue jeans");
+                    drop_item_at_player("crowbar");
+                    /*
+                      TODO: infect with some disease?
+                     */
                 };
             page->choices.push_back({ opt1, -1 });
             intro->pages.push_back(page);
@@ -5464,7 +5490,8 @@ static void init_interactions(void) {
 
             page->pre = []()
                 {
-                    g.map->player->hurt(0.1);
+                    uniform_int_distribution<> hurt_dist(0.01, 0.1);
+                    g.map->player->hurt(hurt_dist(*g.rng));
                 };
             fall_down->pages.push_back(page);
             fall_down->current_page = page;
