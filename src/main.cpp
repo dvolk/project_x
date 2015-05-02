@@ -1582,7 +1582,6 @@ struct TileMap : public Widget {
     Ecology eco;
 
     // array of size_x * size_y tiles, allocated in constructor
-    // TODO: would a 2D array be better?
     vector<Tile> tiles;
 
     vector<TileInfo> tile_info;
@@ -1624,6 +1623,9 @@ struct TileMap : public Widget {
     bool blocks_los(int n);
 
     void runEcology();
+
+    int random_uninhabited_position(void);
+    int distance(int n1, int n2);
 };
 
 static char *random_human_NPC_name(void);
@@ -1660,6 +1662,39 @@ static bool good_index(int n) {
 
 static int dir_transform(int n, int dir);
 
+int TileMap::distance(int n1, int n2) {
+    int x1 = n1 % size_x;
+    int y1 = n1 / size_y;
+    int x2 = n2 % size_x;
+    int y2 = n2 / size_y;
+    return pow(x1 - x2, 2) + pow(y1 - y2, 2);
+}
+
+int TileMap::random_uninhabited_position(void) {
+    uniform_int_distribution<> position_dist(0, max_t);
+    int new_n;
+    int trials = 0;
+    bool ok;
+    // find a position away from all the other characters
+    do {
+        ok = true;
+        new_n = position_dist(*g.rng);
+        if(distance(new_n, player->n) < 10)
+            ok = false;
+        for(auto&& c : characters) {
+            if(distance(new_n, c->n) < 10) {
+                ok = false;
+                break;
+            }
+        }
+        trials++;
+        if(trials >= 10) // map might be full
+            ok = true;
+    } while(ok == false);
+
+    return new_n;
+}
+
 Character *TileMap::addRandomCharacter(char *name) {
     Character *new_char = new Character;
 
@@ -1669,8 +1704,7 @@ Character *TileMap::addRandomCharacter(char *name) {
     uniform_int_distribution<> sprite_dist(0, character_sprite_map.size() - 1);
     new_char->sprite = g.bitmaps[character_sprite_map[sprite_dist(*g.rng)]];
 
-    uniform_int_distribution<> position_dist(0, max_t);
-    new_char->n = position_dist(*g.rng);
+    new_char->n = random_uninhabited_position();
 
     uniform_real_distribution<> health_dist(0.1, 1);
     new_char->health = health_dist(*g.rng);
