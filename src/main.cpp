@@ -5432,7 +5432,7 @@ static void init_interactions(void) {
             Item *opt2 = make_text_item("Offer to help", al_map_rgb(100, 150, 100));
             InteractPage *page = new InteractPage;
             page->tell("You walk around the field and come upon a body. It's turned away");
-            page->tell("from you. As you draw closer, the noise of your moment stirs it");
+            page->tell("from you. As you draw closer, the noise of your movement stirs it");
             page->tell("and it rolls to face you. The hoarse voice of a man obviously in");
             page->tell("pain yells at you:");
             page->tell("");
