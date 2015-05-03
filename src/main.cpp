@@ -2581,8 +2581,10 @@ void TileMap::mouseDown(void) {
 
     // LMB - movement
     if(g.mouse_button == 1) {
-        if(clicked_n == player_n)
+        if(clicked_n == player_n) {
+            g.AddMessage("Hee.");
             return;
+        }
 
         for(int dir = 1; dir <= 6; dir++) {
             if(dir_transform(player_n, dir) == clicked_n) {
@@ -3133,13 +3135,23 @@ void Button::update() {
 // }
 
 void TileMap::generate(void) {
-    uniform_int_distribution<> tile_type_dist(0, tile_info.size() - 1);
+    vector<int8_t> options =
+        { 0, 0, 0, 0, // grass
+          1, 1, // wood
+          2, // city
+          3, // swamp
+          4, 4, // hill
+          5, 5, 5, // dirt
+          6, 6 // cracked dirt ground
+        };
+
+    uniform_int_distribution<> tile_type_dist(0, options.size() - 1);
 
     tiles.resize(size_x * size_y);
 
     for(int i = 0; i <= max_t; i++) {
         tiles[i].visible = false;
-        tiles[i].info_index = tile_type_dist(*g.rng);
+        tiles[i].info_index = options.at(tile_type_dist(*g.rng));
         tiles[i].ground_items = NULL;
         tiles[i].locations = NULL;
     }
