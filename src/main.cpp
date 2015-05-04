@@ -6692,7 +6692,7 @@ MainMenuUI::MainMenuUI() {
     addEntry("Continue");
     addEntry("Load");
     addEntry("Save");
-    addEntry("Options");
+    // addEntry("Options");
     addEntry("Help");
     addEntry("Quit");
 }
