@@ -1,13 +1,12 @@
 # project_x
 
-A currently unnamed GPL3 open-world survival roguelikelike game written in C++
+A currently unnamed GPL3 open-world survival roguelikelike game written in C++ - https://dvolk.github.io/project_x/
 
-#### Try it
-    $ sudo apt-get install liballegro5-dev liballegro-image5-dev
+#### Build instructions (Linux)
+    $ sudo apt-get install g++ make pkg-config liballegro5-dev liballegro-image5-dev
     $ git clone https://github.com/dvolk/project_x
-    $ cd project_x/src
+    $ cd project_x
     $ make
-    $ cd ..
     $ ./project_x
 
 #### Screenshots
