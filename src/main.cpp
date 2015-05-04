@@ -20,7 +20,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 1; // save game version
+const int COMPILED_VERSION = 2; // save game version
 
 using namespace std;
 
@@ -1031,6 +1031,30 @@ Wound::Wound() {
     severity = 0;
 }
 
+enum Faction {
+    FACTION_NONE = 0,
+    FACTION_SCIENTISTS,
+    FACTION_DUTY,
+    FACTION_BANDITS,
+    FACTION_WILD,
+    FACTION_PLAYER,
+};
+
+static const char *faction_to_string(Faction fac) {
+    if(fac == FACTION_PLAYER)
+        return "player";
+    else if (fac == FACTION_SCIENTISTS)
+        return "scientists";
+    else if (fac == FACTION_DUTY)
+        return "duty";
+    else if (fac == FACTION_BANDITS)
+        return "bandits";
+    else if (fac == FACTION_WILD)
+        return "wild";
+    else
+        return "no faction";
+}
+
 struct Character {
     int n; // position by offset
 
@@ -1105,6 +1129,11 @@ struct Character {
     uint64_t skills;
 
     int8_t selected_weapon_slot;
+
+    // faction the character belongs to
+    Faction faction;
+    // what the factions think about the character
+    vector<int> faction_reps;
 
     Character();
     ~Character();
@@ -1394,6 +1423,8 @@ Character::Character(void) {
 
     selected_weapon_slot = 0;
 
+    faction_reps.resize(6);
+
     // info("Character()");
 }
 
@@ -1613,7 +1644,8 @@ struct TileMap : public Widget {
 
     void updateCharsByPos(void);
     void removeCharacter(Character *to_kill);
-    Character *addRandomCharacter(char *name);
+    Character *addRandomCharacter(void);
+    Character *addRandomCharacter(Faction fac);
 
     float getCurrentTemperature(int n);
     const char *getTileName(int n);
@@ -1632,7 +1664,7 @@ static char *random_human_NPC_name(void);
 
 void TileMap::runEcology() {
     if((int)characters.size() < eco.want_creatures) {
-        addRandomCharacter(random_human_NPC_name());
+        addRandomCharacter();
     }
 }
 
@@ -1695,40 +1727,89 @@ int TileMap::random_uninhabited_position(void) {
     return new_n;
 }
 
-Character *TileMap::addRandomCharacter(char *name) {
+static char *random_human_NPC_name(void);
+
+Character *TileMap::addRandomCharacter(void) {
+    // pick random faction
+    Faction fac;
+    {
+        vector<int> faction_options =
+            { 0, 0, 0, // none
+              1, // scientists
+              2, // duty
+              3, 3, // bandits
+              4, 4, 4 // animal
+            };
+
+        uniform_int_distribution<>
+            faction_dist(0, faction_options.size() - 1);
+        fac = (Faction)faction_options.at(faction_dist(*g.rng));
+    }
+
+    return addRandomCharacter(fac);
+}
+
+Character *TileMap::addRandomCharacter(Faction fac) {
     Character *new_char = new Character;
+    new_char->faction = fac;
 
-    new_char->name = name;
+    for(auto&& fac_rep : new_char->faction_reps) fac_rep = -1;
+    new_char->faction_reps[fac] = 1;
 
-    vector<int> character_sprite_map = { 21, 90, 91, 94, 95 };
-    uniform_int_distribution<> sprite_dist(0, character_sprite_map.size() - 1);
-    new_char->sprite = g.bitmaps[character_sprite_map[sprite_dist(*g.rng)]];
+    // pick name
+    if(fac == FACTION_WILD)
+        new_char->name = strdup("dog");
+    else
+        new_char->name = random_human_NPC_name();
 
+    // pick sprite
+    if(fac == FACTION_NONE) {
+        vector<int> human_sprite_map = { 21, 91, 94, 95 };
+        uniform_int_distribution<>
+            sprite_dist(0, human_sprite_map.size() - 1);
+        new_char->sprite =
+            g.bitmaps[human_sprite_map[sprite_dist(*g.rng)]];
+    }
+    else if(fac == FACTION_SCIENTISTS)
+        new_char->sprite = g.bitmaps[91];
+    else if(fac == FACTION_DUTY)
+        new_char->sprite = g.bitmaps[21];
+    else if(fac == FACTION_BANDITS)
+        new_char->sprite = g.bitmaps[94];
+    else if(fac == FACTION_WILD)
+        new_char->sprite = g.bitmaps[90];
+    else if(fac == FACTION_PLAYER)
+        new_char->sprite = g.bitmaps[21];
+
+    // position
     new_char->n = random_uninhabited_position();
 
+    // starting health
     uniform_real_distribution<> health_dist(0.1, 1);
     new_char->health = health_dist(*g.rng);
 
+    // starting delay
     uniform_int_distribution<> delay_dist(0, 500);
     new_char->nextMove = g.map->player->nextMove + delay_dist(*g.rng);
 
-    // add starting items
-    Item *backpack = new Item("backpack");
-    new_char->back->PlaceItem(backpack);
-    Item *first_aid_kit1 = new Item("first aid kit");
-    backpack->storage->PlaceItem(first_aid_kit1);
-    Item *first_aid_kit2 = new Item("first aid kit");
-    new_char->left_hand_hold->PlaceItem(first_aid_kit2);
-    Item *pill_bottle2 = new Item("pill bottle");
-    first_aid_kit1->storage->PlaceItem(pill_bottle2);
-    Item *pill_bottle3 = new Item("pill bottle");
-    first_aid_kit2->storage->PlaceItem(pill_bottle3);
+    // add starting inventory, unless it's an animal
+    if(fac != FACTION_WILD) {
+        Item *backpack = new Item("backpack");
+        new_char->back->PlaceItem(backpack);
+        Item *first_aid_kit1 = new Item("first aid kit");
+        backpack->storage->PlaceItem(first_aid_kit1);
+        Item *first_aid_kit2 = new Item("first aid kit");
+        new_char->left_hand_hold->PlaceItem(first_aid_kit2);
+        Item *pill_bottle2 = new Item("pill bottle");
+        first_aid_kit1->storage->PlaceItem(pill_bottle2);
+        Item *pill_bottle3 = new Item("pill bottle");
+        first_aid_kit2->storage->PlaceItem(pill_bottle3);
 
-    backpack->storage->PlaceItem(new Item("bullet", 5));
-    backpack->storage->PlaceItem(new Item("bullet", 3));
+        backpack->storage->PlaceItem(new Item("bullet", 5));
+        backpack->storage->PlaceItem(new Item("bullet", 3));
+    }
 
     characters.push_back(new_char);
-
     return new_char;
 }
 
@@ -4347,6 +4428,7 @@ public:
     // info needed by EncounterUI
     float getHealth(int n);
     const char *getName(int n);
+    const char *getFaction(int n);
     const char *getEquippedWeaponName(int n);
     const char *getTerrainName(void);
     ALLEGRO_BITMAP *get_character_sprite(int i);
@@ -4428,6 +4510,13 @@ float Encounter::getHealth(int n) {
 
 const char *Encounter::getName(int n) {
     return n == 0 ? c1->name : c2->name;
+}
+
+const char *Encounter::getFaction(int n) {
+    return
+        n == 0
+        ? faction_to_string(c1->faction)
+        : faction_to_string(c2->faction);
 }
 
 const char *Encounter::getEquippedWeaponName(int n) {
@@ -4829,12 +4918,14 @@ void EncounterUI::draw(void) {
         al_draw_bitmap(encounter.get_character_sprite(1), off_x + 700, 40, 0);
         sprintf(buf, "Name: %s", encounter.getName(1));
         al_draw_text(g.font, g.color_black, off_x + 700, 110, 0, buf);
-        al_draw_text(g.font, g.color_black, off_x + 700, 120, 0,
+        sprintf(buf, "Faction: %s", encounter.getFaction(1));
+        al_draw_text(g.font, g.color_black, off_x + 700, 120, 0, buf);
+        al_draw_text(g.font, g.color_black, off_x + 700, 130, 0,
                      "visible: yes");
         sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 130, 0, buf);
-        sprintf(buf, "Health: %f", encounter.getHealth(1));
         al_draw_text(g.font, g.color_black, off_x + 700, 140, 0, buf);
+        sprintf(buf, "Health: %f", encounter.getHealth(1));
+        al_draw_text(g.font, g.color_black, off_x + 700, 150, 0, buf);
     } else {
         al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
         al_draw_text(g.font, g.color_black, off_x + 700, 110, 0,
@@ -7221,6 +7312,10 @@ static void init_player(void) {
 
     c->name = strdup("Player");
     c->nextMove = 9000;
+    c->faction = FACTION_PLAYER;
+
+    for(auto&& fac_rep : c->faction_reps) fac_rep = -1;
+    c->faction_reps[c->faction] = 1;
 
     uniform_int_distribution<> position_dist(0, g.map->max_t);
     c->n = position_dist(*g.rng);
@@ -7272,7 +7367,7 @@ static void init_characters(void) {
     cout << "Spawning " << n_start_npcs << " NPCs" << endl;
 
     for(int i = 0; i < n_start_npcs; i++) {
-        g.map->addRandomCharacter(random_human_NPC_name());
+        g.map->addRandomCharacter();
     }
 
     // init map stuff
@@ -7568,7 +7663,12 @@ void Character::save(ostream &os) {
     os << health << ' ' << pain << ' ' << warmth << ' '
        << fatigue << ' ' << hydration << ' ' << satiety << ' '
        << burden << ' ' << maxBurden << ' ' << skills << ' '
-       << (int)selected_weapon_slot << ' ' << nextMove << ' ';
+       << (int)selected_weapon_slot << ' ' << nextMove << ' '
+       << (int)faction << ' ';
+
+    for(auto&& fac_rep : faction_reps) {
+        os << fac_rep << ' ';
+    }
 
     for(auto&& hp : inventory_hardpoints) {
         hp->save(os);
@@ -7611,13 +7711,19 @@ void Character::load(istream &is) {
     sprite = g.bitmaps[sprite_index];
 
     int w_slot;
+    int i_fac;
 
     is >> health >> pain >> warmth
        >> fatigue >> hydration >> satiety
        >> burden >> maxBurden >> skills
-       >> w_slot >> nextMove;
+       >> w_slot >> nextMove >> i_fac;
 
     selected_weapon_slot = w_slot;
+    faction = (Faction)i_fac;
+
+    for(auto&& fac_rep : faction_reps) {
+        is >> fac_rep;
+    }
 
     for(auto&& hp :inventory_hardpoints) {
         hp->load(is);
