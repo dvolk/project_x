@@ -577,7 +577,7 @@ name 10 red hoodie
 	grid_size_on_hp_y 9
 	container_size_x 2
 	container_size_y 4
-	container_offset_x -85
+	container_offset_x -185
 	container_offset_y 220
 	maxStack 1
 	weight 500
@@ -607,7 +607,7 @@ name 10 blue jeans
 	grid_size_on_hp_y 11
 	container_size_x 2
 	container_size_y 2
-	container_offset_x -115
+	container_offset_x -165
 	container_offset_y 150
 	maxStack 1
 	weight 500
@@ -783,8 +783,8 @@ name 7 Retreat
 	ItemSlot 0
 	grid_size_x 2
 	grid_size_y 2
-	grid_size_on_hp_x 3
-	grid_size_on_hp_y 3
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
 	container_size_x 0
 	container_size_y 0
 	container_offset_x 0
@@ -813,8 +813,8 @@ name 7 Advance
 	ItemSlot 0
 	grid_size_x 2
 	grid_size_y 2
-	grid_size_on_hp_x 3
-	grid_size_on_hp_y 3
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
 	container_size_x 0
 	container_size_y 0
 	container_offset_x 0
@@ -843,8 +843,8 @@ name 4 fist
 	ItemSlot 0
 	grid_size_x 3
 	grid_size_y 3
-	grid_size_on_hp_x 3
-	grid_size_on_hp_y 3
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
 	container_size_x 0
 	container_size_y 0
 	container_offset_x 0
@@ -873,12 +873,12 @@ name 18 makeshift wood bow
 	ItemSlot 10
 	grid_size_x 14
 	grid_size_y 3
-	grid_size_on_hp_x 3
-	grid_size_on_hp_y 3
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
 	container_size_x 10
 	container_size_y 1
-	container_offset_x 0
-	container_offset_y 0
+	container_offset_x -250
+	container_offset_y 80
 	maxStack 1
 	weight 1500
 	isVehicle 0
@@ -903,8 +903,8 @@ name 11 moldy bread
 	ItemSlot 0
 	grid_size_x 2
 	grid_size_y 2
-	grid_size_on_hp_x 3
-	grid_size_on_hp_y 3
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
 	container_size_x -1
 	container_size_y -1
 	container_offset_x 0
@@ -933,8 +933,8 @@ name 5 water
 	ItemSlot 9
 	grid_size_x 1
 	grid_size_y 2
-	grid_size_on_hp_x 3
-	grid_size_on_hp_y 3
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
 	container_size_x 0
 	container_size_y 0
 	container_offset_x 0

@@ -259,12 +259,13 @@ struct Item {
     bool isUsable(void);
     bool isConsumedOnUse(void);
     bool isLiquid(void);
+    bool isClothing(void);
 
     int get_weapon_range(void);
     float get_weapon_damage(void);
     int get_weight(void);
     float get_warmth(void);
-    void getHpDims(float &x2, float &y2);
+    void setHpDims(void);
 };
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
@@ -322,6 +323,18 @@ Item::Item(const Item& i) {
 
 bool Item::isLiquid(void) {
     return g.item_info[info_index].isLiquid;
+}
+
+bool Item::isClothing(void) {
+    ItemSlot s = g.item_info[info_index].slot;
+    return
+        s == ARMOR_HEAD ||
+        s == ARMOR_TORSO ||
+        s == ARMOR_LEGS ||
+        s == ARMOR_LEFT_SHOE ||
+        s == ARMOR_RIGHT_SHOE ||
+        s == ARMOR_LEFT_HAND ||
+        s == ARMOR_RIGHT_HAND;
 }
 
 ALLEGRO_BITMAP *Item::get_sprite() {
@@ -764,18 +777,41 @@ Item::Item(const char *item_name) {
     init_from_name(item_name);
 }
 
+static inline bool is_correct_slot(ItemSlot s, GridInfo *i) {
+    return
+        (s == ARMOR_TORSO && i == g.torso) ||
+        (s == ARMOR_LEGS && i == g.legs) ||
+        (s == ARMOR_LEFT_SHOE && i == g.left_foot) ||
+        (s == ARMOR_RIGHT_SHOE && i == g.right_foot) ||
+        (s == ARMOR_HEAD && i == g.head) ||
+        (s == ARMOR_LEFT_HAND && i == g.left_hand) ||
+        (s == ARMOR_RIGHT_HAND && i == g.right_hand) ||
+        (s == WEAPON_BOW && i == g.right_hand_hold) ||
+        (s == WEAPON_BOW && i == g.left_hand_hold) ||
+        (s == ARMOR_BACK && i == g.back) ||
+        (s == ARMOR_BACK && i == g.left_hand_hold) ||
+        (s == ARMOR_BACK && i == g.right_hand_hold)
+        ;
+}
+
 // an item on a hardpoint may have a different size than
 // on a normal grid. e.g. clothing
-void Item::getHpDims(float &x2, float &y2) {
-    if(parent != NULL &&
-       parent->info != NULL &&
-       parent->info->noGrid == true &&
-       g.item_info[info_index].grid_size_on_hp_x != -1) {
-        x2 = g.item_info[info_index].grid_size_on_hp_x;
-        y2 = g.item_info[info_index].grid_size_on_hp_y;
+void Item::setHpDims(void) {
+    if( parent != NULL &&
+        parent->info != g.default_info &&
+        parent->info->noGrid == true &&
+        g.item_info[info_index].grid_size_on_hp_x != -1 &&
+        is_correct_slot(g.item_info[info_index].slot, parent->info) == true &&
+        g.item_info[info_index].is_text_item == false) {
+
+        pos.x2 = g.item_info[info_index].grid_size_on_hp_x;
+        pos.y2 = g.item_info[info_index].grid_size_on_hp_y;
+
     } else {
-        x2 = pos.x2;
-        y2 = pos.y2;
+        if(g.item_info[info_index].is_text_item == false) {
+            pos.x2 = g.item_info[info_index].grid_size_x;
+            pos.y2 = g.item_info[info_index].grid_size_y;
+        }
     }
 }
 
@@ -841,6 +877,7 @@ Item *Grid::PlaceItem(Item *to_place) {
             to_place->pos.x1 = 0;
             to_place->pos.y1 = 0;
             AddItem(to_place);
+            to_place->setHpDims();
             return NULL;
         }
         return to_place;
@@ -925,6 +962,7 @@ Item *Grid::PlaceItem(Item *to_place) {
             to_place->storage->gsb_displayed = false;
         }
         AddItem(to_place);
+        to_place->setHpDims();
         return NULL;
     }
     else {
@@ -2367,9 +2405,9 @@ void GridSystem::MouseAutoMoveItemToGround() {
     assert(item != NULL);
     assert(from != NULL);
 
-    PlaceItemOnMultiGrid(ground, item);
     if(item->storage != NULL)
         item->storage->gsb_displayed = false;
+    PlaceItemOnMultiGrid(ground, item);
     reset();
 }
 
@@ -3377,7 +3415,9 @@ void GridSystem::drawItemTooltip(void) {
 
     for(auto& grid : grids) {
         for(auto& item : grid->items) {
-            item->getHpDims(sx, sy);
+            sx = item->pos.x2;
+            sy = item->pos.y2;
+            // item->getHpDims(sx, sy);
 
             if(item->parent->pos.x1 + item->pos.x1 * Grid::grid_px_x <= g.mouse_x &&
                item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= g.mouse_y &&
@@ -3503,6 +3543,7 @@ void GridSystem::GrabItem() {
  got_it:
     held = i;
     was_rotated = i->rotated;
+    i->setHpDims();
     cout << was_rotated << endl;
     g.hold_off_x =
         g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
@@ -3533,9 +3574,16 @@ void GridSystem::GrabItem() {
 void GridSystem::addStorageGrid(void) {
     if(held != NULL &&
        held->storage != NULL &&
-       held->parent->info != NULL &&
-       held->parent->info->noGrid == true) {
-        // ^^ we only want to add it if it's on a hardpoint
+       // held->parent->info != NULL &&
+       // held->parent->info->noGrid == true &&
+       (is_correct_slot(g.item_info[held->info_index].slot,
+                        held->parent->info) ||
+        (held->isClothing() == false &&
+         (held->parent->info == g.right_hand_hold ||
+          held->parent->info == g.left_hand_hold)))) {
+        // ^^ we only want to add it if it's on the correct hardpoint
+        // for this item
+        // or if it's on the left or right hand, but not if it's clothing
         held->storage->gsb_displayed = true;
         held->resetHardpointPos();
         grids.push_back(held->storage);
@@ -3549,6 +3597,9 @@ void GridSystem::gsMouseUpEvent() {
     // are we holding an item?
     if(held == NULL)
         return;
+
+    held->pos.x2 = g.item_info[held->info_index].grid_size_x;
+    held->pos.y2 = g.item_info[held->info_index].grid_size_y;
 
     // proposed position to drop it into relative to the
     // grid currently being examined
@@ -3691,8 +3742,10 @@ void GridSystem::gsMouseUpEvent() {
             held->parent = grid;
             held->pos.x1 = drop_x;
             held->pos.y1 = drop_y;
+
             grid->items.push_back(held);
 
+            held->setHpDims();
             addStorageGrid();
 
             char b[60];
@@ -3715,6 +3768,7 @@ void GridSystem::gsMouseUpEvent() {
         held->rotate();
     }
     held->parent->items.push_back(held);
+    held->setHpDims();
 
     addStorageGrid();
 
@@ -3806,7 +3860,8 @@ void Item::draw(void) {
         al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
     }
     else {
-        if(parent->info != NULL && parent->info->noGrid == true && sprite_on_hp != NULL) {
+        if(sprite_on_hp != NULL &&
+           g.item_info[info_index].grid_size_x != pos.x2) {
             al_draw_bitmap(sprite_on_hp, x1, y1, 0);
         } else {
             if(rotated == true) {
@@ -3899,7 +3954,9 @@ Item *Grid::grab_item(int x, int y) {
     float x2;
     float y2;
     for (auto& i : items) {
-        i->getHpDims(x2, y2);
+
+        x2 = i->pos.x2;
+        y2 = i->pos.y2;
 
         if(i->parent->pos.x1 + i->pos.x1 * grid_px_x <= x &&
            i->parent->pos.y1 + i->pos.y1 * grid_px_y <= y &&
@@ -5600,6 +5657,9 @@ static void init_interactions(void) {
                 {
                     drop_item_at_player("backpack");
                     drop_item_at_player("blue jeans");
+                    drop_item_at_player("makeshift wood bow");
+                    drop_item_at_player("arrow");
+                    drop_item_at_player("arrow");
                     drop_item_at_player("crowbar");
                     /*
                       TODO: infect with some disease?

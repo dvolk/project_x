@@ -600,7 +600,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 2;
     tmp.container_size_y = 4;
-    tmp.container_offset_x = -85;
+    tmp.container_offset_x = -185;
     tmp.container_offset_y = 220;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
@@ -624,7 +624,7 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 2;
     tmp.container_size_y = 2;
-    tmp.container_offset_x = -115;
+    tmp.container_offset_x = -165;
     tmp.container_offset_y = +150;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
@@ -750,6 +750,8 @@ void init_iteminfo(void) {
     tmp.name = "Retreat";
     tmp.grid_size_x = 2;
     tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = -1;
+    tmp.grid_size_on_hp_y = -1;
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[80];
@@ -822,6 +824,8 @@ void init_iteminfo(void) {
     tmp.isContainer = true;
     tmp.container_size_x = 10;
     tmp.container_size_y = 1;
+    tmp.container_offset_x = -250;
+    tmp.container_offset_y = 80;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
@@ -845,6 +849,8 @@ void init_iteminfo(void) {
     tmp.isContainer = false;
     tmp.container_size_x = -1;
     tmp.container_size_y = -1;
+    tmp.container_offset_x = 0;
+    tmp.container_offset_y = 0;
     tmp.isSkill = false;
     tmp.apply_to_body = false;
     tmp.consumed_on_application = false;
