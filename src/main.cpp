@@ -7447,8 +7447,9 @@ static void init_player(void) {
     for(auto&& fac_rep : c->faction_reps) fac_rep = -1;
     c->faction_reps[c->faction] = 1;
 
-    uniform_int_distribution<> position_dist(0, g.map->max_t);
-    c->setPos(position_dist(*g.rng));
+    // start the player in the upper left
+    c->setPos(g.map->size_x * (g.map->size_y / 5) + (g.map->size_x / 4));
+
     c->sprite = g.bitmaps[21];
 
     // start the player with clothing
