@@ -20,7 +20,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 2; // save game version
+const int COMPILED_VERSION = 3; // save game version
 
 using namespace std;
 
@@ -1095,6 +1095,7 @@ static const char *faction_to_string(Faction fac) {
 
 struct Character {
     int n; // position by offset
+    int x, y; // cache to avoid computations
 
     char *name;
 
@@ -1183,6 +1184,9 @@ struct Character {
 
     void draw(void);
     void drawOffset(int offset_x, int offset_y);
+
+    void setPos(int n);
+    void setPos(int x, int y);
 
     /*
       TODO why is this here
@@ -1599,6 +1603,18 @@ vector<pair<float, int>> Location::getLootTable(void) {
     return g.location_info[info_index].loot_table;
 }
 
+struct Label {
+    int n;
+    int x, y;
+    const char *text;
+    int offset_x;
+
+    void save(ostream &os);
+    void load(istream &is);
+
+    void draw(void);
+};
+
 // a hex tile
 struct Tile {
     int8_t info_index; // index into TileInfo
@@ -1655,6 +1671,8 @@ struct TileMap : public Widget {
 
     vector<TileInfo> tile_info;
 
+    vector<Label> labels;
+
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
 
@@ -1696,7 +1714,45 @@ struct TileMap : public Widget {
 
     int random_uninhabited_position(void);
     int distance(int n1, int n2);
+
+    void addLabel(int n, const char *text);
 };
+
+void Label::draw(void) {
+    // is it on the screen?
+    if(y >= g.map->view_y + g.map->rows ||
+       x >= g.map->view_x + g.map->cols ||
+       y < g.map->view_y ||
+       x < g.map->view_x) {
+        return;
+    }
+    if(g.map->tiles[n].visible == false)
+        return;
+
+    int r_x = x - g.map->view_x;
+    int r_y = y - g.map->view_y;
+
+    int off_x = 80 * r_x;
+    int off_y = n % 2  == 0 ? 0 : 20;
+    off_y += 40 * r_y;
+
+    al_draw_text(g.font,
+                 g.color_white,
+                 g.map->r_off_x + off_x + offset_x,
+                 g.map->r_off_y + off_y + 55,
+                 0,
+                 text);
+}
+
+void TileMap::addLabel(int n, const char *text) {
+    Label tmp;
+    tmp.n = n;
+    tmp.x = n % g.map->size_x;
+    tmp.y = n / g.map->size_y;
+    tmp.text = text;
+    tmp.offset_x = (100 - (strlen(text) * 8)) / 2;
+    labels.push_back(tmp);
+}
 
 static char *random_human_NPC_name(void);
 
@@ -1765,6 +1821,18 @@ int TileMap::random_uninhabited_position(void) {
     return new_n;
 }
 
+void Character::setPos(int n) {
+    this->n = n;
+    x = n % g.map->size_x;
+    y = n / g.map->size_x;
+}
+
+void Character::setPos(int x, int y) {
+    this->x = x;
+    this->y = y;
+    n = y * g.map->size_x + x;
+}
+
 static char *random_human_NPC_name(void);
 
 Character *TileMap::addRandomCharacter(void) {
@@ -1820,7 +1888,7 @@ Character *TileMap::addRandomCharacter(Faction fac) {
         new_char->sprite = g.bitmaps[21];
 
     // position
-    new_char->n = random_uninhabited_position();
+    new_char->setPos(random_uninhabited_position());
 
     // starting health
     uniform_real_distribution<> health_dist(0.1, 1);
@@ -2121,7 +2189,7 @@ static void runAIEncounter(int n);
 
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
-        n = new_n;
+        setPos(new_n);
         g.map->updateCharsByPos();
 
         // start an encounter if
@@ -2521,6 +2589,8 @@ TileMap::~TileMap() {
             delete tile.locations;
         }
     }
+    for(auto&& label : labels)
+        free((char*)label.text);
 }
 
 TileMap::TileMap(int sx, int sy, int c, int r) {
@@ -2948,19 +3018,16 @@ void Character::draw(void) {
 void Character::drawOffset(int offset_x, int offset_y) {
     assert(sprite != NULL);
 
-    int ch_x = n % g.map->size_x;
-    int ch_y = n / g.map->size_x;
-
     // is it on the screen?
-    if(ch_y >= g.map->view_y + g.map->rows ||
-       ch_x >= g.map->view_x + g.map->cols ||
-       ch_y < g.map->view_y ||
-       ch_x < g.map->view_x) {
+    if(y >= g.map->view_y + g.map->rows ||
+       x >= g.map->view_x + g.map->cols ||
+       y < g.map->view_y ||
+       x < g.map->view_x) {
         return;
     }
 
-    int r_x = ch_x - g.map->view_x;
-    int r_y = ch_y - g.map->view_y;
+    int r_x = x - g.map->view_x;
+    int r_y = y - g.map->view_y;
 
     int off_x = 80 * r_x;
     int off_y = n % 2  == 0 ? 0 : 20;
@@ -2970,12 +3037,12 @@ void Character::drawOffset(int offset_x, int offset_y) {
                    g.map->r_off_x + off_x + 25 + offset_x,
                    g.map->r_off_y + off_y + offset_y, 0);
 
-    if(ch_y + 1 >= g.map->size_y)
+    if(y + 1 >= g.map->size_y)
         return;
 
     if(DEBUG_VISIBILITY ||
-       g.map->tiles[g.map->size_x * (ch_y + 1) + ch_x].visible == true) {
-        g.map->drawTopHalfOfTileAt(ch_x, ch_y + 1);
+       g.map->tiles[g.map->size_x * (y + 1) + x].visible == true) {
+        g.map->drawTopHalfOfTileAt(x, y + 1);
     }
 }
 
@@ -3372,6 +3439,9 @@ void TileMap::draw(void) {
         al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2, 1);
         al_draw_rectangle(pos.x1, pos.y1 + 40, pos.x2 - 81, pos.y2 - 1, g.color_white, 1);
     }
+
+    for(auto&& label : labels)
+        label.draw();
 }
 
 // redraws the top half of a tile (the part that overlaps with the
@@ -6556,7 +6626,7 @@ struct MenuEntry : public Widget {
 
 struct MainMenuUI : public UI {
     const float x = 590;
-    const float y = 250;
+    const float y = 350;
     const float sx = 100;
     const float sy = 50;
 
@@ -7378,7 +7448,7 @@ static void init_player(void) {
     c->faction_reps[c->faction] = 1;
 
     uniform_int_distribution<> position_dist(0, g.map->max_t);
-    c->n = position_dist(*g.rng);
+    c->setPos(position_dist(*g.rng));
     c->sprite = g.bitmaps[21];
 
     // start the player with clothing
@@ -7396,6 +7466,10 @@ static void init_player(void) {
     c->health = 0.2;
 
     g.map->player = c;
+
+    g.map->tiles[c->n].info_index = 5;
+    g.map->addLabel(c->n, strdup("Dead field"));
+    g.map->addLabel(c->n + 3, strdup("Mysterious Tile"));
 }
 
 static char *random_human_NPC_name(void) {
@@ -7623,6 +7697,22 @@ static void new_game(void) {
     init_UIs();
 }
 
+void Label::save(ostream &os) {
+    os << n << ' ' << x << ' ' << y << ' ' << offset_x << ' ';
+    os << strlen(text) << ' ' << text << ' ';
+}
+
+void Label::load(istream &is) {
+    is >> n >> x >> y >> offset_x;
+    int text_len;
+    is >> text_len;
+    char *text = (char *)malloc(text_len + 1);
+    is.ignore(1); // ignore the space
+    is.read(&text[0], text_len);
+    text[text_len] = '\0';
+    this->text = text;
+}
+
 static int find_bitmap_index(ALLEGRO_BITMAP *searched) {
     size_t i = 0;
     for(auto&& bitmap : g.bitmaps) {
@@ -7770,6 +7860,8 @@ void Character::load(istream &is) {
     is >> n >> sprite_index;
     sprite = g.bitmaps[sprite_index];
 
+    setPos(n);
+
     int w_slot;
     int i_fac;
 
@@ -7862,6 +7954,12 @@ void TileMap::save(ostream &os) {
         ch->save(os);
         os << '\n';
     }
+    os << labels.size() << ' ';
+    os << '\n';
+    for(auto&& label : labels) {
+        label.save(os);
+        os << '\n';
+    }
 }
 
 void TileMap::load(istream &is) {
@@ -7915,6 +8013,12 @@ void TileMap::load(istream &is) {
     }
     player->update_visibility();
     updateCharsByPos();
+    is >> n;
+    for(size_t i = 0; i < n; i++) {
+        Label tmp;
+        tmp.load(is);
+        labels.push_back(tmp);
+    }
 }
 
 static bool save_game(void) {
