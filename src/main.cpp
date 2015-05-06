@@ -20,7 +20,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 3; // save game version
+const int COMPILED_VERSION = 4; // save game version
 
 using namespace std;
 
@@ -1057,16 +1057,39 @@ enum ActivityKind {
 };
 
 struct Wound {
-    int8_t severity;
+    int age;
+    float severity;
+    float bleeding;
 
     void save(ostream &os);
     void load(istream &is);
+
+    void modify_severity(float amount);
+    void modify_bleeding(float amount);
 
     Wound();
 };
 
 Wound::Wound() {
     severity = 0;
+    bleeding = 0;
+    age = 0;
+}
+
+void Wound::modify_severity(float amount) {
+    severity = max((float)0.0, severity + amount);
+
+    // start bleeding at wound severity 0.005
+    bleeding = max(0.0, severity - 0.005);
+
+    if(severity < 0.001) {
+        severity = 0;
+        age = 0;
+    }
+}
+
+void Wound::modify_bleeding(float amount) {
+    bleeding = max((float)0.0, bleeding + amount);
 }
 
 enum Faction {
@@ -1127,16 +1150,21 @@ struct Character {
 
     int carry_weight;
 
-    Wound wound_upper_torso;
-    Wound wound_lower_torso;
-    Wound wound_left_upper_leg;
-    Wound wound_right_upper_leg;
-    Wound wound_left_lower_leg;
-    Wound wound_right_lower_leg;
-    Wound wound_left_upper_arm;
-    Wound wound_right_upper_arm;
-    Wound wound_left_lower_arm;
-    Wound wound_right_lower_arm;
+    /*
+      The wounds, in order:
+      upper_torso;
+      lower_torso;
+      left_upper_leg;
+      right_upper_leg;
+      left_lower_leg;
+      right_lower_leg;
+      left_upper_arm;
+      right_upper_arm;
+      left_lower_arm;
+      right_lower_arm;
+    */
+
+    vector<Wound> wounds;
 
     // allowed range: 0 - 1
     float health;
@@ -1153,6 +1181,7 @@ struct Character {
 
     vector<Grid *> inventory_hardpoints;
     vector<Grid *> clothing;
+    vector<Grid *> medical_hardpoints;
 
     ALLEGRO_BITMAP *sprite;
     vector<int> currently_seeing;
@@ -1226,6 +1255,8 @@ struct Character {
 
     void recomputeCarryWeight(void);
     void recomputeWarmth(void);
+
+    Wound *random_wound(void);
 };
 
 /*
@@ -1324,8 +1355,24 @@ void Character::wait(void) {
     spendTime(1000);
 }
 
+Wound * Character::random_wound(void) {
+    uniform_int_distribution<> wounds_dist(0, wounds.size() - 1);
+    return &wounds[wounds_dist(*g.rng)];
+}
+
 void Character::hurt(float amount) {
     health -= min(health, amount);
+
+    int wounds_num = amount / 0.03;
+
+    while(wounds_num > 0.99) {
+        Wound *w = random_wound();
+        w->modify_severity(amount / 5);
+        w->age = 0;
+        wounds_num--;
+        cout << "what?" << endl;
+    }
+
     pain -= min(pain, amount * 3);
     activity = ACTIVITY_COMBAT;
     spendTime(0);
@@ -1408,6 +1455,17 @@ Character::Character(void) {
     medical_left_lower_arm = new Grid(off_x - 60, off_y + 172, 2, 2, g.medical_left_lower_arm);
     medical_right_lower_arm = new Grid(off_x + 60, off_y + 172, 2, 2, g.medical_right_lower_arm);
 
+    medical_hardpoints.push_back(medical_upper_torso);
+    medical_hardpoints.push_back(medical_lower_torso);
+    medical_hardpoints.push_back(medical_left_upper_leg);
+    medical_hardpoints.push_back(medical_right_upper_leg);
+    medical_hardpoints.push_back(medical_left_lower_leg);
+    medical_hardpoints.push_back(medical_right_lower_leg);
+    medical_hardpoints.push_back(medical_left_upper_arm);
+    medical_hardpoints.push_back(medical_right_upper_arm);
+    medical_hardpoints.push_back(medical_left_lower_arm);
+    medical_hardpoints.push_back(medical_right_lower_arm);
+
     inventory_hardpoints.push_back(right_hand_hold);
     inventory_hardpoints.push_back(left_hand_hold);
     inventory_hardpoints.push_back(right_hand);
@@ -1451,17 +1509,7 @@ Character::Character(void) {
 
     activity = ACTIVITY_MOVE;
 
-    wound_upper_torso.severity = 1;
-    wound_upper_torso.severity = 1;
-    wound_lower_torso.severity = 1;
-    wound_left_upper_leg.severity = 1;
-    wound_right_upper_leg.severity = 1;
-    wound_left_lower_leg.severity = 1;
-    wound_right_lower_leg.severity = 1;
-    wound_left_upper_arm.severity = 1;
-    wound_right_upper_arm.severity = 1;
-    wound_left_lower_arm.severity = 1;
-    wound_right_lower_arm.severity = 1;
+    wounds.resize(10);
 
     selected_weapon_slot = 0;
 
@@ -1890,9 +1938,9 @@ Character *TileMap::addRandomCharacter(Faction fac) {
     // position
     new_char->setPos(random_uninhabited_position());
 
-    // starting health
-    uniform_real_distribution<> health_dist(0.1, 1);
-    new_char->health = health_dist(*g.rng);
+    // // starting health
+    // uniform_real_distribution<> health_dist(0.1, 1);
+    // new_char->health = health_dist(*g.rng);
 
     // starting delay
     uniform_int_distribution<> delay_dist(0, 500);
@@ -2108,6 +2156,37 @@ void Character::update(void) {
         float warmth_damage = (0.15 - warmth) * dt / 4000;
         health = max((float)0.0, health - warmth_damage);
     }
+
+    size_t i = 0;
+    for(auto&& m_hp : medical_hardpoints) {
+        // if there's a clean rag on the wound, then
+        // decrease the wound severity
+        if(m_hp->items.empty() == false) {
+            wounds[i].modify_severity(-0.002 * dt * 0.001);
+
+        // if we're wounded and there's nothing on the wound,
+        // increase it's severity
+        }
+        else if(wounds[i].severity > 0) {
+            // start healing after 5 hours
+            if(wounds[i].age > 5000) {
+                if(wounds[i].severity >= 0.004) {
+                    wounds[i].modify_severity(-0.001 * dt * 0.001);
+                }
+            } else {
+                wounds[i].modify_severity( 0.0005 * dt * 0.001);
+            }
+            wounds[i].age += dt;
+        }
+        i++;
+    }
+
+    // hurt the player based on bleeding wounds
+    float bleed_damage = 0;
+    for(auto&& w : wounds) {
+        bleed_damage += (float)w.bleeding;
+    }
+    health = max((float)0.0, health - bleed_damage);
 
     if(activity == ACTIVITY_MOVE) {
         /*
@@ -4098,6 +4177,21 @@ static void player_hurt_messages(void) {
     } else if(g.map->player->fatigue < 0.15) {
         g.AddMessage("Rest...");
     }
+
+    float bleeding = 0;
+    for(auto&& w : g.map->player->wounds)
+        bleeding += w.bleeding;
+
+    if(bleeding > 0.05)
+        g.AddMessage("You're bleeding heavily...");
+    else if(bleeding > 0.001)
+        g.AddMessage("You're bleeding...");
+
+    // cout << "bleed damage: " << bleeding << endl;
+
+    // for(auto&& w : g.map->player->wounds)
+    //     printf("%d,%f,%f ", w.age, w.severity, w.bleeding);
+    // cout << endl << g.map->player->health << endl;
 }
 
 static void end_turn() {
@@ -4557,6 +4651,7 @@ public:
     const char *getName(int n);
     const char *getFaction(int n);
     const char *getEquippedWeaponName(int n);
+    const Character *getChar(int n);
     const char *getTerrainName(void);
     ALLEGRO_BITMAP *get_character_sprite(int i);
     int getRange(void);
@@ -4565,6 +4660,10 @@ public:
     bool seesOpponent(int n);
     void updateVisibility(void);
 };
+
+const Character *Encounter::getChar(int n) {
+    return n == 0 ? c1 : c2;
+}
 
 void Encounter::updateVisibility(void) {
     if(range <= 6) {
@@ -5022,16 +5121,29 @@ void EncounterUI::draw(void) {
 
     if(encounter.seesOpponent(0) == true) {
         al_draw_text(g.font, g.color_black, off_x + 120, 120, 0,
-                     "visible: yes");
+                     "Visible: yes");
     } else {
         al_draw_text(g.font, g.color_black, off_x + 120, 120, 0,
-                     "visible: no");
+                     "Visible: no");
     }
 
     sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(0));
     al_draw_text(g.font, g.color_black, off_x + 120, 130, 0, buf);
-    sprintf(buf, "Health: %f", encounter.getHealth(0));
-    al_draw_text(g.font, g.color_black, off_x + 120, 140, 0, buf);
+    // sprintf(buf, "Health: %f", encounter.getHealth(0));
+    // al_draw_text(g.font, g.color_black, off_x + 120, 140, 0, buf);
+
+    float wound_severity = 0;
+    float wound_bleeding = 0;
+
+    for(auto&& w : encounter.getChar(0)->wounds) {
+        wound_severity += w.severity;
+        wound_bleeding += w.bleeding;
+    }
+
+    if(wound_severity >= 0.001)
+        al_draw_text(g.font, g.color_black, off_x + 120, 160, 0, "Wounded");
+    if(wound_bleeding >= 0.001)
+        al_draw_text(g.font, g.color_black, off_x + 120, 170, 0, "Bleeding");
 
     // center pane
     al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
@@ -5051,8 +5163,21 @@ void EncounterUI::draw(void) {
                      "visible: yes");
         sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
         al_draw_text(g.font, g.color_black, off_x + 700, 140, 0, buf);
-        sprintf(buf, "Health: %f", encounter.getHealth(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 150, 0, buf);
+        // sprintf(buf, "Health: %f", encounter.getHealth(1));
+        // al_draw_text(g.font, g.color_black, off_x + 700, 150, 0, buf);
+
+        wound_severity = 0;
+        wound_bleeding = 0;
+        for(auto&& w : encounter.getChar(1)->wounds) {
+            wound_severity += w.severity;
+            wound_bleeding += w.bleeding;
+        }
+
+        if(wound_severity >= 0.001)
+            al_draw_text(g.font, g.color_black, off_x + 700, 170, 0, "Wounded");
+        if(wound_bleeding >= 0.001)
+            al_draw_text(g.font, g.color_black, off_x + 700, 180, 0, "Bleeding");
+
     } else {
         al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
         al_draw_text(g.font, g.color_black, off_x + 700, 110, 0,
@@ -5729,6 +5854,10 @@ static void init_interactions(void) {
                     drop_item_at_player("blue jeans");
                     drop_item_at_player("makeshift wood bow");
                     drop_item_at_player("arrow");
+                    drop_item_at_player("clean rag");
+                    drop_item_at_player("clean rag");
+                    drop_item_at_player("clean rag");
+                    drop_item_at_player("clean rag");
                     drop_item_at_player("arrow");
                     drop_item_at_player("crowbar");
                     /*
@@ -5955,8 +6084,8 @@ ConditionGridSystem::~ConditionGridSystem() {
 void ConditionGridSystem::draw(void) {
     al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
     al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-    al_draw_filled_rectangle(700, 50, 1175, 500, g.color_grey);
-    al_draw_text(g.font, g.color_black, 708, 58, 0, "Current conditions:");
+    // al_draw_filled_rectangle(700, 50, 1175, 500, g.color_grey);
+    // al_draw_text(g.font, g.color_black, 708, 58, 0, "Current conditions:");
 
     for (auto& g : grids) {
         // skip medical hardpoints
@@ -5988,34 +6117,34 @@ void ConditionGridSystem::draw_medical_hardpoint(Grid *grid) {
     if(grid->items.size() == 0) {
         // TODO: draw wound if we're injured
         if(grid->info == g.medical_upper_torso
-           && g.map->player->wound_upper_torso.severity >= 1)
+           && g.map->player->wounds[0].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[70], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_lower_leg
-                && g.map->player->wound_left_lower_leg.severity >= 1)
+                && g.map->player->wounds[4].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[71], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_lower_leg
-                && g.map->player->wound_right_lower_leg.severity >= 1)
+                && g.map->player->wounds[5].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[72], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_upper_leg
-                && g.map->player->wound_right_upper_leg.severity >= 1)
+                && g.map->player->wounds[3].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[73], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_upper_leg
-                && g.map->player->wound_left_upper_leg.severity >= 1)
+                && g.map->player->wounds[2].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[74], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_lower_arm
-                && g.map->player->wound_right_lower_arm.severity >= 1)
+                && g.map->player->wounds[9].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[75], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_upper_arm
-                && g.map->player->wound_right_upper_arm.severity >= 1)
+                && g.map->player->wounds[7].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[76], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_lower_torso
-                && g.map->player->wound_lower_torso.severity >= 1)
+                && g.map->player->wounds[1].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[77], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_lower_arm
-                && g.map->player->wound_left_lower_arm.severity >= 1)
+                && g.map->player->wounds[8].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[78], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_upper_arm
-                && g.map->player->wound_left_upper_arm.severity >= 1)
+                && g.map->player->wounds[6].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[79], grid->pos.x1, grid->pos.y1, 0);
         return;
     }
@@ -7464,7 +7593,7 @@ static void init_player(void) {
     c->enableSkill(33);
     c->recomputeCarryWeight();
     c->recomputeWarmth();
-    c->health = 0.2;
+    c->health = 1;
 
     g.map->player = c;
 
@@ -7799,12 +7928,10 @@ void Grid::load(istream &is) {
 }
 
 void Wound::save(ostream &os) {
-    os << (int)severity << ' ';
+    os << age << ' ' << severity << ' ' << bleeding << ' ';
 }
 void Wound::load(istream &is) {
-    int s;
-    is >> s;
-    severity = s;
+    is >> age >> severity >> bleeding;
 }
 
 void Character::save(ostream &os) {
@@ -7837,16 +7964,8 @@ void Character::save(ostream &os) {
     medical_left_lower_arm->save(os);
     medical_right_lower_arm->save(os);
 
-    wound_upper_torso.save(os);
-    wound_lower_torso.save(os);
-    wound_left_upper_leg.save(os);
-    wound_right_upper_leg.save(os);
-    wound_left_lower_leg.save(os);
-    wound_right_lower_leg.save(os);
-    wound_left_upper_arm.save(os);
-    wound_right_upper_arm.save(os);
-    wound_left_lower_arm.save(os);
-    wound_right_lower_arm.save(os);
+    for(auto&& w : wounds)
+        w.save(os);
 }
 
 void Character::load(istream &is) {
@@ -7894,16 +8013,9 @@ void Character::load(istream &is) {
     medical_left_lower_arm->load(is);
     medical_right_lower_arm->load(is);
 
-    wound_upper_torso.load(is);
-    wound_lower_torso.load(is);
-    wound_left_upper_leg.load(is);
-    wound_right_upper_leg.load(is);
-    wound_left_lower_leg.load(is);
-    wound_right_lower_leg.load(is);
-    wound_left_upper_arm.load(is);
-    wound_right_upper_arm.load(is);
-    wound_left_lower_arm.load(is);
-    wound_right_lower_arm.load(is);
+    wounds.resize(10);
+    for(auto&& w : wounds)
+        w.load(is);
 }
 
 void Location::save(ostream &os) {
