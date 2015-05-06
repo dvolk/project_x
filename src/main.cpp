@@ -71,6 +71,7 @@ struct Game {
 
     ALLEGRO_COLOR color_white;
     ALLEGRO_COLOR color_black;
+    ALLEGRO_COLOR color_red;
     ALLEGRO_COLOR color_grey;
     ALLEGRO_COLOR color_grey2;
     ALLEGRO_COLOR color_grey3;
@@ -1370,7 +1371,6 @@ void Character::hurt(float amount) {
         w->modify_severity(amount / 5);
         w->age = 0;
         wounds_num--;
-        cout << "what?" << endl;
     }
 
     pain -= min(pain, amount * 3);
@@ -2169,9 +2169,9 @@ void Character::update(void) {
         }
         else if(wounds[i].severity > 0) {
             // start healing after 5 hours
-            if(wounds[i].age > 5000) {
+            if(wounds[i].age > 3000) {
                 if(wounds[i].severity >= 0.004) {
-                    wounds[i].modify_severity(-0.001 * dt * 0.001);
+                    wounds[i].modify_severity(-0.002 * dt * 0.001);
                 }
             } else {
                 wounds[i].modify_severity( 0.0005 * dt * 0.001);
@@ -5141,9 +5141,9 @@ void EncounterUI::draw(void) {
     }
 
     if(wound_severity >= 0.001)
-        al_draw_text(g.font, g.color_black, off_x + 120, 160, 0, "Wounded");
+        al_draw_text(g.font, g.color_red, off_x + 120, 160, 0, "Wounded");
     if(wound_bleeding >= 0.001)
-        al_draw_text(g.font, g.color_black, off_x + 120, 170, 0, "Bleeding");
+        al_draw_text(g.font, g.color_red, off_x + 120, 170, 0, "Bleeding");
 
     // center pane
     al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
@@ -5174,9 +5174,9 @@ void EncounterUI::draw(void) {
         }
 
         if(wound_severity >= 0.001)
-            al_draw_text(g.font, g.color_black, off_x + 700, 170, 0, "Wounded");
+            al_draw_text(g.font, g.color_red, off_x + 700, 170, 0, "Wounded");
         if(wound_bleeding >= 0.001)
-            al_draw_text(g.font, g.color_black, off_x + 700, 180, 0, "Bleeding");
+            al_draw_text(g.font, g.color_red, off_x + 700, 180, 0, "Bleeding");
 
     } else {
         al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
@@ -7657,6 +7657,7 @@ static void init_colors(void) {
     g.color_darkgrey = al_map_rgb(100, 100, 110);
     g.color_black = al_map_rgb(0, 0, 0);
     g.color_white = al_map_rgb(255, 255, 255);
+    g.color_red = al_map_rgb(200, 0, 0);
     g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
     g.color_active_tile_tint = al_map_rgba_f(1, 1, 1, 0.2);
     g.color_bg = g.color_black;
