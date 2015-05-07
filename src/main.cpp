@@ -3451,6 +3451,12 @@ void TileMap::drawTile(int i, int x, int y) {
                            r_off_x + off_x,
                            r_off_y + off_y,
                            0);
+            if(tiles[t].ground_items != NULL) {
+                al_draw_bitmap(g.bitmaps[98],
+                               r_off_x + off_x,
+                               r_off_y + off_y,
+                               0);
+            }
         }
         else {
             /*
@@ -4056,9 +4062,15 @@ void Item::drawHeld(void) {
     }
 }
 
-/*
-  valgrind reports a loss here (still?)
-*/
+void EmptyOut(Grid *storage) {
+    vector<Grid *> *ground = ground_at_player();
+
+    for(auto&& moving : storage->items) {
+        PlaceItemOnMultiGrid(ground, moving);
+    }
+    storage->items.clear();
+}
+
 // this does a lot more than unstack now
 void Grid::unstack_item(int x, int y) {
     int c = 0;
@@ -4078,17 +4090,12 @@ void Grid::unstack_item(int x, int y) {
                 PlaceItemWantsStacking = true;
                 return;
             }
-            if(i->storage != NULL) {
-                // the item has storage, empty it out (onto the ground)
-                vector<Grid *> *ground = ground_at_player();
-                while(i->storage->items.empty() == false) {
-                    Item *moving = i->storage->items.front();
-                    PlaceItemOnMultiGrid(ground, moving);
-                    i->storage->RemoveItem(moving);
-                }
+            else if(i->storage != NULL) {
+                // if the item has storage, mmb empties onto the ground
+                EmptyOut(i->storage);
                 return;
             }
-            if(i->isUsable()) {
+            else if(i->isUsable()) {
                 // we're using an item
                 g.map->player->useItem(i);
             }
@@ -7237,6 +7244,7 @@ static void load_bitmaps(void) {
     /* 95 */ filenames.push_back("media/characters/char3.png");
     /* 96 */ filenames.push_back("media/items/moldy_bread.png");
     /* 97 */ filenames.push_back("media/items/water.png");
+    /* 98 */ filenames.push_back("media/indicators/tile_has_storage.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
