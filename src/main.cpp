@@ -1764,6 +1764,7 @@ struct TileMap : public Widget {
     int distance(int n1, int n2);
 
     void addLabel(int n, const char *text);
+    void DeleteGroundIfEmpty(int n);
 };
 
 void Label::draw(void) {
@@ -1983,8 +1984,10 @@ void TileMap::removeCharacter(Character *to_kill) {
     for(auto& character : g.map->characters) {
         if(character == to_kill) {
             g.map->characters.erase(g.map->characters.begin() + i);
+            int n = to_kill->n;
             delete to_kill;
             updateCharsByPos();
+            DeleteGroundIfEmpty(n);
             return;
         }
         i++;
@@ -2266,8 +2269,29 @@ static bool runRandomScavengingEvents(void) {
 
 static void runAIEncounter(int n);
 
+void TileMap::DeleteGroundIfEmpty(int n) {
+    vector<Grid *> *mg = tiles[n].ground_items;
+
+    if(mg == NULL)
+        return;
+
+    for(auto&& grid : *mg)
+        if(grid->items.empty() == false)
+            return;
+
+    for(auto&& grid : *mg)
+        delete grid;
+
+    mg->clear();
+    delete mg;
+
+    tiles[n].ground_items = NULL;
+}
+
 void Character::move(int new_n) {
     if(good_index(new_n) == true) {
+        g.map->DeleteGroundIfEmpty(this->n);
+
         setPos(new_n);
         g.map->updateCharsByPos();
 
