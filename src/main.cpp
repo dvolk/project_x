@@ -20,7 +20,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 4; // save game version
+const int COMPILED_VERSION = 5; // save game version
 
 using namespace std;
 
@@ -271,13 +271,15 @@ struct Item {
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     int text_len = strlen(text) * 8;
-    int item_size_x;
+    int item_size_x = 0;
     for(int i = 1; i < 12; i++) {
         if(text_len < i * 18) {
             item_size_x = i * 18;
             break;
         }
     }
+    if(item_size_x == 0)
+        errorQuit("make_text_item(): supplied text is too long");
 
     float offset_x = (item_size_x - text_len) / 2;
 
@@ -1062,13 +1064,27 @@ struct Wound {
     float severity;
     float bleeding;
 
+    Wound();
+
     void save(ostream &os);
     void load(istream &is);
 
     void modify_severity(float amount);
     void modify_bleeding(float amount);
+};
 
-    Wound();
+enum WoundKind {
+    WOUND_UPPER_TORSO = 0,
+    WOUND_LOWER_TORSO,
+    WOUND_LEFT_UPPER_LEG,
+    WOUND_RIGHT_UPPER_LEG,
+    WOUND_LEFT_LOWER_LEG,
+    WOUND_RIGHT_LOWER_LEG,
+    WOUND_LEFT_UPPER_ARM,
+    WOUND_RIGHT_UPPER_ARM,
+    WOUND_LEFT_LOWER_ARM,
+    WOUND_RIGHT_LOWER_ARM,
+    WOUND_MAX
 };
 
 Wound::Wound() {
@@ -1115,6 +1131,30 @@ static const char *faction_to_string(Faction fac) {
         return "wild";
     else
         return "no faction";
+}
+
+enum DiseaseKind {
+    DISEASE_COMMON_COLD = 0,
+    DISEASE_FLU = 1,
+    DISEASE_MAX = 2
+};
+
+struct Disease {
+    // time left active, -1 for not active
+    int duration;
+
+    // immunity
+    float vulnerability; // [0-1]
+
+    Disease();
+
+    void save(ostream &os);
+    void load(istream &is);
+};
+
+Disease::Disease() {
+    duration = -1;
+    vulnerability = 0.5;
 }
 
 struct Character {
@@ -1166,6 +1206,8 @@ struct Character {
     */
 
     vector<Wound> wounds;
+
+    vector<Disease> diseases;
 
     // allowed range: 0 - 1
     float health;
@@ -1509,11 +1551,13 @@ Character::Character(void) {
 
     activity = ACTIVITY_MOVE;
 
-    wounds.resize(10);
+    wounds.resize(WOUND_MAX);
+    diseases.resize(DISEASE_MAX);
 
     selected_weapon_slot = 0;
 
     faction_reps.resize(6);
+
 
     // info("Character()");
 }
@@ -1764,7 +1808,9 @@ struct TileMap : public Widget {
     int distance(int n1, int n2);
 
     void addLabel(int n, const char *text);
+
     void DeleteGroundIfEmpty(int n);
+    void CollectGroundGrids(int n);
 };
 
 void Label::draw(void) {
@@ -1828,7 +1874,7 @@ const char *TileMap::getTileName(int n) {
 }
 
 float TileMap::getCurrentTemperature(__attribute__ ((unused)) int n) {
-    return 0.7;
+    return 0.9;
 }
 
 static bool good_index(int n) {
@@ -2085,7 +2131,7 @@ void Character::recomputeWarmth(void) {
 
     for(auto& point : clothing) {
         for(auto& cloth : point->items) {
-            warmth += cloth->get_warmth();
+            warmth_sum += cloth->get_warmth();
         }
     }
 
@@ -2161,6 +2207,7 @@ void Character::update(void) {
     }
 
     size_t i = 0;
+    float wound_severity = 0;
     for(auto&& m_hp : medical_hardpoints) {
         // if there's a clean rag on the wound, then
         // decrease the wound severity
@@ -2181,6 +2228,9 @@ void Character::update(void) {
             }
             wounds[i].age += dt;
         }
+
+        wound_severity += wounds[i].severity;
+
         i++;
     }
 
@@ -2201,6 +2251,28 @@ void Character::update(void) {
                 abuseItem(item, dt * 0.002 * 0.001);
             }
         }
+    }
+
+    /*
+      update diseases
+    */
+    int idx = 0;
+    for(auto&& d : diseases) {
+        d.duration -= dt;
+        if(d.duration > 0) {
+            if(idx == DISEASE_COMMON_COLD) {
+                float hydrationChange = 0.04 * 0.001 * dt;
+                hydration = max((float)0.0, hydration - hydrationChange);
+            }
+        }
+        idx++;
+    }
+
+    /*
+      get new diseases
+    */
+    if(warmth < 0.2 && diseases[DISEASE_COMMON_COLD].duration < -10000) {
+        diseases[DISEASE_COMMON_COLD].duration = 10000;
     }
 
     dt = 0;
@@ -2238,7 +2310,8 @@ static void chInterruptsPlayer(Character *c1) {
     /*
       TODO: this fails
     */
-    // assert(playersNewDt >= 0);
+    if(playersNewDt < 0)
+        printf("chInterruptsPlayer(): player's dt is negative: %d\n", playersNewDt);
 
     g.map->player->dt = playersNewDt;
     g.map->player->nextMove = c1->nextMove;
@@ -2269,6 +2342,30 @@ static bool runRandomScavengingEvents(void) {
 
 static void runAIEncounter(int n);
 
+// deletes empty ground grids at tile
+void TileMap::CollectGroundGrids(int n) {
+    vector<Grid *> *mg = tiles[n].ground_items;
+
+    if(mg == NULL)
+        return;
+
+    vector<Grid *>::iterator it;
+    for(it = mg->begin() ; it != mg->end() ; ) {
+        if((*it)->items.empty() == true) {
+            delete *it;
+            it = mg->erase(it);
+        } else {
+            it++;
+        }
+    }
+
+    if(mg->empty() == true) {
+        delete mg;
+        tiles[n].ground_items = NULL;
+    }
+}
+
+// deletes the ground if there are zero items on the tile
 void TileMap::DeleteGroundIfEmpty(int n) {
     vector<Grid *> *mg = tiles[n].ground_items;
 
@@ -2297,6 +2394,7 @@ void Character::move(int new_n) {
 
         // start an encounter if
         if(this == g.map->player) {
+            g.map->CollectGroundGrids(this->n);
             // this character is the player and there's more than
             // one character on that tile
             if(g.map->charsByPos.count(this->n) > 1) {
@@ -4217,6 +4315,12 @@ static void player_hurt_messages(void) {
         g.AddMessage("You're bleeding heavily...");
     else if(bleeding > 0.001)
         g.AddMessage("You're bleeding...");
+
+    if(g.map->player->diseases[DISEASE_COMMON_COLD].duration > 0)
+        g.AddMessage("A-choo!");
+    if(g.map->player->diseases[DISEASE_FLU].duration > 0)
+        g.AddMessage("*Cough*");
+
 
     // cout << "bleed damage: " << bleeding << endl;
 
@@ -6148,34 +6252,34 @@ void ConditionGridSystem::draw_medical_hardpoint(Grid *grid) {
     if(grid->items.size() == 0) {
         // TODO: draw wound if we're injured
         if(grid->info == g.medical_upper_torso
-           && g.map->player->wounds[0].severity >= 0.001)
+           && g.map->player->wounds[WOUND_UPPER_TORSO].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[70], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_lower_leg
-                && g.map->player->wounds[4].severity >= 0.001)
+                && g.map->player->wounds[WOUND_LEFT_LOWER_LEG].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[71], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_lower_leg
-                && g.map->player->wounds[5].severity >= 0.001)
+                && g.map->player->wounds[WOUND_RIGHT_LOWER_LEG].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[72], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_upper_leg
-                && g.map->player->wounds[3].severity >= 0.001)
+                && g.map->player->wounds[WOUND_RIGHT_UPPER_LEG].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[73], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_upper_leg
-                && g.map->player->wounds[2].severity >= 0.001)
+                && g.map->player->wounds[WOUND_LEFT_UPPER_LEG].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[74], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_lower_arm
-                && g.map->player->wounds[9].severity >= 0.001)
+                && g.map->player->wounds[WOUND_RIGHT_LOWER_ARM].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[75], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_right_upper_arm
-                && g.map->player->wounds[7].severity >= 0.001)
+                && g.map->player->wounds[WOUND_RIGHT_UPPER_ARM].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[76], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_lower_torso
-                && g.map->player->wounds[1].severity >= 0.001)
+                && g.map->player->wounds[WOUND_LOWER_TORSO].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[77], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_lower_arm
-                && g.map->player->wounds[8].severity >= 0.001)
+                && g.map->player->wounds[WOUND_LEFT_LOWER_ARM].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[78], grid->pos.x1, grid->pos.y1, 0);
         else if(grid->info == g.medical_left_upper_arm
-                && g.map->player->wounds[6].severity >= 0.001)
+                && g.map->player->wounds[WOUND_LEFT_UPPER_ARM].severity >= 0.001)
             al_draw_bitmap(g.bitmaps[79], grid->pos.x1, grid->pos.y1, 0);
         return;
     }
@@ -7860,6 +7964,14 @@ static void new_game(void) {
     init_UIs();
 }
 
+void Disease::save(ostream &os) {
+    os << duration << ' ' << vulnerability << ' ';
+}
+
+void Disease::load(istream &is) {
+    is >> duration >> vulnerability;
+}
+
 void Label::save(ostream &os) {
     os << n << ' ' << x << ' ' << y << ' ' << offset_x << ' ';
     os << strlen(text) << ' ' << text << ' ';
@@ -7999,6 +8111,9 @@ void Character::save(ostream &os) {
 
     for(auto&& w : wounds)
         w.save(os);
+
+    for(auto&& d : diseases)
+        d.save(os);
 }
 
 void Character::load(istream &is) {
@@ -8049,6 +8164,10 @@ void Character::load(istream &is) {
     wounds.resize(10);
     for(auto&& w : wounds)
         w.load(is);
+
+    diseases.resize(DISEASE_MAX);
+    for(auto&& d : diseases)
+        d.load(is);
 }
 
 void Location::save(ostream &os) {
