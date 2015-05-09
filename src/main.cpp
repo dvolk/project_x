@@ -5750,7 +5750,7 @@ void InteractPage::draw_description(void) {
     al_set_target_bitmap(left);
     al_clear_to_color(g.color_grey2);
 
-    float y = (InteractUI::top_size - 8 * description.size()) / 3;
+    float y = (InteractUI::top_size - g.font_height * description.size()) / 3;
     for(auto&& line : description) {
         al_draw_text(g.font, g.color_black, 5, y, 0, line);
         y += 14;
@@ -6977,6 +6977,12 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             button_MainMap_press();
+        } else {
+            bool success = load_game();
+            if(success == true) {
+                g.AddMessage("Game loaded.");
+                button_MainMap_press();
+            }
         }
     } else if(strcmp(name, "Save") == 0) {
         bool success = save_game();
@@ -7051,12 +7057,12 @@ void MainMenuUI::createTitle(void) {
     float version_offset = round((title_shadow_len - title_version_len) / 2);
 
     title = al_create_bitmap(title_shadow_len, font_height * 2);
-
     al_set_target_bitmap(title);
+    // al_clear_to_color(g.color_white);
 
     al_draw_text(shadow_font, g.color_black, 0, 0, 0, title_text);
     al_draw_text(f, g.color_white, shadow_offset, 0, 0, title_text);
-    al_draw_text(g.font, g.color_black, version_offset, font_height + 4 + 20, 0, VERSION);
+    al_draw_textf(g.font, g.color_black, version_offset, font_height + 4 + 20, 0, "(%s)", VERSION);
 
     al_set_target_backbuffer(g.display);
     al_destroy_font(f);
