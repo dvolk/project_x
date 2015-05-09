@@ -3,6 +3,7 @@
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_font.h>
+#include <allegro5/allegro_ttf.h>
 
 #include <cstdint>
 #include <cmath>
@@ -60,11 +61,14 @@ struct Game {
     bool running;
 
     // display dimensions
-    int display_x;
-    int display_y;
+    const int display_x = 1280;
+    const int display_y = 720;
 
     ALLEGRO_DISPLAY *display;
     ALLEGRO_FONT *font;
+
+    const char *font_filename = "DejaVuSans-Bold.ttf";
+    const int font_height = 14;
 
     // global random number god
     mt19937 *rng;
@@ -270,8 +274,9 @@ struct Item {
 };
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
-    int text_len = strlen(text) * 8;
+    int text_len = al_get_text_width(g.font, text); //strlen(text) * 8;
     int item_size_x = 0;
+    int item_size_y = 2 * 18;
     for(int i = 1; i < 12; i++) {
         if(text_len < i * 18) {
             item_size_x = i * 18;
@@ -281,12 +286,15 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     if(item_size_x == 0)
         errorQuit("make_text_item(): supplied text is too long");
 
-    float offset_x = (item_size_x - text_len) / 2;
+    float offset_x = round((item_size_x - text_len) / 2);
+    float offset_y = round((item_size_y - g.font_height) / 2) - 1;
 
-    ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, 36);
+    ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, item_size_y);
+
     al_set_target_bitmap(b);
-    al_draw_filled_rounded_rectangle(0, 0, item_size_x, 36, 7, 7, bg_col);
-    al_draw_text(g.font, g.color_white, offset_x, 14, 0, text);
+    al_draw_filled_rounded_rectangle(0, 0, item_size_x, item_size_y, 7, 7, bg_col);
+    al_draw_text(g.font, g.color_white, offset_x, offset_y, 0, text);
+
     al_set_target_backbuffer(g.display);
 
     ItemInfo tmp = g.item_info.at(0);
@@ -578,7 +586,7 @@ BarIndicator::BarIndicator() {
 
 void BarIndicator::draw(void) {
     if(up != NULL && quantity != NULL && bars != NULL) {
-        al_draw_text(g.font, g.color_white, pos.x1 + 2, pos.y1 + 1, 0, indicator_name);
+        al_draw_text(g.font, g.color_white, pos.x1 + 2, pos.y1 - 6, 0, indicator_name);
         al_draw_bitmap(up, pos.x1, pos.y1 + 10, 0);
         al_draw_bitmap_region(bars, 0, 0, *quantity * pos.x2, pos.y2, pos.x1, pos.y1 + 10, 0);
     }
@@ -2463,7 +2471,7 @@ Button::Button(void) {
 
 Button::Button(const char *_name) {
     name = _name;
-    name_len = 16 + 8 * strlen(_name);
+    name_len = 16 + al_get_text_width(g.font, _name);
     pressed = false;
     up = NULL;
     down = NULL;
@@ -2502,7 +2510,7 @@ void WeaponSwitcher::draw(void) {
         } else {
             sprintf(buf, "Ammo: empty");
         }
-        al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 18, 0, buf);
+        al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 2 * g.font_height, 0, buf);
     }
 }
 
@@ -3415,7 +3423,7 @@ void Button::keyDown(void) {
 
 void Button::hoverOver(void) {
     if(name != NULL) {
-        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + name_len, pos.y1 + 24, g.color_black);
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + name_len, pos.y1 + 30, g.color_black);
         al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 8, 0, name);
     }
 }
@@ -3487,10 +3495,10 @@ void MessageLog::draw(void) {
 
     int off_y = 8;
     int lines_n = lines.size();
-    int start = max(0, lines_n - 16);
+    int start = max(0, lines_n - 9);
     for(int i = start; i < lines_n; i++) {
         al_draw_text(font, g.color_grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
-        off_y = off_y + 8;
+        off_y = off_y + 14;
     }
 
     // ...
@@ -3710,8 +3718,8 @@ void GridSystem::drawItemTooltip(void) {
                 float off_y = 24.0;
                 float box_height =
                     off_y
-                    + (display_weight == true ? 16.0 : 0)
-                    + (display_condition == true ? 16.0 : 0);
+                    + (display_weight == true ? g.font_height : 0)
+                    + (display_condition == true ? g.font_height : 0) + 8;
 
                 al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
                                          g.mouse_x + 200, g.mouse_y + box_height, g.color_black);
@@ -3722,13 +3730,13 @@ void GridSystem::drawItemTooltip(void) {
                 if(display_condition == true) {
                     al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
                                   0, "condition: %.1f%%", item->condition * 100);
-                    off_y += 16;
+                    off_y += 14;
                 }
 
                 if(display_weight == true) {
                     al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
                                   0, "%d g", weight * item->cur_stack);
-                    off_y += 16;
+                    off_y += 14;
                 }
 
                 // if the item has a grid, draw it under the text
@@ -4155,9 +4163,9 @@ void Item::draw(void) {
         char buf[4];
         sprintf(buf, "%d", cur_stack);
         if(cur_stack > 9)
-            al_draw_text(g.font, g.color_black, x2 - 17, y2 - 9, 0, buf);
+            al_draw_text(g.font, g.color_black, x2 - 19, y2 - 15, 0, buf);
         else
-            al_draw_text(g.font, g.color_black, x2 - 9, y2 - 9, 0, buf);
+            al_draw_text(g.font, g.color_black, x2 - 11, y2 - 15, 0, buf);
     }
 }
 
@@ -5244,7 +5252,7 @@ void EncounterUI::draw(void) {
     al_draw_filled_rectangle(off_x + 105, 25, off_x + 405, 295, g.color_grey2);
     al_draw_filled_rectangle(off_x + 410, 25, off_x + 680, 295, g.color_grey2);
     al_draw_filled_rectangle(off_x + 685, 25, off_x + 985, 295, g.color_grey2);
-    al_draw_text(g.font, g.color_white, off_x + 105, 10, 0,
+    al_draw_text(g.font, g.color_white, off_x + 105, 7, 0,
                  "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
 
     char buf[30];
@@ -5255,15 +5263,15 @@ void EncounterUI::draw(void) {
     al_draw_text(g.font, g.color_black, off_x + 120, 110, 0, buf);
 
     if(encounter.seesOpponent(0) == true) {
-        al_draw_text(g.font, g.color_black, off_x + 120, 120, 0,
+        al_draw_text(g.font, g.color_black, off_x + 120, 110 + g.font_height, 0,
                      "Visible: yes");
     } else {
-        al_draw_text(g.font, g.color_black, off_x + 120, 120, 0,
+        al_draw_text(g.font, g.color_black, off_x + 120, 110 + g.font_height, 0,
                      "Visible: no");
     }
 
     sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(0));
-    al_draw_text(g.font, g.color_black, off_x + 120, 130, 0, buf);
+    al_draw_text(g.font, g.color_black, off_x + 120, 110 + 2 * g.font_height, 0, buf);
     // sprintf(buf, "Health: %f", encounter.getHealth(0));
     // al_draw_text(g.font, g.color_black, off_x + 120, 140, 0, buf);
 
@@ -5278,14 +5286,14 @@ void EncounterUI::draw(void) {
     if(wound_severity >= 0.001)
         al_draw_text(g.font, g.color_red, off_x + 120, 160, 0, "Wounded");
     if(wound_bleeding >= 0.001)
-        al_draw_text(g.font, g.color_red, off_x + 120, 170, 0, "Bleeding");
+        al_draw_text(g.font, g.color_red, off_x + 120, 160 + g.font_height, 0, "Bleeding");
 
     // center pane
     al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
     sprintf(buf, "Terrain: %s", encounter.getTerrainName());
     al_draw_text(g.font, g.color_black, off_x + 430, 160, 0, buf);
     sprintf(buf, "Range: %d", encounter.getRange());
-    al_draw_text(g.font, g.color_black, off_x + 430, 170, 0, buf);
+    al_draw_text(g.font, g.color_black, off_x + 430, 160 + g.font_height, 0, buf);
 
     // right pane
     if(encounter.seesOpponent(1) == true) {
@@ -5293,11 +5301,11 @@ void EncounterUI::draw(void) {
         sprintf(buf, "Name: %s", encounter.getName(1));
         al_draw_text(g.font, g.color_black, off_x + 700, 110, 0, buf);
         sprintf(buf, "Faction: %s", encounter.getFaction(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 120, 0, buf);
-        al_draw_text(g.font, g.color_black, off_x + 700, 130, 0,
+        al_draw_text(g.font, g.color_black, off_x + 700, 110 + g.font_height, 0, buf);
+        al_draw_text(g.font, g.color_black, off_x + 700, 110 + 2 * g.font_height, 0,
                      "visible: yes");
         sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 140, 0, buf);
+        al_draw_text(g.font, g.color_black, off_x + 700, 110 + 3 * g.font_height, 0, buf);
         // sprintf(buf, "Health: %f", encounter.getHealth(1));
         // al_draw_text(g.font, g.color_black, off_x + 700, 150, 0, buf);
 
@@ -5311,13 +5319,13 @@ void EncounterUI::draw(void) {
         if(wound_severity >= 0.001)
             al_draw_text(g.font, g.color_red, off_x + 700, 170, 0, "Wounded");
         if(wound_bleeding >= 0.001)
-            al_draw_text(g.font, g.color_red, off_x + 700, 180, 0, "Bleeding");
+            al_draw_text(g.font, g.color_red, off_x + 700, 170 + g.font_height, 0, "Bleeding");
 
     } else {
         al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
         al_draw_text(g.font, g.color_black, off_x + 700, 110, 0,
                      "Name: unknown");
-        al_draw_text(g.font, g.color_black, off_x + 700, 120, 0,
+        al_draw_text(g.font, g.color_black, off_x + 700, 110 + g.font_height, 0,
                      "Visible: no");
     }
 
@@ -5745,7 +5753,7 @@ void InteractPage::draw_description(void) {
     float y = (InteractUI::top_size - 8 * description.size()) / 3;
     for(auto&& line : description) {
         al_draw_text(g.font, g.color_black, 5, y, 0, line);
-        y += 8;
+        y += 14;
     }
 
     al_set_target_backbuffer(g.display);
@@ -6890,11 +6898,14 @@ struct MenuEntry : public Widget {
 
 struct MainMenuUI : public UI {
     const float x = 590;
-    const float y = 350;
+    const float y = 300;
     const float sx = 100;
     const float sy = 50;
 
     ALLEGRO_BITMAP *background;
+    ALLEGRO_BITMAP *title;
+    float title_offset;
+
     vector <MenuEntry *> entries;
 
     MainMenuUI();
@@ -6905,16 +6916,20 @@ struct MainMenuUI : public UI {
     void addEntry(const char *name);
     void handlePress(const char *name);
 
+    void createTitle(void);
     void setFadeColors(void);
     void resetFadeLevels(void);
 };
 
 MainMenuUI::~MainMenuUI() {
     for(auto&& entry : entries) delete entry;
+    al_destroy_bitmap(title);
 }
 
 void MainMenuUI::draw(void) {
     al_draw_bitmap(background, 0, 0, 0);
+    if(title != NULL)
+        al_draw_bitmap(title, title_offset, 150, 0);
     al_draw_text(g.font, g.color_black, 5, 5, 0, "Project X");
     al_draw_text(g.font, g.color_black, 5, 20, 0, "Website: https://github.io/dvolk/project_x");
     UI::draw();
@@ -7010,16 +7025,32 @@ void MainMenuUI::addEntry(const char *name) {
     e->pos.y1 = y + offset_y;
     e->pos.x2 = 100;
     e->pos.y2 = sy - 5; // 5px spacing
-    e->text_offset_x = round((e->pos.x2 - strlen(name) * 8) / 2); // center the text
+    e->text_offset_x = round((e->pos.x2 - al_get_text_width(g.font, name)) / 2); // center the text
     // rounded, otherwise al_draw_text produces artifacts
-    e->text_offset_y = round((e->pos.y2 - 8) / 2);
+    e->text_offset_y = round((e->pos.y2 - g.font_height) / 2);
     e->fade_level = 24;
     entries.push_back(e);
     widgets.push_back(e);
 }
 
+void MainMenuUI::createTitle(void) {
+    const int font_height = 48;
+    ALLEGRO_FONT *f = al_load_font(g.font_filename, font_height, 0);
+    assert(f);
+    const char *title_text = "Project X";
+    const int title_text_len = al_get_text_width(f, title_text);
+    title_offset = round((g.display_x - title_text_len) / 2);
+    title = al_create_bitmap(title_text_len, font_height * 1.5);
+    al_set_target_bitmap(title);
+    al_draw_text(f, g.color_black, 0, 0, 0, title_text);
+    al_set_target_backbuffer(g.display);
+    al_destroy_font(f);
+}
+
 MainMenuUI::MainMenuUI() {
     background = g.bitmaps[93];
+    title = NULL;
+    // createTitle();
     setFadeColors();
 
     addEntry("New");
@@ -7048,8 +7079,8 @@ TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
     pos.y1 = y;
     pos.x2 = sx;
     pos.y2 = sy;
-    text_offset_x = round((pos.x2 - strlen(name) * 8) / 2);
-    text_offset_y = round((pos.y2 - 8) / 2);
+    text_offset_x = round((pos.x2 - al_get_text_width(g.font, name)) / 2);
+    text_offset_y = round((pos.y2 - g.font_height) / 2);
 }
 
 void TextButton::draw(void) {
@@ -7406,7 +7437,7 @@ static void init_buttons(void) {
     g.button_scavenge  = new Button ("Scavenge");
     g.button_sleep     = new Button ("Sleep");
 
-    int off_y = 175;
+    int off_y = 200;
     int step = 45;
     // left
     g.button_MainMap->pos.x1 = 0;
@@ -7519,7 +7550,7 @@ static void init_weaponswitcher(void) {
 static void init_timedisplay(void) {
     g.time_display = new TimeDisplay;
     g.time_display->pos.x1 = 2;
-    g.time_display->pos.y1 = 205;
+    g.time_display->pos.y1 = 223;
     g.time_display->pos.x2 = 100;
     g.time_display->pos.y2 = 25;
 }
@@ -7536,11 +7567,11 @@ static void set_indicators_target(Character *t) {
 }
 
 static void init_indicators(void) {
-    int off_y = 3;
-    int space_y = 3;
+    int off_y = 6;
+    int space_y = 6;
 
     g.health_indicator = new BarIndicator;
-    g.health_indicator->indicator_name = "Health:";
+    g.health_indicator->indicator_name = "Health";
     g.health_indicator->pos.x1 = 0;
     g.health_indicator->pos.y1 = off_y;
     g.health_indicator->pos.x2 = 100;
@@ -7550,7 +7581,7 @@ static void init_indicators(void) {
     g.health_indicator->bars = g.bitmaps[47];
 
     g.pain_indicator = new BarIndicator;
-    g.pain_indicator->indicator_name = "Pain:";
+    g.pain_indicator->indicator_name = "Pain";
     g.pain_indicator->pos.x1 = 0;
     g.pain_indicator->pos.y1 = off_y + 25 + space_y * 1;
     g.pain_indicator->pos.x2 = 100;
@@ -7560,7 +7591,7 @@ static void init_indicators(void) {
     g.pain_indicator->bars = g.bitmaps[47];
 
     g.temperature_indicator = new BarIndicator;
-    g.temperature_indicator->indicator_name = "Warmth:";
+    g.temperature_indicator->indicator_name = "Warmth";
     g.temperature_indicator->pos.x1 = 0;
     g.temperature_indicator->pos.y1 = off_y + 50 + space_y * 2;
     g.temperature_indicator->pos.x2 = 100;
@@ -7570,7 +7601,7 @@ static void init_indicators(void) {
     g.temperature_indicator->bars = g.bitmaps[47];
 
     g.fatigue_indicator = new BarIndicator;
-    g.fatigue_indicator->indicator_name = "Fatigue:";
+    g.fatigue_indicator->indicator_name = "Fatigue";
     g.fatigue_indicator->pos.x1 = 0;
     g.fatigue_indicator->pos.y1 = off_y + 75 + space_y * 3;
     g.fatigue_indicator->pos.x2 = 100;
@@ -7580,7 +7611,7 @@ static void init_indicators(void) {
     g.fatigue_indicator->bars = g.bitmaps[47];
 
     g.hydration_indicator = new BarIndicator;
-    g.hydration_indicator->indicator_name = "Hydration:";
+    g.hydration_indicator->indicator_name = "Hydration";
     g.hydration_indicator->pos.x1 = 0;
     g.hydration_indicator->pos.y1 = off_y + 100 + space_y * 4;
     g.hydration_indicator->pos.x2 = 100;
@@ -7590,7 +7621,7 @@ static void init_indicators(void) {
     g.hydration_indicator->bars = g.bitmaps[47];
 
     g.satiety_indicator = new BarIndicator;
-    g.satiety_indicator->indicator_name = "Satiety:";
+    g.satiety_indicator->indicator_name = "Satiety";
     g.satiety_indicator->pos.x1 = 0;
     g.satiety_indicator->pos.y1 = off_y + 125 + space_y * 5;
     g.satiety_indicator->pos.x2 = 100;
@@ -7600,7 +7631,7 @@ static void init_indicators(void) {
     g.satiety_indicator->bars = g.bitmaps[47];
 
     g.burden_indicator = new BarIndicator;
-    g.burden_indicator->indicator_name = "Burden:";
+    g.burden_indicator->indicator_name = "Burden";
     g.burden_indicator->pos.x1 = 0;
     g.burden_indicator->pos.y1 = off_y + 150 + space_y * 6;
     g.burden_indicator->pos.x2 = 100;
@@ -7810,15 +7841,6 @@ static void allegro_init(void) {
     al_init(); // no return value
     info("Probably initialized core allegro library.");
 
-    g.display_x = 1280;
-    g.display_y = 720;
-    g.display = al_create_display(g.display_x, g.display_y);
-
-    if(g.display == NULL)
-        errorQuit("Failed to create display.");
-    else
-        info("Created display.");
-
     ret = al_init_primitives_addon();
     if(ret == false)
         errorQuit("Failed to initialize allegro addon: primitives.");
@@ -7834,6 +7856,19 @@ static void allegro_init(void) {
     al_init_font_addon(); // no return value
     info("Probably initialized allegro addon: font.");
 
+    ret = al_init_ttf_addon();
+    if(ret == false)
+        errorQuit("Failed to initialize allegro addon: ttf.");
+    else
+        info("Initialized allegro addon: ttf.");
+
+    g.display = al_create_display(g.display_x, g.display_y);
+
+    if(g.display == NULL)
+        errorQuit("Failed to create display.");
+    else
+        info("Created display.");
+
     ret = al_install_keyboard();
     if(ret == false)
         errorQuit("Failed to initialize keyboard.");
@@ -7845,12 +7880,14 @@ static void allegro_init(void) {
         errorQuit("Failed to initialize mouse.");
     else
         info("Initialized mouse.");
+}
 
-    g.font = al_create_builtin_font();
+static void load_fonts(void) {
+    g.font = al_load_font(g.font_filename, g.font_height, 0);
     if(g.font == NULL)
-        errorQuit("failed to load builtin font.");
+        errorQuit("failed to load font: " + string(g.font_filename));
     else
-        info("Loaded builtin font.");
+        info("Loaded font: " + string(g.font_filename));
 }
 
 static void init_rng(int seed) {
@@ -8405,6 +8442,7 @@ int main(int argc, char **argv) {
 
         int seed;
         init_args(argc, argv, &seed);
+        load_fonts();
         load_bitmaps();
         init_rng( seed );
         init_colors();
