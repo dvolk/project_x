@@ -7049,7 +7049,7 @@ void MainMenuUI::createTitle(void) {
 
     const int title_text_len = al_get_text_width(f, title_text);
     const int title_shadow_len = al_get_text_width(shadow_font, title_text);
-    const int title_version_len = al_get_text_width(g.font, VERSION);
+    const int title_version_len = al_get_text_width(g.font, VERSION) + al_get_text_width(g.font, "()");
 
     title_offset = round((g.display_x - title_shadow_len) / 2);
 
