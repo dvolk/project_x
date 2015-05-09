@@ -67,7 +67,7 @@ struct Game {
     ALLEGRO_DISPLAY *display;
     ALLEGRO_FONT *font;
 
-    const char *font_filename = "DejaVuSans-Bold.ttf";
+    const char *font_filename = "media/fonts/DejaVuSans-Bold.ttf";
     const int font_height = 14;
 
     // global random number god
@@ -3744,7 +3744,7 @@ void GridSystem::drawItemTooltip(void) {
                    (item->parent->info == NULL ||
                     item->parent->info->noGrid == false))
                     // ^^ unless it's on a hardpoint
-                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + off_y);
+                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + box_height);
 
                 return;
             }
