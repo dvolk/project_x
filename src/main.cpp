@@ -6930,8 +6930,6 @@ void MainMenuUI::draw(void) {
     al_draw_bitmap(background, 0, 0, 0);
     if(title != NULL)
         al_draw_bitmap(title, title_offset, 150, 0);
-    al_draw_text(g.font, g.color_black, 5, 5, 0, "Project X");
-    al_draw_text(g.font, g.color_black, 5, 20, 0, "Website: https://github.io/dvolk/project_x");
     UI::draw();
 }
 
@@ -7034,23 +7032,41 @@ void MainMenuUI::addEntry(const char *name) {
 }
 
 void MainMenuUI::createTitle(void) {
-    const int font_height = 48;
+    const int font_height = 72;
     ALLEGRO_FONT *f = al_load_font(g.font_filename, font_height, 0);
+    ALLEGRO_FONT *shadow_font = al_load_font(g.font_filename, font_height + 4, 0);
+
     assert(f);
+    assert(shadow_font);
+
     const char *title_text = "Project X";
+
     const int title_text_len = al_get_text_width(f, title_text);
-    title_offset = round((g.display_x - title_text_len) / 2);
-    title = al_create_bitmap(title_text_len, font_height * 1.5);
+    const int title_shadow_len = al_get_text_width(shadow_font, title_text);
+    const int title_version_len = al_get_text_width(g.font, VERSION);
+
+    title_offset = round((g.display_x - title_shadow_len) / 2);
+
+    float shadow_offset = round((title_shadow_len - title_text_len) / 2);
+    float version_offset = round((title_shadow_len - title_version_len) / 2);
+
+    title = al_create_bitmap(title_shadow_len, font_height * 2);
+
     al_set_target_bitmap(title);
-    al_draw_text(f, g.color_black, 0, 0, 0, title_text);
+
+    al_draw_text(shadow_font, g.color_black, 0, 0, 0, title_text);
+    al_draw_text(f, g.color_white, shadow_offset, 0, 0, title_text);
+    al_draw_text(g.font, g.color_black, version_offset, font_height + 4 + 20, 0, VERSION);
+
     al_set_target_backbuffer(g.display);
     al_destroy_font(f);
+    al_destroy_font(shadow_font);
 }
 
 MainMenuUI::MainMenuUI() {
     background = g.bitmaps[93];
     title = NULL;
-    // createTitle();
+    createTitle();
     setFadeColors();
 
     addEntry("New");
