@@ -1,6 +1,8 @@
-# project_x
+# Project X
 
-A currently unnamed GPL3 open-world survival roguelikelike game written in C++ - https://dvolk.github.io/project_x/
+A GPL3 open-world survival roguelikelike game written in C++
+
+Webpage: https://dvolk.github.io/project_x/
 
 #### Build instructions (Linux)
     $ sudo apt-get install g++ make pkg-config liballegro5-dev liballegro-image5-dev
@@ -11,6 +13,6 @@ A currently unnamed GPL3 open-world survival roguelikelike game written in C++ -
 
 #### Screenshots
 
-<img src="https://i.imgur.com/h86F6b6.png">
-<img src="https://i.imgur.com/ZOVQjol.png">
+<img src="https://i.imgur.com/vPXyPiB.png">
+<img src="https://i.imgur.com/1uhQthj.png">
 
