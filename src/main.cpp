@@ -13,6 +13,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 
 #include "./version.h"
@@ -3461,19 +3462,43 @@ void GridSortButton::draw(void) {
         al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_black);
 }
 
+/*
+  adapted from code from http://rosettacode.org/wiki/Word_wrap
+*/
+static vector<string> word_wrap(const char *text, int line_length_px) {
+    istringstream words(text);
+    string word;
+    vector<string> ret;
+    size_t line = 0;
+    int space_px = al_get_text_width(g.font, " ");
+
+    if(words >> word) {
+        ret.resize(1);
+        ret[line] += word;
+        int space_left = line_length_px - al_get_text_width(g.font, word.c_str());
+
+        while(words >> word) {
+            if(space_left < al_get_text_width(g.font, word.c_str()) + space_px) {
+                line++;
+                ret.resize(line + 1);
+                ret[line] += word;
+                space_left = line_length_px - al_get_text_width(g.font, word.c_str());
+            } else {
+                ret[line] += ' ';
+                ret[line] += word;
+                space_left = space_left - (al_get_text_width(g.font, word.c_str()) + space_px);
+            }
+        }
+    }
+    return ret;
+}
+
 void Game::AddMessage(string str) {
     if(log == NULL)
         return;
 
-    const size_t max_line_len = 99;
-
-    /*
-      TODO: proper word wrap
-    */
-    do {
-        log->lines.push_back(str.substr(0, max_line_len));
-        str.erase(0, max_line_len);
-    } while(str.empty() != true);
+    for(auto&& line : word_wrap(str.c_str(), 790))
+        log->lines.push_back(line);
 }
 
 void Button::press(void) {
@@ -5594,7 +5619,7 @@ struct InteractPage {
     ALLEGRO_BITMAP *right;
 
     // page description, shown upper left
-    vector<const char *> description;
+    vector<char *> description;
 
     // choices that can be made on this page
     vector<pair<Item *, int>> choices;
@@ -5615,12 +5640,16 @@ struct InteractPage {
 
     // add a line to the description
     void tell(const char *line);
+    void wrap_and_tell(const char *text);
 
     void draw_description(void);
     void draw(void);
 };
 
 InteractPage::~InteractPage() {
+    for(auto&& line : description)
+        free(line);
+
     for(auto&& choice : choices)
         delete choice.first;
 }
@@ -5732,8 +5761,14 @@ InteractPage::InteractPage(void) {
 }
 
 void InteractPage::tell(const char *line) {
-    description.push_back(line);
+    description.push_back(strdup(line));
 }
+
+void InteractPage::wrap_and_tell(const char *text) {
+    for(auto&& line : word_wrap(text, 545))
+        description.push_back(strdup(line.c_str()));
+}
+
 
 void InteractPage::switch_to(void) {
     left = al_create_bitmap(555, InteractUI::top_size);
@@ -5941,9 +5976,7 @@ static void init_interactions(void) {
             page->tell("");
             page->tell("In front is a desolate field.");
             page->tell("");
-            page->tell("Your mind feels like a broken dam as questions form but find no");
-            page->tell("immediate answer. It seems that you have no memory of who");
-            page->tell("you are or of recent events.");
+            page->wrap_and_tell("Your mind feels like a broken dam as questions form but find no immediate answer. It seems that you have no memory of who you are or of recent events.");
             page->tell("");
             page->tell("You brush off the dirt from your clothes and look around.");
 
@@ -5961,10 +5994,7 @@ static void init_interactions(void) {
             Item *opt1 = make_text_item("Leave");
             Item *opt2 = make_text_item("Offer to help", al_map_rgb(100, 150, 100));
             InteractPage *page = new InteractPage;
-            page->tell("You walk around the field and come upon a body. It's turned away");
-            page->tell("from you. As you draw closer, the noise of your movement stirs it");
-            page->tell("and it rolls to face you. The hoarse voice of a man obviously in");
-            page->tell("pain yells at you:");
+            page->wrap_and_tell("You walk around the field and come upon a body. It's turned away from you. As you draw closer, the noise of your movement stirs it and it rolls to face you. The hoarse voice of a man obviously in pain yells at you:");
             page->tell("");
             page->tell("\"What are you doing? Get away!\"");
 
@@ -5976,15 +6006,11 @@ static void init_interactions(void) {
         { // page 2
             Item *opt1 = make_text_item("Leave");
             InteractPage *page = new InteractPage;
-            page->tell("\"Help?\" says the man, \"Are you insane? There's no help for me");
-            page->tell("now\" He stops looking at you and turns his head toward the sky");
-            page->tell("\"Don't you get it? I'm infected. I'll be dead soon, like");
-            page->tell("everyone who gets the virus.\"");
+            page->wrap_and_tell("\"Help?\" says the man, \"Are you insane? There's no help for me now\" He stops looking at you and turns his head toward the sky \"Don't you get it? I'm infected. I'll be dead soon, like everyone who gets the virus.\"");
             page->tell("");
             page->tell("He rolls his head again and looks at you. \"You too, probably.\"");
             page->tell("");
-            page->tell("\"But since you're here you can take my gear. It should be");
-            page->tell("clean. The virus doesn't live long without the host.\"");
+            page->wrap_and_tell("\"But since you're here you can take my gear. It should be clean. The virus doesn't live long without the host.\"");
             page->tell("");
             page->tell("\"Now leave me\" He looks toward the sky again.");
 
