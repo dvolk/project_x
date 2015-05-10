@@ -2970,6 +2970,7 @@ int TileMap::mouseToTileN(void) {
 }
 
 static void end_turn(void);
+static void notify(const char *text);
 
 // check if the clicked tile is next to the player
 // if so, move them there.
@@ -2984,6 +2985,7 @@ void TileMap::mouseDown(void) {
     // LMB - movement
     if(g.mouse_button == 1) {
         if(clicked_n == player_n) {
+            notify("Yes, that's you!");
             g.AddMessage("Hee.");
             return;
         }
@@ -3447,7 +3449,7 @@ void GridSortButton::reset(void) {
 }
 
 void GridSortButton::mouseDown(void) {
-    info("Sorting is disabled");
+    notify("Sorting is currently disabled.");
     return;
     if(g.mouse_button == 1)
         parent->Sort(BiggerItemsFirst);
@@ -6960,6 +6962,79 @@ void FadeTransitionUI::updateFrame(void) {
     }
 }
 
+static void fade_to_UI(UI *from, UI *to) {
+    g.ui = new FadeTransitionUI(from, to);
+}
+
+/*
+  Blocking notifications
+ */
+struct NotificationUI : public UI {
+    Rect pos;
+    UI *below;
+    const char *text;
+    float bottom_text_offset_x;
+    ALLEGRO_BITMAP *bg;
+
+    NotificationUI(const char *text);
+
+    void draw(void) override;
+
+    void stop(void);
+
+    struct MouseDownCaller : public Widget {
+        NotificationUI *parent;
+        bool stop;
+        MouseDownCaller() { visible = false; stop = false; }
+        void mouseDown(void) override { stop = true; }
+        void update(void) override { if(stop) parent->stop(); }
+    };
+    MouseDownCaller mouseDownCaller;
+};
+
+NotificationUI::NotificationUI(const char *text) {
+    below = g.ui;
+
+    bg = al_create_bitmap(g.display_x, g.display_y);
+    al_set_target_bitmap(bg);
+    al_clear_to_color(g.color_bg);
+    below->draw();
+
+    this->text = text;
+    pos.x1 = round((g.display_x - 100 - al_get_text_width(g.font, text)) / 2);
+    pos.y1 = round((g.display_y - g.font_height - 100) / 2) + 10;
+    pos.x2 = al_get_text_width(g.font, text) + 100;
+    pos.y2 = 100;
+    bottom_text_offset_x = round((pos.x2 - al_get_text_width(g.font, "Click to continue")) / 2);
+
+    al_set_target_backbuffer(g.display);
+
+    mouseDownCaller.parent = this;
+    mouseDownCaller.pos = this->pos;
+
+    widgets.push_back(&mouseDownCaller);
+}
+
+void NotificationUI::draw(void) {
+    al_draw_tinted_bitmap(bg, al_map_rgba_f(0.5, 0.5, 0.5, 0.5), 0, 0, 0);
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, g.color_grey2);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 3);
+    al_draw_text(g.font, g.color_black, pos.x1 + 50, pos.y1 + 24, 0, text);
+    al_draw_text(g.font, g.color_grey, pos.x1 + bottom_text_offset_x, pos.y1 + 65, 0, "Click to continue");
+}
+
+void NotificationUI::stop(void) {
+    g.ui = below;
+    al_destroy_bitmap(bg);
+    delete this;
+}
+
+static void notify(const char *text) {
+    g.ui = new NotificationUI(text);
+}
+
 vector<ALLEGRO_COLOR> menu_fade;
 
 struct MenuEntry : public Widget {
@@ -7054,7 +7129,7 @@ void MainMenuUI::handlePress(const char *name) {
         new_game();
         button_MainMap_press();
         runInteract("intro");
-        g.ui = new FadeTransitionUI(g.ui_MainMenu, g.ui_Interact);
+        fade_to_UI(g.ui_MainMenu, g.ui_Interact);
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             button_MainMap_press();
@@ -7063,23 +7138,30 @@ void MainMenuUI::handlePress(const char *name) {
             if(success == true) {
                 g.AddMessage("Game loaded.");
                 button_MainMap_press();
+            } else {
+                notify("No game to continue or load.");
             }
         }
     } else if(strcmp(name, "Save") == 0) {
-        bool success = save_game();
-        if(success == true) {
-            g.AddMessage("Game saved.");
-            button_MainMap_press();
+        if(g.map == NULL) {
+            notify("No game in progress.");
+        } else {
+            bool success = save_game();
+            if(success == true) {
+                g.AddMessage("Game saved.");
+                button_MainMap_press();
+            } else {
+                notify("Couldn't save game.");
+            }
         }
     } else if(strcmp(name, "Load") == 0) {
         bool success = load_game();
         if(success == true) {
             g.AddMessage("Game loaded.");
             button_MainMap_press();
+        } else {
+            notify("Couldn't load game.");
         }
-    } else if(strcmp(name, "Options") == 0) {
-        if(g.map != NULL)
-            button_MainMap_press();
     } else if(strcmp(name, "Help") == 0) {
         button_Help_press();
     } else {
@@ -8574,6 +8656,7 @@ int main(int argc, char **argv) {
     // new_game();
     // button_MainMap_press();
     runMainMenu();
+    notify("This is pre-alpha software. Please report bugs and give feedback!");
 
     bool redraw = true;
     bool was_mouse_down = false;
