@@ -292,6 +292,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, item_size_y);
 
     al_set_target_bitmap(b);
+    al_clear_to_color(al_map_rgba(0, 0, 0, 0));
     al_draw_filled_rounded_rectangle(0, 0, item_size_x, item_size_y, 7, 7, bg_col);
     al_draw_text(g.font, g.color_white, offset_x, offset_y, 0, text);
 
@@ -824,6 +825,8 @@ void Item::setHpDims(void) {
             pos.y2 = g.item_info[info_index].grid_size_y;
         }
     }
+    if(rotated == true)
+        swap(pos.x2, pos.y2);
 }
 
 int Item::index_from_name(const char *item_name) {
@@ -3302,8 +3305,6 @@ struct UI {
         // info("~UI()");
     }
 
-    static void switch_to(UI *to);
-
     void mouseDownEvent(void);
     void mouseUpEvent(void);
     void keyDownEvent(void);
@@ -3882,9 +3883,6 @@ void GridSystem::gsMouseUpEvent() {
     // are we holding an item?
     if(held == NULL)
         return;
-
-    held->pos.x2 = g.item_info[held->info_index].grid_size_x;
-    held->pos.y2 = g.item_info[held->info_index].grid_size_y;
 
     // proposed position to drop it into relative to the
     // grid currently being examined
@@ -5944,8 +5942,8 @@ static void init_interactions(void) {
             page->tell("In front is a desolate field.");
             page->tell("");
             page->tell("Your mind feels like a broken dam as questions form but find no");
-            page->tell("immediate answer. It seems that you have no memory of who you are");
-            page->tell("or of recent events.");
+            page->tell("immediate answer. It seems that you have no memory of who");
+            page->tell("you are or of recent events.");
             page->tell("");
             page->tell("You brush off the dirt from your clothes and look around.");
 
@@ -6880,6 +6878,62 @@ void ConditionGridSystem::reset(void) {
     GridSystem::reset();
 }
 
+struct FadeTransitionUI : public UI {
+    UI *from;
+    UI *to;
+    const int fade_frames = 30;
+    int frame;
+
+    FadeTransitionUI(UI *f, UI *t);
+
+    void draw(void) override;
+    void updateFrame(void);
+
+    // a widget whose only purpose is to call FadeTransitionUI::updateFrame
+    /*
+      TODO: is this better than making UI::update virtual?
+    */
+    struct UpdateCaller : public Widget {
+        FadeTransitionUI *parent;
+        UpdateCaller() { visible = false; }
+        void update(void) override { parent->updateFrame(); }
+    };
+    UpdateCaller upc;
+};
+
+FadeTransitionUI::FadeTransitionUI(UI *f, UI *t) {
+    from = f;
+    to = t;
+    frame = - fade_frames;
+    upc.parent = this;
+    widgets.push_back(&upc);
+}
+
+void FadeTransitionUI::draw(void) {
+    if(frame <= 0) {
+        from->draw();
+        float alpha = 1.0 - ((-frame) / (float)fade_frames);
+        al_draw_filled_rectangle(0, 0, g.display_x, g.display_y,
+                                 al_map_rgba_f(0, 0, 0, alpha));
+    } else
+    if(frame > 0) {
+        to->draw();
+        float alpha = 1.0 - (frame / (float)fade_frames);
+        al_draw_filled_rectangle(0, 0, g.display_x, g.display_y,
+                                 al_map_rgba_f(0, 0, 0, alpha));
+    }
+}
+
+void FadeTransitionUI::updateFrame(void) {
+    frame++;
+
+    if(frame >= fade_frames) {
+        g.ui = to;
+        delete this; // hihi
+        return;
+    }
+}
+
 vector<ALLEGRO_COLOR> menu_fade;
 
 struct MenuEntry : public Widget {
@@ -6974,6 +7028,7 @@ void MainMenuUI::handlePress(const char *name) {
         new_game();
         button_MainMap_press();
         runInteract("intro");
+        g.ui = new FadeTransitionUI(g.ui_MainMenu, g.ui_Interact);
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             button_MainMap_press();
@@ -7058,7 +7113,7 @@ void MainMenuUI::createTitle(void) {
 
     title = al_create_bitmap(title_shadow_len, font_height * 2);
     al_set_target_bitmap(title);
-    // al_clear_to_color(g.color_white);
+    al_clear_to_color(al_map_rgba(0, 0, 0, 0));
 
     al_draw_text(shadow_font, g.color_black, 0, 0, 0, title_text);
     al_draw_text(f, g.color_white, shadow_offset, 0, 0, title_text);
