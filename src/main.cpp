@@ -4,6 +4,7 @@
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
+#include <allegro5/allegro_native_dialog.h>
 
 #include <cstdint>
 #include <cmath>
@@ -65,11 +66,14 @@ struct Game {
     const int display_x = 1280;
     const int display_y = 720;
 
+    const char *font_filename = "media/fonts/DejaVuSans-Bold.ttf";
+    const int font_height = 14;
+
     ALLEGRO_DISPLAY *display;
     ALLEGRO_FONT *font;
 
-    const char *font_filename = "media/fonts/DejaVuSans-Bold.ttf";
-    const int font_height = 14;
+    ALLEGRO_FILECHOOSER *save_filechooser;
+    ALLEGRO_FILECHOOSER *load_filechooser;
 
     // global random number god
     mt19937 *rng;
@@ -97,11 +101,19 @@ struct Game {
     Button *button_scavenge;
     Button *button_sleep;
 
+    // the main 8 buttons
+    vector<Button *> main_buttons;
+
     int tilemap_sx; // persistent over games
     int tilemap_sy;
 
     TileMap *map;
     MiniMap *minimap;
+    MessageLog *log;
+
+    Item *skills[64];
+    // default weapon
+    Item *hand_combat;
 
     vector<ItemInfo> item_info;
     vector<LocationInfo> location_info;
@@ -182,12 +194,6 @@ struct Game {
     bool encounterInterrupt; // player
     int ai_encounterInterrupt; // AI at index (value is position)
 
-    MessageLog *log;
-
-    Item *skills[64];
-    // default weapon
-    Item *hand_combat;
-
     // current mouse state
     int mouse_x;
     int mouse_y;
@@ -199,9 +205,6 @@ struct Game {
     // time in seconds since last ui update
     double dt;
 
-    // the main 8 buttons
-    vector<Button *> main_buttons;
-
     // add a message to the message log
     void AddMessage(string str);
 };
@@ -210,6 +213,7 @@ static Game g;
 
 #include "./itemdefs.h"
 
+// an item is something that lives on the grid
 struct Item {
     // position and size of the item on the grid
     // x1, y1 - grid offset in grid units
@@ -275,9 +279,10 @@ struct Item {
 };
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
-    int text_len = al_get_text_width(g.font, text); //strlen(text) * 8;
+    int text_len = al_get_text_width(g.font, text);
     int item_size_x = 0;
     int item_size_y = 2 * 18;
+    // find  the size of the item in steps of two that fits the text
     for(int i = 1; i < 12; i++) {
         if(text_len < i * 18) {
             item_size_x = i * 18;
@@ -287,11 +292,13 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     if(item_size_x == 0)
         errorQuit("make_text_item(): supplied text is too long");
 
+    // center text
     float offset_x = round((item_size_x - text_len) / 2);
     float offset_y = round((item_size_y - g.font_height) / 2) - 1;
 
     ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, item_size_y);
 
+    // draw item bitmap
     al_set_target_bitmap(b);
     al_clear_to_color(al_map_rgba(0, 0, 0, 0));
     al_draw_filled_rounded_rectangle(0, 0, item_size_x, item_size_y, 7, 7, bg_col);
@@ -299,12 +306,14 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
 
     al_set_target_backbuffer(g.display);
 
+    // construct new ItemInfo and assign the bitmap to it
     ItemInfo tmp = g.item_info.at(0);
     tmp.sprite = b;
     tmp.name = strdup(text);
     tmp.is_text_item = true;
     g.item_info.push_back(tmp);
 
+    // construct new Item with the above ItemInfo
     Item *ret = new Item ("none");
     ret->pos.x1 = 0;
     ret->pos.y1 = 0;
@@ -413,12 +422,7 @@ struct MessageLog : public Widget {
     ALLEGRO_FONT *font;
     vector<string> lines;
 
-    MessageLog() { }
-    ~MessageLog();
-
     void mouseDown(void) override;
-    void mouseUp(void) { }
-    void keyDown(void) { }
 
     void draw(void);
 };
@@ -1733,6 +1737,11 @@ struct Ecology {
     int want_creatures;
 };
 
+struct RealityBubble {
+    int position; // center of reality bubble
+    int radius;
+};
+
 struct TileMap : public Widget {
     // display dimensions
     int cols;
@@ -1765,10 +1774,12 @@ struct TileMap : public Widget {
     // map from positions to characters on that position
     unordered_multimap<int, Character *> charsByPos;
 
+    vector<Character *> all_characters;
     vector<Character *> characters;
     Character *player;
 
     Ecology eco;
+    RealityBubble bubble;
 
     // array of size_x * size_y tiles, allocated in constructor
     vector<Tile> tiles;
@@ -1806,6 +1817,7 @@ struct TileMap : public Widget {
     void removeCharacter(Character *to_kill);
     Character *addRandomCharacter(void);
     Character *addRandomCharacter(Faction fac);
+    Character *addRandomCharacterNearPlayer(void);
 
     float getCurrentTemperature(int n);
     const char *getTileName(int n);
@@ -1817,13 +1829,32 @@ struct TileMap : public Widget {
     void runEcology();
 
     int random_uninhabited_position(void);
+    int random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2);
     int distance(int n1, int n2);
 
     void addLabel(int n, const char *text);
 
     void DeleteGroundIfEmpty(int n);
     void CollectGroundGrids(int n);
+
+    void updateActiveCharacters(void);
 };
+
+void TileMap::updateActiveCharacters(void) {
+    characters.clear();
+    bubble.position = g.map->player->n;
+
+    int i = 0;
+    for(auto&& c : all_characters) {
+        if(distance(c->n, bubble.position) < bubble.radius) {
+            characters.push_back(c);
+            i++;
+        }
+    }
+
+    cout << "added " << i << " characters to the active list" << endl;
+}
+
 
 void Label::draw(void) {
     // is it on the screen?
@@ -1864,8 +1895,9 @@ void TileMap::addLabel(int n, const char *text) {
 static char *random_human_NPC_name(void);
 
 void TileMap::runEcology() {
-    if((int)characters.size() < eco.want_creatures) {
-        addRandomCharacter();
+    if((int)all_characters.size() < eco.want_creatures) {
+        Character *c = addRandomCharacterNearPlayer();
+        printf("Ecology added character %s at %d\n", c->name, c->n);
     }
 }
 
@@ -1901,6 +1933,35 @@ int TileMap::distance(int n1, int n2) {
     int x2 = n2 % size_x;
     int y2 = n2 / size_y;
     return pow(x1 - x2, 2) + pow(y1 - y2, 2);
+}
+
+int TileMap::random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2) {
+    uniform_int_distribution<> position_dist_x(x1, x2);
+    uniform_int_distribution<> position_dist_y(y1, y2);
+
+    int x, y, new_n;
+    int trials = 0;
+    bool ok;
+    // find a position away from all the other characters
+    do {
+        ok = true;
+        x = position_dist_x(*g.rng);
+        y = position_dist_y(*g.rng);
+        new_n = size_x * y + x;
+        if(distance(new_n, player->n) < 10)
+            ok = false;
+        for(auto&& c : characters) {
+            if(distance(new_n, c->n) < 10) {
+                ok = false;
+                break;
+            }
+        }
+        trials++;
+        if(trials >= 10) // map might be full
+            ok = true;
+    } while(ok == false);
+
+    return new_n;
 }
 
 int TileMap::random_uninhabited_position(void) {
@@ -1941,6 +2002,17 @@ void Character::setPos(int x, int y) {
 }
 
 static char *random_human_NPC_name(void);
+
+Character *TileMap::addRandomCharacterNearPlayer(void) {
+    Character *c = addRandomCharacter();
+    int r = 10;
+    int x1 = max(0, g.map->player->x - r);
+    int y1 = max(0, g.map->player->y - r);
+    int x2 = max(size_x /* ?? */ - 1, g.map->player->x + r);
+    int y2 = max(size_y /* ?? */ - 1, g.map->player->y + r);
+    c->n = random_uninhabited_position_in_rect(x1, y1, x2, y2);
+    return c;
+}
 
 Character *TileMap::addRandomCharacter(void) {
     // pick random faction
@@ -2022,7 +2094,7 @@ Character *TileMap::addRandomCharacter(Faction fac) {
         backpack->storage->PlaceItem(new Item("bullet", 3));
     }
 
-    characters.push_back(new_char);
+    all_characters.push_back(new_char);
     return new_char;
 }
 
@@ -2037,15 +2109,15 @@ void TileMap::removeCharacter(Character *to_kill) {
     }
 
     to_kill->drop_all_items();
+    DeleteGroundIfEmpty(to_kill->n);
 
     int i = 0;
-    for(auto& character : g.map->characters) {
+    for(auto& character : g.map->all_characters) {
         if(character == to_kill) {
-            g.map->characters.erase(g.map->characters.begin() + i);
-            int n = to_kill->n;
+            g.map->all_characters.erase(g.map->all_characters.begin() + i);
             delete to_kill;
+            updateActiveCharacters();
             updateCharsByPos();
-            DeleteGroundIfEmpty(n);
             return;
         }
         i++;
@@ -2406,6 +2478,13 @@ void Character::move(int new_n) {
 
         // start an encounter if
         if(this == g.map->player) {
+            // only update the active character list if we moved more than
+            // 5 hexes
+            int dist = g.map->distance(this->n, g.map->bubble.position);
+            printf("distance: %d\n", dist);
+            if(dist > 25)
+                g.map->updateActiveCharacters();
+
             g.map->CollectGroundGrids(this->n);
             // this character is the player and there's more than
             // one character on that tile
@@ -2786,7 +2865,7 @@ TileMap::~TileMap() {
     // info("~TileMap");
     // tilemap owns characters
     delete player;
-    for(auto& character : characters) {
+    for(auto& character : all_characters) {
         delete character;
     }
     // delete ground item and location vectors and their contents
@@ -2822,12 +2901,6 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     size_x = sx;
     size_y = sy;
 
-    // hex_size_x = 100;
-    // hex_size_y = 80;
-
-    // hex_step_x = 80;
-    // hex_step_y = 40;
-
     r_off_x = 0;
     r_off_y = 0;
 
@@ -2849,7 +2922,9 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     cout << "Tilemap rendering dimensions: "
          << pos.x1 << " " << pos.y1 << " " << pos.x2 << " " << pos.y2 << endl;
 
-    eco.want_creatures = sqrt(max_t) / 2;
+    eco.want_creatures = 2 + max_t / 20;
+
+    bubble.radius = 200;
 }
 
 void TileMap::focusOnPlayer(void) {
@@ -3510,10 +3585,6 @@ void Button::press(void) {
 
 Button::~Button(void) {
     // info("~Button()");
-}
-
-MessageLog::~MessageLog(void) {
-    // info("~MessageLog()");
 }
 
 void MessageLog::draw(void) {
@@ -4310,9 +4381,14 @@ static Character *next(void) {
 //     cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
 // }
 
-__attribute__ ((unused))
 static void end_turn_debug_print(void) {
-    cout << "\"turn\" ends (" << g.map->player->nextMove << ") with " << (int)g.map->characters.size() << " characters. Interrupt: " << g.encounterInterrupt << endl;
+    printf("turn ends (%d) with %d characters (%d active). Interrupt: %d\n",
+           g.map->player->nextMove,
+           (int)g.map->all_characters.size(),
+           (int)g.map->characters.size(),
+           g.encounterInterrupt
+           );
+
     // g.map->player->print_stats();
 }
 
@@ -4369,13 +4445,14 @@ static void end_turn() {
     // an encounter interrupt
     while((c = next()) != g.map->player && g.encounterInterrupt == false && g.ai_encounterInterrupt == -1)
         {
-            // cout << c << " (" << c->nextMove << ") ";
+            printf("%s (%d), ", c->name, c->nextMove);
+
             c->do_AI();
             if(g.ai_encounterInterrupt != -1) {
                 runAIEncounter(g.ai_encounterInterrupt);
             }
         }
-    // cout << endl;
+    puts("\n");
 
     g.map->player->update_visibility();
 
@@ -6347,11 +6424,10 @@ static void appliedCB(void) {
     Grid *applied_to = g.ui_Condition->gridsystem->applied_params.first;
     Item *was_applied = g.ui_Condition->gridsystem->applied_params.second;
 
-    char buf[50];
-    sprintf(buf, "Applied %s to %p",
-            was_applied->getName(),
-            (void*)applied_to);
-    g.AddMessage(buf);
+    printf("Applied %s to %p",
+           was_applied->getName(),
+           (void*)applied_to);
+
     return;
 }
 
@@ -6906,6 +6982,11 @@ void ConditionGridSystem::reset(void) {
     GridSystem::reset();
 }
 
+/*
+  Fades out from the `from' UI into the `to' UI
+
+  If from is NULL, it only fades-in
+ */
 struct FadeTransitionUI : public UI {
     UI *from;
     UI *to;
@@ -6932,7 +7013,12 @@ struct FadeTransitionUI : public UI {
 FadeTransitionUI::FadeTransitionUI(UI *f, UI *t) {
     from = f;
     to = t;
-    frame = - fade_frames;
+
+    if(from != NULL)
+        frame = - fade_frames;
+    else
+        frame = 0;
+
     upc.parent = this;
     widgets.push_back(&upc);
 }
@@ -6966,9 +7052,15 @@ static void fade_to_UI(UI *from, UI *to) {
     g.ui = new FadeTransitionUI(from, to);
 }
 
+static void fade_to_UI(void) {
+    g.ui = new FadeTransitionUI(NULL, g.ui);
+}
+
 /*
   Blocking notifications
- */
+
+  Construct with notify("message");
+*/
 struct NotificationUI : public UI {
     Rect pos;
     UI *below;
@@ -6982,6 +7074,9 @@ struct NotificationUI : public UI {
 
     void stop(void);
 
+    /*
+      runs parent->stop() when you click it
+     */
     struct MouseDownCaller : public Widget {
         NotificationUI *parent;
         bool stop;
@@ -6995,11 +7090,13 @@ struct NotificationUI : public UI {
 NotificationUI::NotificationUI(const char *text) {
     below = g.ui;
 
+    // take a screenshot of the current UI
     bg = al_create_bitmap(g.display_x, g.display_y);
     al_set_target_bitmap(bg);
     al_clear_to_color(g.color_bg);
     below->draw();
 
+    // center text
     this->text = text;
     pos.x1 = round((g.display_x - 100 - al_get_text_width(g.font, text)) / 2);
     pos.y1 = round((g.display_y - g.font_height - 100) / 2) + 10;
@@ -7016,7 +7113,10 @@ NotificationUI::NotificationUI(const char *text) {
 }
 
 void NotificationUI::draw(void) {
+    // tint the background
     al_draw_tinted_bitmap(bg, al_map_rgba_f(0.5, 0.5, 0.5, 0.5), 0, 0, 0);
+
+    // draw "the widget"
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
                              pos.y1 + pos.y2, g.color_grey2);
     al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
@@ -7118,8 +7218,8 @@ void MenuEntry::mouseDown(void) {
 }
 
 static void new_game(void);
-static bool save_game(void);
-static bool load_game(void);
+static bool save_game(const char *filename);
+static bool load_game(const char *filename);
 static void button_Help_press(void);
 
 void MainMenuUI::handlePress(const char *name) {
@@ -7133,34 +7233,50 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             button_MainMap_press();
+            // } else {
+            //     bool success = load_game();
+            //     if(success == true) {
+            //         g.AddMessage("Game loaded.");
+            //         button_MainMap_press();
         } else {
-            bool success = load_game();
-            if(success == true) {
-                g.AddMessage("Game loaded.");
-                button_MainMap_press();
-            } else {
-                notify("No game to continue or load.");
-            }
+            notify("No game to continue or load.");
+            // }
         }
     } else if(strcmp(name, "Save") == 0) {
         if(g.map == NULL) {
             notify("No game in progress.");
         } else {
-            bool success = save_game();
-            if(success == true) {
-                g.AddMessage("Game saved.");
-                button_MainMap_press();
+            // show save dialog
+            bool dialog_opened = al_show_native_file_dialog(NULL, g.save_filechooser);
+            if(dialog_opened == true) {
+                // check if user selected a file
+                if(al_get_native_file_dialog_count(g.save_filechooser) != 0) {
+                    // try to save
+                    bool success = save_game(al_get_native_file_dialog_path(g.save_filechooser, 0));
+                    if(success == true) {
+                        notify("Game saved.");
+                    } else {
+                        notify("Couldn't save game.");
+                    }
+                }
             } else {
-                notify("Couldn't save game.");
+                notify("Error: Couldn't open file chooser!");
             }
         }
     } else if(strcmp(name, "Load") == 0) {
-        bool success = load_game();
-        if(success == true) {
-            g.AddMessage("Game loaded.");
-            button_MainMap_press();
+        bool dialog_opened = al_show_native_file_dialog(NULL, g.load_filechooser);
+        if(dialog_opened == true) {
+            if(al_get_native_file_dialog_count(g.load_filechooser) != 0) {
+                bool success = load_game(al_get_native_file_dialog_path(g.load_filechooser, 0));
+                if(success == true) {
+                    g.AddMessage("Game loaded.");
+                    button_MainMap_press();
+                } else {
+                    notify("Couldn't load game.");
+                }
+            }
         } else {
-            notify("Couldn't load game.");
+            notify("Error: Couldn't open file chooser!");
         }
     } else if(strcmp(name, "Help") == 0) {
         button_Help_press();
@@ -7200,6 +7316,9 @@ void MainMenuUI::addEntry(const char *name) {
     widgets.push_back(e);
 }
 
+/*
+  create the title bitmap containing the game name and version
+*/
 void MainMenuUI::createTitle(void) {
     const int font_height = 72;
     ALLEGRO_FONT *f = al_load_font(g.font_filename, font_height, 0);
@@ -7239,7 +7358,7 @@ MainMenuUI::MainMenuUI() {
     setFadeColors();
 
     addEntry("New");
-    addEntry("Continue");
+    // addEntry("Continue");
     addEntry("Load");
     addEntry("Save");
     // addEntry("Options");
@@ -7319,7 +7438,7 @@ static ALLEGRO_BITMAP *little_pink_bitmap(void) {
 }
 
 HelpUI::HelpUI() {
-    button_back = new TextButton("Back", round(g.display_x - 75) / 2, 630, 85, 45);
+    button_back = new TextButton("Back", round((g.display_x - 75) / 2), 630, 85, 45);
     button_back->onMouseDown = press_Help_back;
     background = al_load_bitmap("media/backgrounds/help.png");
     if(background == NULL) {
@@ -7987,6 +8106,7 @@ static void init_characters(void) {
     }
 
     // init map stuff
+    g.map->updateActiveCharacters();
     g.map->updateCharsByPos();
     g.map->player->update_visibility();
     g.map->focusOnPlayer();
@@ -8024,7 +8144,10 @@ static void allegro_init(void) {
     int ret = 0;
 
     al_init(); // no return value
-    info("Probably initialized core allegro library.");
+    if(al_is_system_installed() == false)
+        errorQuit("Failed to initialize core allegro library.");
+    else
+        info("Initialized core allegro library.");
 
     ret = al_init_primitives_addon();
     if(ret == false)
@@ -8046,6 +8169,26 @@ static void allegro_init(void) {
         errorQuit("Failed to initialize allegro addon: ttf.");
     else
         info("Initialized allegro addon: ttf.");
+
+    ret = al_init_native_dialog_addon();
+    if(ret == false)
+        errorQuit("Failed to initialize allegro addon: native dialogs.");
+    else
+        info("Initialized allegro addon: native dialogs.");
+
+    /*
+      TODO: how do the first and third arguments work?
+    */
+    g.save_filechooser = al_create_native_file_dialog(NULL, "save game", "*.sav",
+                                                      ALLEGRO_FILECHOOSER_SAVE);
+    g.load_filechooser = al_create_native_file_dialog(NULL, "load game", "*.sav",
+                                                      ALLEGRO_FILECHOOSER_FILE_MUST_EXIST);
+
+    if(g.save_filechooser == NULL)
+        errorQuit("Failed to initialize save game filechooser");
+
+    if(g.load_filechooser == NULL)
+        errorQuit("Failed to initialize load game filechooser");
 
     g.display = al_create_display(g.display_x, g.display_y);
 
@@ -8109,12 +8252,12 @@ static void init_args(int argc, char **argv, int *seed) {
         }
         catch (exception &e) {
             info("WARNING: couldn't parse tilemap dimension arguments");
-            g.tilemap_sx = 50;
-            g.tilemap_sy = 50;
+            g.tilemap_sx = 150;
+            g.tilemap_sy = 150;
         }
     } else {
-        g.tilemap_sx = 50;
-        g.tilemap_sy = 50;
+        g.tilemap_sx = 150;
+        g.tilemap_sy = 150;
     }
 }
 
@@ -8435,9 +8578,10 @@ void TileMap::save(ostream &os) {
     }
     os << '\n';
     player->save(os);
-    os << characters.size() << ' ';
     os << '\n';
-    for(auto&& ch : characters) {
+    os << all_characters.size() << ' ';
+    os << '\n';
+    for(auto&& ch : all_characters) {
         ch->save(os);
         os << '\n';
     }
@@ -8493,12 +8637,13 @@ void TileMap::load(istream &is) {
     player = new Character;
     player->load(is);
     is >> n;
-    characters.resize(n);
-    for(auto&& ch : characters) {
+    all_characters.resize(n);
+    for(auto&& ch : all_characters) {
         ch = new Character;
         ch->load(is);
     }
     player->update_visibility();
+    updateActiveCharacters();
     updateCharsByPos();
     is >> n;
     for(size_t i = 0; i < n; i++) {
@@ -8508,13 +8653,13 @@ void TileMap::load(istream &is) {
     }
 }
 
-static bool save_game(void) {
+static bool save_game(const char *filename) {
     PerfTimer t("Save game");
 
     if(g.map == NULL)
         return false;
 
-    ofstream out("test.sav", ios::out);
+    ofstream out(filename, ios::out);
     if(out.fail() == true) {
         info("Error: Couldn't open test.sav for writing");
         cout << strerror(errno) << endl;
@@ -8533,10 +8678,10 @@ static bool save_game(void) {
     return true;
 }
 
-static bool load_game(void) {
+static bool load_game(const char *filename) {
     PerfTimer t("Load game");
 
-    ifstream in("test.sav", ios::in);
+    ifstream in(filename, ios::in);
     if(in.fail() == true) {
         info("Error: Couldn't open test.sav for reading");
         cout << strerror(errno) << endl;
@@ -8653,10 +8798,14 @@ int main(int argc, char **argv) {
 
     al_set_target_backbuffer(g.display);
 
-    // new_game();
-    // button_MainMap_press();
-    runMainMenu();
-    notify("This is pre-alpha software. Please report bugs and give feedback!");
+    if(argc <= 1) {
+        runMainMenu();
+        notify("This is pre-alpha software. Please report bugs and give feedback!");
+        fade_to_UI();
+    } else {
+        new_game();
+        button_MainMap_press();
+    }
 
     bool redraw = true;
     bool was_mouse_down = false;
