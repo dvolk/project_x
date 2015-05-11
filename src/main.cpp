@@ -57,6 +57,8 @@ struct TimeDisplay;
 struct WeaponSwitcher;
 struct Interact;
 struct MainMenuUI;
+struct FadeTransitionUI;
+struct NotificationUI;
 
 // global state
 struct Game {
@@ -183,6 +185,8 @@ struct Game {
     InteractUI *ui_Interact;
     MainMenuUI *ui_MainMenu;
     HelpUI *ui_Help;
+    FadeTransitionUI *ui_FadeTransition;
+    NotificationUI *ui_Notification;
 
     unordered_map<const char *, Interact *> stories;
     //              ^^
@@ -1174,6 +1178,7 @@ Disease::Disease() {
 }
 
 struct Character {
+    bool active;
     int n; // position by offset
     int x, y; // cache to avoid computations
 
@@ -1316,6 +1321,8 @@ struct Character {
     void recomputeWarmth(void);
 
     Wound *random_wound(void);
+
+    void awaken(void);
 };
 
 /*
@@ -1840,6 +1847,11 @@ struct TileMap : public Widget {
     void updateActiveCharacters(void);
 };
 
+void Character::awaken(void) {
+    nextMove = g.map->player->nextMove + 100;
+    dt = 1000;
+}
+
 void TileMap::updateActiveCharacters(void) {
     characters.clear();
     bubble.position = g.map->player->n;
@@ -1847,8 +1859,12 @@ void TileMap::updateActiveCharacters(void) {
     int i = 0;
     for(auto&& c : all_characters) {
         if(distance(c->n, bubble.position) < bubble.radius) {
+            if(c->active == false)
+                c->awaken();
             characters.push_back(c);
             i++;
+        } else {
+            c->active = false;
         }
     }
 
@@ -2005,6 +2021,7 @@ static char *random_human_NPC_name(void);
 
 Character *TileMap::addRandomCharacterNearPlayer(void) {
     Character *c = addRandomCharacter();
+    c->active = true;
     int r = 10;
     int x1 = max(0, g.map->player->x - r);
     int y1 = max(0, g.map->player->y - r);
@@ -2036,6 +2053,7 @@ Character *TileMap::addRandomCharacter(void) {
 
 Character *TileMap::addRandomCharacter(Faction fac) {
     Character *new_char = new Character;
+    new_char->active = false;
     new_char->faction = fac;
 
     for(auto&& fac_rep : new_char->faction_reps) fac_rep = -1;
@@ -5851,6 +5869,19 @@ void InteractPage::wrap_and_tell(const char *text) {
 
 void InteractPage::switch_to(void) {
     left = al_create_bitmap(555, InteractUI::top_size);
+    if(left == NULL) {
+        al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
+        left = al_create_bitmap(555, InteractUI::top_size);
+        al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+        if(left == NULL) {
+            info("Couldn't create InteractPage bitmap: left");
+            info("Sending text here instead ---");
+            for(auto&& line : description)
+                cout << line << endl;
+            info("--- End of text");
+            return;
+        }
+    }
     draw_description();
 }
 
@@ -5859,6 +5890,9 @@ void InteractPage::switch_from(void) {
 }
 
 void InteractPage::draw_description(void) {
+    if(left == NULL)
+        return;
+
     al_set_target_bitmap(left);
     al_clear_to_color(g.color_grey2);
 
@@ -6993,7 +7027,7 @@ struct FadeTransitionUI : public UI {
     const int fade_frames = 30;
     int frame;
 
-    FadeTransitionUI(UI *f, UI *t);
+    void start(UI *f, UI *t);
 
     void draw(void) override;
     void updateFrame(void);
@@ -7010,7 +7044,7 @@ struct FadeTransitionUI : public UI {
     UpdateCaller upc;
 };
 
-FadeTransitionUI::FadeTransitionUI(UI *f, UI *t) {
+void FadeTransitionUI::start(UI *f, UI *t) {
     from = f;
     to = t;
 
@@ -7042,18 +7076,19 @@ void FadeTransitionUI::updateFrame(void) {
     frame++;
 
     if(frame >= fade_frames) {
+        widgets.clear();
         g.ui = to;
-        delete this; // hihi
-        return;
     }
 }
 
 static void fade_to_UI(UI *from, UI *to) {
-    g.ui = new FadeTransitionUI(from, to);
+    g.ui_FadeTransition->start(from, to);
+    g.ui = g.ui_FadeTransition;
 }
 
 static void fade_to_UI(void) {
-    g.ui = new FadeTransitionUI(NULL, g.ui);
+    g.ui_FadeTransition->start(NULL, g.ui);
+    g.ui = g.ui_FadeTransition;
 }
 
 /*
@@ -7068,7 +7103,7 @@ struct NotificationUI : public UI {
     float bottom_text_offset_x;
     ALLEGRO_BITMAP *bg;
 
-    NotificationUI(const char *text);
+    void message(const char *text);
 
     void draw(void) override;
 
@@ -7087,14 +7122,26 @@ struct NotificationUI : public UI {
     MouseDownCaller mouseDownCaller;
 };
 
-NotificationUI::NotificationUI(const char *text) {
+static ALLEGRO_BITMAP *little_pink_bitmap(void);
+
+void NotificationUI::message(const char *text) {
     below = g.ui;
 
     // take a screenshot of the current UI
     bg = al_create_bitmap(g.display_x, g.display_y);
-    al_set_target_bitmap(bg);
-    al_clear_to_color(g.color_bg);
-    below->draw();
+    if(bg == NULL) {
+        al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
+        bg = al_create_bitmap(g.display_x, g.display_y);
+        al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+    }
+    if(bg == NULL) {
+        bg = little_pink_bitmap();
+    }
+    if(bg != NULL) {
+        al_set_target_bitmap(bg);
+        al_clear_to_color(g.color_bg);
+        below->draw();
+    }
 
     // center text
     this->text = text;
@@ -7114,7 +7161,8 @@ NotificationUI::NotificationUI(const char *text) {
 
 void NotificationUI::draw(void) {
     // tint the background
-    al_draw_tinted_bitmap(bg, al_map_rgba_f(0.5, 0.5, 0.5, 0.5), 0, 0, 0);
+    if(bg != NULL)
+        al_draw_tinted_bitmap(bg, al_map_rgba_f(0.5, 0.5, 0.5, 0.5), 0, 0, 0);
 
     // draw "the widget"
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
@@ -7126,13 +7174,14 @@ void NotificationUI::draw(void) {
 }
 
 void NotificationUI::stop(void) {
-    g.ui = below;
+    widgets.clear();
     al_destroy_bitmap(bg);
-    delete this;
+    g.ui = below;
 }
 
 static void notify(const char *text) {
-    g.ui = new NotificationUI(text);
+    g.ui_Notification->message(text);
+    g.ui = g.ui_Notification;
 }
 
 vector<ALLEGRO_COLOR> menu_fade;
@@ -7434,6 +7483,8 @@ static ALLEGRO_BITMAP *little_pink_bitmap(void) {
     al_set_target_bitmap(b);
     al_clear_to_color(al_color_name("pink"));
     al_set_target_backbuffer(g.display);
+    if(b == NULL)
+        errorQuit("Couldn't create placeholder 32x32 bitmap");
     return b;
 }
 
@@ -7712,11 +7763,16 @@ static void load_bitmaps(void) {
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
         ALLEGRO_BITMAP *bitmap = al_load_bitmap(filename);
-        if(bitmap)
+        if(bitmap != NULL)
             cout << '.';
         else {
-            printf("\n*** ERROR! Failed to load bitmap: %s. If the file exists then it's possible that your graphics card doesn't support textures of its size. Making a 32x32 pink texture to replace it and hope for the best\n", filename);
-            bitmap = little_pink_bitmap();
+            al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
+            bitmap = al_load_bitmap(filename);
+            al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+            if(bitmap == NULL) {
+                printf("\n*** ERROR! Failed to load bitmap: %s. If the file exists then it's possible that your graphics card doesn't support textures of its size. Making a 32x32 pink texture to replace it and hope for the best\n", filename);
+                bitmap = little_pink_bitmap();
+            }
         }
         g.bitmaps.push_back(bitmap);
     }
@@ -8791,12 +8847,19 @@ int main(int argc, char **argv) {
         init_interactions();
 
         g.ui_MainMenu  = new MainMenuUI;
+        g.ui_FadeTransition = new FadeTransitionUI;
+        g.ui_Notification = new NotificationUI;
 
         g.map = NULL;
         g.ui = NULL;
     }
 
     al_set_target_backbuffer(g.display);
+
+    /*
+      TODO: Check maximum video bitmap dimensions and
+      warn user if it's less than 2048x2048
+     */
 
     if(argc <= 1) {
         runMainMenu();
