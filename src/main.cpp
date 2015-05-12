@@ -24,7 +24,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 7; // save game version
+const int COMPILED_VERSION = 8; // save game version
 
 using namespace std;
 
@@ -74,6 +74,8 @@ struct Game {
 
     ALLEGRO_DISPLAY *display;
     ALLEGRO_FONT *font;
+    ALLEGRO_KEYBOARD_STATE keyboard_state;
+    ALLEGRO_MOUSE_STATE mouse_state;
 
     ALLEGRO_FILECHOOSER *save_filechooser;
     ALLEGRO_FILECHOOSER *load_filechooser;
@@ -1766,6 +1768,12 @@ struct TileMap : public Widget {
     // current view (tile offset)
     int view_x;
     int view_y;
+    // current view (pixel offset)
+    int view_px;
+    int view_py;
+    // offset pixels
+    int res_px;
+    int res_py;
     // dimensions of the map
     int size_x;
     int size_y;
@@ -1808,6 +1816,9 @@ struct TileMap : public Widget {
     void save(ostream &os);
     void load(istream &is);
 
+    void resetViewXY(void);
+    void resetViewPXPY(void);
+
     void mouseDown(void);
     void keyDown(void);
 
@@ -1815,6 +1826,8 @@ struct TileMap : public Widget {
     void generate(void);
 
     void draw(void);
+    void update(void);
+
     void drawTile(int i, int x, int y);
     void drawTopHalfOfTileAt(int x, int y);
     void mouseToTileXY(int &x, int &y);
@@ -1851,6 +1864,55 @@ struct TileMap : public Widget {
 
     void updateActiveCharacters(void);
 };
+
+void TileMap::update(void) {
+    // handles smooth scrolling
+    resetViewXY();
+    int d = 1000 * g.dt;
+    if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_UP)) {
+        if(view_y > 0) { view_py -= d; }
+    }
+    else if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_DOWN)) {
+        if(view_y < size_y - rows) { view_py += d; }
+    }
+    if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_LEFT)) {
+        if(view_x > 0) { view_px -= d; }
+    }
+    else if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_RIGHT)) {
+        if(view_x < size_x - cols) { view_px += d; }
+    }
+
+    // TODO: what if the player comes into the map while holding mmb?
+    static int old_mx;
+    static int old_my;
+
+    // TODO: draw symbol on (old_mx, old_my)
+
+    if (g.mouse_state.buttons & 4) {
+        int dx = (old_mx - g.mouse_x) / 15;
+        int dy = (old_my - g.mouse_y) / 15;
+        view_px = std::max(0, std::min(view_px - dx, (size_x - cols) * hex_step_x));
+        view_py = std::max(0, std::min(view_py - dy, (size_y - rows) * hex_step_y));
+    } else {
+        old_mx = g.mouse_x;
+        old_my = g.mouse_y;
+    }
+    resetViewXY();
+}
+
+void TileMap::resetViewPXPY(void) {
+    view_px = view_x * hex_step_x;
+    view_py = view_y * hex_step_y;
+    res_px = 0;
+    res_py = 0;
+}
+
+void TileMap::resetViewXY(void) {
+    view_x = max(0, min(size_x - cols, view_px / hex_step_x));
+    view_y = max(0, min(size_y - rows, view_py / hex_step_y));
+    res_px = view_px % hex_step_x;
+    res_py = view_py % hex_step_y;
+}
 
 void Character::awaken(void) {
     nextMove = g.map->player->nextMove + 100;
@@ -1891,9 +1953,9 @@ void Label::draw(void) {
     int r_x = x - g.map->view_x;
     int r_y = y - g.map->view_y;
 
-    int off_x = 80 * r_x;
+    int off_x = 80 * r_x - g.map->res_px;
     int off_y = n % 2  == 0 ? 0 : 20;
-    off_y += 40 * r_y;
+    off_y += 40 * r_y - g.map->res_py;
 
     al_draw_text(g.font,
                  g.color_white,
@@ -2935,6 +2997,11 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     cols = min(sx, c);
     rows = min(sy, r);
 
+    view_px = 0;
+    view_py = 0;
+    res_px = 0;
+    res_py = 0;
+
     pos.x1 = 100;
     pos.y1 = 0;
     pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x);
@@ -2960,6 +3027,8 @@ void TileMap::focusOn(int n) {
     view_y = max(0, p_y - rows/2 + 2);
     view_x = max(0, min(view_x, size_x - cols));
     view_y = max(0, min(view_y, size_y - rows));
+    resetViewPXPY();
+    resetViewXY();
 }
 
 struct MiniMap : public Widget {
@@ -3061,9 +3130,9 @@ void MiniMap::draw(void) {
 }
 
 void TileMap::mouseToTileXY(int &x, int &y) {
-    x = view_x + floor((g.mouse_x - pos.x1) / 80);
+    x = view_x + floor((g.mouse_x - pos.x1 + res_px) / 80);
     int off_y = x % 2 == 0 ? 0 : 20;
-    y = view_y + floor((g.mouse_y - 40 - off_y - pos.y1) / 40);
+    y = view_y + floor((g.mouse_y - 40 - off_y - pos.y1 + res_py) / 40);
 }
 
 int TileMap::mouseToTileN(void) {
@@ -3349,9 +3418,9 @@ void Character::drawOffset(int offset_x, int offset_y) {
     int r_x = x - g.map->view_x;
     int r_y = y - g.map->view_y;
 
-    int off_x = 80 * r_x;
+    int off_x = 80 * r_x - g.map->res_px;
     int off_y = n % 2  == 0 ? 0 : 20;
-    off_y += 40 * r_y;
+    off_y += 40 * r_y - g.map->res_py;
 
     al_draw_bitmap(sprite,
                    g.map->pos.x1 + off_x + 25 + offset_x,
@@ -3379,18 +3448,7 @@ static void toggleMsgLogVisibility(void) {
 }
 
 void TileMap::keyDown(void) {
-    if(g.key == ALLEGRO_KEY_UP) {
-        if(view_y > 0) { view_y--; }
-    }
-    else if(g.key == ALLEGRO_KEY_LEFT) {
-        if(view_x > 0) { view_x--; }
-    }
-    else if(g.key == ALLEGRO_KEY_DOWN) {
-        if(view_y < size_y - rows) { view_y++; }
-    }
-    else if(g.key == ALLEGRO_KEY_RIGHT) {
-        if(view_x < size_x - cols) { view_x++; }
-    } else if(g.key == ALLEGRO_KEY_C) {
+    if(g.key == ALLEGRO_KEY_C) {
         g.map->focusOnPlayer();
     }
     else if(g.key == ALLEGRO_KEY_M) {
@@ -3468,7 +3526,6 @@ void UI::mouseDownEvent(void) {
             widget->mouseDown();
             if(widget->onMouseDown != NULL)
                 widget->onMouseDown();
-            return;
         }
     }
 }
@@ -3698,9 +3755,9 @@ void TileMap::drawTile(int i, int x, int y) {
         // can the player currently see the tile?
         bool currently_seeing = playerSees(t);
 
-        int off_x = (i % cols) * 80;
+        int off_x = (i % cols) * 80 - res_px;
         int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
-        off_y = off_y + (40 * floor(i / cols));
+        off_y = off_y + (40 * floor(i / cols)) - res_py;
 
         if(currently_seeing == true) {
             // draw the tile at full brightness
@@ -3737,6 +3794,7 @@ void TileMap::drawTile(int i, int x, int y) {
 }
 
 void TileMap::draw(void) {
+    resetViewXY();
     start = size_x * view_y + view_x;
     mouse_n = mouseToTileN();
 
@@ -3797,9 +3855,9 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
     int r_x = x - g.map->view_x;
     int r_y = y - g.map->view_y;
 
-    int off_x = 80 * r_x;
+    int off_x = 80 * r_x - res_px;
     int off_y = n % 2  == 0 ? 0 : 20;
-    off_y += 40 * r_y;
+    off_y += 40 * r_y - res_py;
 
     if(mouse_n == n) {
         al_draw_tinted_bitmap(tile_info[tiles[n].info_index].sprite,
@@ -6259,7 +6317,7 @@ static void init_interactions(void) {
             page->right = NULL;
             page->choices.push_back({ opt1, -1 });
 
-            page->tell("You enter and explore the building. There doesn't seem to be anything here.");
+            page->wrap_and_tell("You enter and explore the building. There doesn't seem to be anything here.");
             page->tell("");
             page->tell("Disappointing, but not unexpected.");
 
@@ -8726,7 +8784,9 @@ void Location::load(istream &is) {
 }
 
 void TileMap::save(ostream &os) {
-    os << cols << ' ' << rows << ' ' << view_x << ' ' << view_y << ' ';
+    os << cols << ' ' << rows << '\n';
+    os << view_x << ' ' << view_y << ' ' << view_px << ' ' << view_py << ' ';
+    os << res_px << ' ' << res_py << '\n';
     os << size_x << ' ' << size_y << ' ' << pos.x1 << ' ' << pos.y1 << ' ';
     os << pos.x2 << ' ' << pos.y2 << ' ';
     os << max_t << ' ';
@@ -8777,7 +8837,7 @@ void TileMap::save(ostream &os) {
 }
 
 void TileMap::load(istream &is) {
-    is >> cols >> rows >> view_x >> view_y;
+    is >> cols >> rows >> view_x >> view_y >> view_px >> view_py >> res_px >> res_py;
     is >> size_x >> size_y >> pos.x1 >> pos.y1 >> pos.x2 >> pos.y2;
     is >> max_t;
     size_t n;
@@ -8943,8 +9003,6 @@ int main(int argc, char **argv) {
         info("Created timer.");
 
     ALLEGRO_EVENT ev;
-    ALLEGRO_MOUSE_STATE mouse_state;
-    ALLEGRO_KEYBOARD_STATE keyboard_state;
 
     al_start_timer(timer);
 
@@ -9014,18 +9072,18 @@ int main(int argc, char **argv) {
     while(g.running) {
         frame_start = al_current_time();
 
-        al_get_mouse_state(&mouse_state);
-        al_get_keyboard_state(&keyboard_state);
+        al_get_mouse_state(&g.mouse_state);
+        al_get_keyboard_state(&g.keyboard_state);
 
-        g.mouse_x = mouse_state.x;
-        g.mouse_y = mouse_state.y;
+        g.mouse_x = g.mouse_state.x;
+        g.mouse_y = g.mouse_state.y;
         draw_hover = false;
         // 1 - RMB
         // 2 - LMB
         // 4 - wheel
-        g.mouse_button = mouse_state.buttons;
+        g.mouse_button = g.mouse_state.buttons;
 
-        if (mouse_state.buttons != 0) {
+        if (g.mouse_state.buttons != 0) {
             if (!was_mouse_down) {
                 // mouse button down event
                 g.ui->mouseDownEvent();
