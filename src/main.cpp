@@ -12,10 +12,11 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <queue>
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <algorithm>
 
 #include "./version.h"
 #include "./util.h"
@@ -23,7 +24,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 5; // save game version
+const int COMPILED_VERSION = 6; // save game version
 
 using namespace std;
 
@@ -282,6 +283,8 @@ struct Item {
     void setHpDims(void);
 };
 
+static ALLEGRO_BITMAP *little_pink_bitmap(void);
+
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     int text_len = al_get_text_width(g.font, text);
     int item_size_x = 0;
@@ -301,6 +304,13 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     float offset_y = round((item_size_y - g.font_height) / 2) - 1;
 
     ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, item_size_y);
+    if(b == NULL) {
+        al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
+        b = al_create_bitmap(item_size_x, item_size_y);
+        al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+    }
+    if(b == NULL)
+        b = little_pink_bitmap();
 
     // draw item bitmap
     al_set_target_bitmap(b);
@@ -2990,7 +3000,13 @@ MiniMap::MiniMap() {
     pos.x2 = off_x + size_x;
     pos.y2 = off_y + size_y;
 
+    // TODO should this always be a memory bitmap?
     buf = al_create_bitmap(size_x, size_y);
+    if(buf == NULL) {
+        al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
+        buf = al_create_bitmap(size_x, size_y);
+        al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+    }
 }
 
 MiniMap::~MiniMap() {
@@ -2998,7 +3014,12 @@ MiniMap::~MiniMap() {
     // info("~MiniMap()");
 }
 
+static void notify(const char *text);
+
 void MiniMap::recreate() {
+    if(buf == NULL)
+        notify("Couldn't create minimap bitmap");
+
     al_set_target_bitmap(buf);
 
     al_clear_to_color(g.color_black);
@@ -3041,6 +3062,7 @@ void MiniMap::recreate() {
 }
 
 void MiniMap::draw(void) {
+    if(buf == NULL) return;
     al_draw_bitmap(buf, off_x, off_y, 0);
 }
 
@@ -3063,7 +3085,6 @@ int TileMap::mouseToTileN(void) {
 }
 
 static void end_turn(void);
-static void notify(const char *text);
 
 // check if the clicked tile is next to the player
 // if so, move them there.
@@ -7099,11 +7120,16 @@ static void fade_to_UI(void) {
 struct NotificationUI : public UI {
     Rect pos;
     UI *below;
+    // current message
     const char *text;
+    // all messages
+    queue<const char *> messages;
     float bottom_text_offset_x;
     ALLEGRO_BITMAP *bg;
 
+    NotificationUI();
     void message(const char *text);
+    void go(void);
 
     void draw(void) override;
 
@@ -7122,12 +7148,25 @@ struct NotificationUI : public UI {
     MouseDownCaller mouseDownCaller;
 };
 
-static ALLEGRO_BITMAP *little_pink_bitmap(void);
+NotificationUI::NotificationUI() {
+    bg = NULL;
+    widgets.push_back(&mouseDownCaller);
+}
 
 void NotificationUI::message(const char *text) {
+    messages.push(text);
+    if(messages.size() == 1)
+        go();
+}
+
+void NotificationUI::go() {
+    if(bg != NULL)
+        // we're already in this UI presumably
+        goto alreadyThere;
+
     below = g.ui;
 
-    // take a screenshot of the current UI
+    // otherwise take a screenshot of the current UI
     bg = al_create_bitmap(g.display_x, g.display_y);
     if(bg == NULL) {
         al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
@@ -7141,22 +7180,21 @@ void NotificationUI::message(const char *text) {
         al_set_target_bitmap(bg);
         al_clear_to_color(g.color_bg);
         below->draw();
+        al_set_target_backbuffer(g.display);
     }
 
+ alreadyThere:
     // center text
-    this->text = text;
+    this->text = messages.front();
     pos.x1 = round((g.display_x - 100 - al_get_text_width(g.font, text)) / 2);
     pos.y1 = round((g.display_y - g.font_height - 100) / 2) + 10;
     pos.x2 = al_get_text_width(g.font, text) + 100;
     pos.y2 = 100;
     bottom_text_offset_x = round((pos.x2 - al_get_text_width(g.font, "Click to continue")) / 2);
 
-    al_set_target_backbuffer(g.display);
-
+    mouseDownCaller.stop = false;
     mouseDownCaller.parent = this;
     mouseDownCaller.pos = this->pos;
-
-    widgets.push_back(&mouseDownCaller);
 }
 
 void NotificationUI::draw(void) {
@@ -7174,9 +7212,15 @@ void NotificationUI::draw(void) {
 }
 
 void NotificationUI::stop(void) {
-    widgets.clear();
-    al_destroy_bitmap(bg);
-    g.ui = below;
+    messages.pop();
+    if(messages.empty() == true) {
+        al_destroy_bitmap(bg);
+        bg = NULL;
+        g.ui = below;
+    } else {
+        // there are more messages to display
+        go();
+    }
 }
 
 static void notify(const char *text) {
@@ -7271,6 +7315,23 @@ static bool save_game(const char *filename);
 static bool load_game(const char *filename);
 static void button_Help_press(void);
 
+static void load_game_wrapper(void) {
+    bool dialog_opened = al_show_native_file_dialog(NULL, g.load_filechooser);
+    if(dialog_opened == true) {
+        if(al_get_native_file_dialog_count(g.load_filechooser) != 0) {
+            bool success = load_game(al_get_native_file_dialog_path(g.load_filechooser, 0));
+            if(success == true) {
+                g.AddMessage("Game loaded.");
+                button_MainMap_press();
+            } else {
+                notify("Couldn't load game.");
+            }
+        }
+    } else {
+        notify("Error: Couldn't open file chooser!");
+    }
+}
+
 void MainMenuUI::handlePress(const char *name) {
     if(strcmp(name, "Quit") == 0) {
         g.running = false;
@@ -7282,14 +7343,8 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             button_MainMap_press();
-            // } else {
-            //     bool success = load_game();
-            //     if(success == true) {
-            //         g.AddMessage("Game loaded.");
-            //         button_MainMap_press();
         } else {
-            notify("No game to continue or load.");
-            // }
+            load_game_wrapper();
         }
     } else if(strcmp(name, "Save") == 0) {
         if(g.map == NULL) {
@@ -7313,20 +7368,7 @@ void MainMenuUI::handlePress(const char *name) {
             }
         }
     } else if(strcmp(name, "Load") == 0) {
-        bool dialog_opened = al_show_native_file_dialog(NULL, g.load_filechooser);
-        if(dialog_opened == true) {
-            if(al_get_native_file_dialog_count(g.load_filechooser) != 0) {
-                bool success = load_game(al_get_native_file_dialog_path(g.load_filechooser, 0));
-                if(success == true) {
-                    g.AddMessage("Game loaded.");
-                    button_MainMap_press();
-                } else {
-                    notify("Couldn't load game.");
-                }
-            }
-        } else {
-            notify("Error: Couldn't open file chooser!");
-        }
+        load_game_wrapper();
     } else if(strcmp(name, "Help") == 0) {
         button_Help_press();
     } else {
@@ -7407,7 +7449,7 @@ MainMenuUI::MainMenuUI() {
     setFadeColors();
 
     addEntry("New");
-    // addEntry("Continue");
+    addEntry("Continue");
     addEntry("Load");
     addEntry("Save");
     // addEntry("Options");
@@ -7586,9 +7628,9 @@ static void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
-        g.minimap->recreate();
         g.ui = g.ui_MiniMap;
         g.color_bg = g.color_grey;
+        g.minimap->recreate();
     }
     main_buttons_update();
 }
@@ -8121,6 +8163,7 @@ static void init_player(void) {
     c->recomputeCarryWeight();
     c->recomputeWarmth();
     c->health = 1;
+    c->active = true; // doesn't do anything
 
     g.map->player = c;
 
@@ -8508,7 +8551,7 @@ void Character::save(ostream &os) {
        << fatigue << ' ' << hydration << ' ' << satiety << ' '
        << burden << ' ' << maxBurden << ' ' << skills << ' '
        << (int)selected_weapon_slot << ' ' << nextMove << ' '
-       << (int)faction << ' ';
+       << (int)faction << ' ' << active << ' ';
 
     for(auto&& fac_rep : faction_reps) {
         os << fac_rep << ' ';
@@ -8557,7 +8600,7 @@ void Character::load(istream &is) {
     is >> health >> pain >> warmth
        >> fatigue >> hydration >> satiety
        >> burden >> maxBurden >> skills
-       >> w_slot >> nextMove >> i_fac;
+       >> w_slot >> nextMove >> i_fac >> active;
 
     selected_weapon_slot = w_slot;
     faction = (Faction)i_fac;
