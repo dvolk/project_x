@@ -24,7 +24,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 6; // save game version
+const int COMPILED_VERSION = 7; // save game version
 
 using namespace std;
 
@@ -1763,15 +1763,12 @@ struct TileMap : public Widget {
     // display dimensions
     int cols;
     int rows;
-    // current view
+    // current view (tile offset)
     int view_x;
     int view_y;
     // dimensions of the map
     int size_x;
     int size_y;
-    // rendering offset
-    int r_off_x;
-    int r_off_y;
     /*
       TODO: replace the magic numbers throughout with these
     */
@@ -1810,8 +1807,6 @@ struct TileMap : public Widget {
 
     void save(ostream &os);
     void load(istream &is);
-
-    void handleKeyDown(void);
 
     void mouseDown(void);
     void keyDown(void);
@@ -1902,8 +1897,8 @@ void Label::draw(void) {
 
     al_draw_text(g.font,
                  g.color_white,
-                 g.map->r_off_x + off_x + offset_x,
-                 g.map->r_off_y + off_y + 55,
+                 g.map->pos.x1 + off_x + offset_x,
+                 g.map->pos.y1 + off_y + 55,
                  0,
                  text);
 }
@@ -2627,8 +2622,16 @@ void WeaponSwitcher::draw(void) {
 
 struct TimeDisplay : public Widget {
     int tod;
+    const char * const time_strings[4] =
+        { "Morning",
+          "Midday",
+          "Afternoon",
+          "Nighttime"
+        };
 
-    TimeDisplay() { };
+    const char *current_time_string;
+
+    TimeDisplay() { current_time_string = ""; };
     ~TimeDisplay() { };
 
     void mouseDown(void) { };
@@ -2644,19 +2647,22 @@ struct TimeDisplay : public Widget {
 
 void TimeDisplay::calculate_tod(void) {
     tod = g.map->player->nextMove % 24000;
+
+    int i = -1;
+
+    if(     tod >     0 && tod <=  9000) i = 0;
+    else if(tod >  9000 && tod <= 12000) i = 1;
+    else if(tod > 12000 && tod <= 18000) i = 2;
+    else if(tod > 18000 && tod <= 24000) i = 3;
+
+    if(i == -1)
+        current_time_string = "";
+    else
+        current_time_string = time_strings[i];
 }
 
 void TimeDisplay::draw(void) {
-    calculate_tod();
-
-    if(tod > 0 && tod <= 9000)
-        al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, "Morning");
-    else if(tod > 9000 && tod <= 12000)
-        al_draw_text(g.font, g.color_white, pos.x1, pos.y1, 0, "Midday");
-    else if(tod > 12000 && tod <= 18000)
-        al_draw_text(g.font, g.color_grey2, pos.x1, pos.y1, 0, "Afternoon");
-    else if(tod > 18000 && tod <= 24000)
-        al_draw_text(g.font, g.color_grey3, pos.x1, pos.y1, 0, "Nighttime");
+    al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, current_time_string);
 }
 
 struct GridSystem : public Widget {
@@ -2923,32 +2929,20 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
         sy += 1;
     }
 
-    cols = min(sx, c);
-    rows = min(sy, r);
-
     size_x = sx;
     size_y = sy;
 
-    r_off_x = 0;
-    r_off_y = 0;
+    cols = min(sx, c);
+    rows = min(sy, r);
 
-    if(size_x * hex_step_x < g.display_x)
-        r_off_x = (g.display_x - (size_x + 0.5) * hex_step_x) / 2;
-    if(size_y * hex_step_y < g.display_y)
-        r_off_y = (g.display_y - size_y * hex_step_y) / 4;
-
-    /*
-      TODO: I don't even
-    */
-    pos.x1 = max(100, r_off_x);
-    pos.y1 = r_off_y;
-    pos.x2 = min(g.display_x - 200, (int)pos.x1 + (size_x + 1) * hex_step_x);
-    pos.y2 = min(g.display_y, (int)pos.y1 + (size_y + 1) * hex_step_y);
+    pos.x1 = 100;
+    pos.y1 = 0;
+    pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x);
+    pos.y2 = min(g.display_y - 150, (int)pos.y1 + (size_y + 1) * hex_step_y);
 
     max_t = size_x * size_y - 1;
 
-    cout << "Tilemap rendering dimensions: "
-         << pos.x1 << " " << pos.y1 << " " << pos.x2 << " " << pos.y2 << endl;
+    printf("TileMap: (%f, %f) (%f, %f)\n", pos.x1, pos.y1, pos.x2, pos.y2);
 
     eco.want_creatures = 2 + max_t / 20;
 
@@ -3045,7 +3039,7 @@ void MiniMap::recreate() {
     ALLEGRO_COLOR red = al_map_rgb(255, 0, 0);
 
     // if the tilemap dimensions are larger than the screen
-    if(g.map->r_off_x == 0 || g.map->r_off_y == 0) {
+    if(g.map->pos.x1 == 0 || g.map->pos.y1 == 0) {
         // draw player location lines
         int p_x = g.map->player->n % g.map->size_x;
         int p_y = g.map->player->n / g.map->size_x;
@@ -3067,15 +3061,15 @@ void MiniMap::draw(void) {
 }
 
 void TileMap::mouseToTileXY(int &x, int &y) {
-    x = view_x + floor((g.mouse_x - r_off_x) / 80);
+    x = view_x + floor((g.mouse_x - pos.x1) / 80);
     int off_y = x % 2 == 0 ? 0 : 20;
-    y = view_y + floor((g.mouse_y - 40 - off_y - r_off_y) / 40);
+    y = view_y + floor((g.mouse_y - 40 - off_y - pos.y1) / 40);
 }
 
 int TileMap::mouseToTileN(void) {
     if(g.mouse_x < pos.x1 ||
        g.mouse_y < pos.y1 + 40 ||
-       g.mouse_x > pos.x2 + 21 || // - 81 ||
+       g.mouse_x > pos.x2 - 81 ||
        g.mouse_y > pos.y2 - 1) {
         return -1;
     }
@@ -3092,6 +3086,10 @@ void TileMap::mouseDown(void) {
     int clicked_n = mouseToTileN();
     int player_n = player->n;
     int clicked_nearby = -1;
+
+    printf("clicked on n=%d m=(%d, %d) p=((%f, %f) (%f, %f))\n",
+           clicked_n, g.mouse_x, g.mouse_y,
+           pos.x1, pos.y1, pos.x2, pos.y2);
 
     if(clicked_n == -1)
         return;
@@ -3110,9 +3108,7 @@ void TileMap::mouseDown(void) {
             }
         }
 
-        if(clicked_nearby == -1)
-            return;
-        else {
+        if(clicked_nearby != -1) {
             if(g.map->tile_info[g.map->tiles[clicked_nearby].info_index].blocks_movement == false) {
                 player->move(clicked_nearby);
                 end_turn();
@@ -3124,11 +3120,6 @@ void TileMap::mouseDown(void) {
     else if(g.mouse_button == 2) {
         focusOn(clicked_n);
     }
-
-    char buf[100];
-    snprintf(buf, sizeof(buf), "clicked on n=%d %d %d %f %f %f %f",
-             clicked_nearby, g.mouse_x, g.mouse_y, pos.x1, pos.y1, pos.x2, pos.y2);
-    info(buf);
 }
 
 static bool tile_blocks_los(int n) {
@@ -3363,8 +3354,8 @@ void Character::drawOffset(int offset_x, int offset_y) {
     off_y += 40 * r_y;
 
     al_draw_bitmap(sprite,
-                   g.map->r_off_x + off_x + 25 + offset_x,
-                   g.map->r_off_y + off_y + offset_y, 0);
+                   g.map->pos.x1 + off_x + 25 + offset_x,
+                   g.map->pos.y1 + off_y + offset_y, 0);
 
     if(y + 1 >= g.map->size_y)
         return;
@@ -3378,9 +3369,11 @@ void Character::drawOffset(int offset_x, int offset_y) {
 static void toggleMsgLogVisibility(void) {
     if(g.log->visible) {
         g.log->visible = false;
+        g.map->pos.y2 += 150;
         g.weapon_switcher->visible = false;
     } else {
         g.log->visible = true;
+        g.map->pos.y2 -= 150;
         g.weapon_switcher->visible = true;
     }
 }
@@ -3430,7 +3423,6 @@ struct UI {
     void update(void);
     virtual void draw(void);
 
-    void toggleMessageLog(void);
     void addIndicatorWidgets(void);
     void addLogAndButtons(void);
 };
@@ -3462,13 +3454,13 @@ void UI::addLogAndButtons(void) {
 }
 
 void UI::update(void) {
-    for(auto& widget : widgets)
+    for(auto& widget : widgets) {
         widget->update();
+    }
 }
 
 void UI::mouseDownEvent(void) {
     for(auto& widget : widgets) {
-        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -3476,14 +3468,13 @@ void UI::mouseDownEvent(void) {
             widget->mouseDown();
             if(widget->onMouseDown != NULL)
                 widget->onMouseDown();
-            // break;
+            return;
         }
     }
 }
 
 void UI::mouseUpEvent(void) {
     for(auto& widget : widgets) {
-        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -3491,14 +3482,13 @@ void UI::mouseUpEvent(void) {
             widget->mouseUp();
             if(widget->onMouseUp != NULL)
                 widget->onMouseUp();
-            // break;
+            return;
         }
     }
 }
 
 void UI::keyDownEvent(void) {
     for(auto& widget : widgets) {
-        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -3506,14 +3496,13 @@ void UI::keyDownEvent(void) {
             widget->keyDown();
             if(widget->onKeyDown != NULL)
                 widget->onKeyDown();
-            // break;
+            return;
         }
     }
 }
 
 void UI::hoverOverEvent(void) {
     for(auto& widget : widgets) {
-        assert(widget);
         if(widget->pos.x1 <= g.mouse_x &&
            widget->pos.y1 <= g.mouse_y &&
            widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
@@ -3716,13 +3705,13 @@ void TileMap::drawTile(int i, int x, int y) {
         if(currently_seeing == true) {
             // draw the tile at full brightness
             al_draw_bitmap(tile_info[tiles[t].info_index].sprite,
-                           r_off_x + off_x,
-                           r_off_y + off_y,
+                           pos.x1 + off_x,
+                           pos.y1 + off_y,
                            0);
             if(tiles[t].ground_items != NULL) {
                 al_draw_bitmap(g.bitmaps[98],
-                               r_off_x + off_x,
-                               r_off_y + off_y,
+                               pos.x1 + off_x,
+                               pos.y1 + off_y,
                                0);
             }
         }
@@ -3734,15 +3723,15 @@ void TileMap::drawTile(int i, int x, int y) {
             // otherwise draw it 50% tinted
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
                                   g.color_tile_tint,
-                                  r_off_x + off_x,
-                                  r_off_y + off_y, 0);
+                                  pos.x1 + off_x,
+                                  pos.y1 + off_y, 0);
         }
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
                                   g.color_active_tile_tint,
-                                  r_off_x + off_x,
-                                  r_off_y + off_y, 0);
+                                  pos.x1 + off_x,
+                                  pos.y1 + off_y, 0);
         }
     }
 }
@@ -3789,7 +3778,7 @@ void TileMap::draw(void) {
     }
 
     if(DEBUG_VISIBILITY == true) {
-        al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2, 1);
+        al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_red, 1);
         al_draw_rectangle(pos.x1, pos.y1 + 40, pos.x2 - 81, pos.y2 - 1, g.color_white, 1);
     }
 
@@ -3815,13 +3804,13 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
     if(mouse_n == n) {
         al_draw_tinted_bitmap(tile_info[tiles[n].info_index].sprite,
                                      g.color_active_tile_tint,
-                                     r_off_x + off_x,
-                                     r_off_y + off_y, 0);
+                                     pos.x1 + off_x,
+                                     pos.y1 + off_y, 0);
     } else {
         al_draw_bitmap_region(tile_info[tiles[n].info_index].sprite,
                               0, 0, 100, 40,
-                              r_off_x + off_x,
-                              r_off_y + off_y, 0);
+                              pos.x1 + off_x,
+                              pos.y1 + off_y, 0);
 
     }
     // check if there's a character on that tile
@@ -4501,7 +4490,15 @@ static void end_turn() {
             runPlayerEncounter();
         }
 
+    const char *time_string_before = g.time_display->current_time_string;
+
     g.map->player->update();
+
+    g.time_display->calculate_tod();
+    const char *time_string_after = g.time_display->current_time_string;
+    if(strcmp(time_string_before, time_string_after) != 0) {
+        g.AddMessage("Time changed to " + string(time_string_after));
+    }
 
     if(g.map->player->health < 0.01) {
         g.map->removeCharacter(g.map->player);
@@ -5086,11 +5083,28 @@ void Encounter::runAIEncounter(int n) {
     // run encounters until only one character remains
     do {
         // setup
-        range = 10;
         auto cs = g.map->charsByPos.equal_range(n).first;
+
+        if(cs == g.map->charsByPos.end()) {
+            cout << "***********************************" << endl;
+            info("runAIEncounter(): No characters?");
+            cout << "***********************************" << endl;
+            return;
+        }
         c1 = cs->second;
+        if(cs == g.map->charsByPos.end()) {
+            cout << "***********************************" << endl;
+            info("runAIEncounter(): Just one character?");
+            cout << "***********************************" << endl;
+            return;
+        }
         cs++;
         c2 = cs->second;
+
+        range = 10;
+
+        printf("Fight!\n");
+        printf("%15s\t%15s\n", c1->name, c2->name);
 
         while(true) {
             npcEncounterStep(0);
@@ -5099,7 +5113,7 @@ void Encounter::runAIEncounter(int n) {
             npcEncounterStep(1);
             if(isEncounterNPCdead(1) == true || npcRelocated() == true) break;
 
-            cout << c1->health << ' ' << c2->health << endl;
+            printf("%15f\t%15f\n", c1->health, c2->health);
         }
         c1->post_update();
         c2->post_update();
@@ -5987,6 +6001,7 @@ static void runInteractStep(InteractPage *x) {
 }
 
 static void switchToMainMenu(void);
+static void unload_game(void);
 
 static void runInteractStepCB(void) {
     // find the page we're on
@@ -6011,7 +6026,7 @@ static void runInteractStepCB(void) {
     }
 
     // -1: exit
-    // -2: exit to main menu
+    // -2: exit to main menu (game over)
     // -3: choice pair not found
     int new_page = -3;
     for(auto&& c : p->choices) {
@@ -6034,6 +6049,8 @@ static void runInteractStepCB(void) {
     } else if(new_page == -1) {
         button_MainMap_press();
     } else if(new_page == -2) {
+        delete g.map;
+        g.map = NULL;
         switchToMainMenu();
     } else {
         info("Interact Error: couldn't find new interact page index");
@@ -6187,7 +6204,7 @@ static void init_interactions(void) {
 
             page->pre = []()
                 {
-                    uniform_int_distribution<> hurt_dist(0.01, 0.1);
+                    uniform_int_distribution<> hurt_dist(0.05, 0.1);
                     g.map->player->hurt(hurt_dist(*g.rng));
                 };
             fall_down->pages.push_back(page);
@@ -6212,11 +6229,49 @@ static void init_interactions(void) {
         }
     }
 
+    Interact *strange_building = new Interact;
+
+    { // "strange_building"
+
+        { // page 0
+            Item *opt1 = make_text_item("Enter building", al_map_rgb(200, 100, 100));
+            Item *opt2 = make_text_item("Leave", al_map_rgb(100, 100, 100));
+            InteractPage *page = new InteractPage;
+            page->right = NULL;
+            page->choices.push_back({ opt1, 1 });
+            page->choices.push_back({ opt2, -1 });
+
+            page->wrap_and_tell("Most buildings in the vicinity are in gross disrepair, but one stands out as newer than the others.");
+            page->tell("");
+            page->tell("Perhaps there are people living in it?");
+            page->pre = []() {
+                cout << "hello";
+                // mark as seen
+            };
+
+            strange_building->pages.push_back(page);
+            strange_building->current_page = page;
+        }
+
+        { // page 1
+            Item *opt1 = make_text_item("Leave", al_map_rgb(100, 100, 100));
+            InteractPage *page = new InteractPage;
+            page->right = NULL;
+            page->choices.push_back({ opt1, -1 });
+
+            page->tell("You enter and explore the building. There doesn't seem to be anything here.");
+            page->tell("");
+            page->tell("Disappointing, but not unexpected.");
+
+            strange_building->pages.push_back(page);
+            strange_building->current_page = page;
+        }
+    }
+
     g.stories.emplace("intro", intro);
     g.stories.emplace("fall_down", fall_down);
     g.stories.emplace("player_dead", player_dead);
-
-    g.map_stories.emplace(3, "fall_down");
+    g.stories.emplace("strange_building", strange_building);
 }
 
 struct InventoryGridSystem;
@@ -6680,9 +6735,9 @@ ItemsUI::ItemsUI() {
 
     addLogAndButtons();
     addIndicatorWidgets();
-    widgets.push_back(gridsystem);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
+    widgets.push_back(gridsystem);
 }
 
 ConditionUI::ConditionUI() {
@@ -6708,9 +6763,9 @@ ConditionUI::ConditionUI() {
 
     addLogAndButtons();
     addIndicatorWidgets();
-    widgets.push_back(gridsystem);
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
+    widgets.push_back(gridsystem);
 }
 
 ItemsUI::~ItemsUI() {
@@ -7332,6 +7387,25 @@ static void load_game_wrapper(void) {
     }
 }
 
+static void save_game_wrapper(void) {
+    // show save dialog
+    bool dialog_opened = al_show_native_file_dialog(NULL, g.save_filechooser);
+    if(dialog_opened == true) {
+        // check if user selected a file
+        if(al_get_native_file_dialog_count(g.save_filechooser) != 0) {
+            // try to save
+            bool success = save_game(al_get_native_file_dialog_path(g.save_filechooser, 0));
+            if(success == true) {
+                notify("Game saved.");
+            } else {
+                notify("Couldn't save game.");
+            }
+        }
+    } else {
+        notify("Error: Couldn't open file chooser!");
+    }
+}
+
 void MainMenuUI::handlePress(const char *name) {
     if(strcmp(name, "Quit") == 0) {
         g.running = false;
@@ -7350,22 +7424,7 @@ void MainMenuUI::handlePress(const char *name) {
         if(g.map == NULL) {
             notify("No game in progress.");
         } else {
-            // show save dialog
-            bool dialog_opened = al_show_native_file_dialog(NULL, g.save_filechooser);
-            if(dialog_opened == true) {
-                // check if user selected a file
-                if(al_get_native_file_dialog_count(g.save_filechooser) != 0) {
-                    // try to save
-                    bool success = save_game(al_get_native_file_dialog_path(g.save_filechooser, 0));
-                    if(success == true) {
-                        notify("Game saved.");
-                    } else {
-                        notify("Couldn't save game.");
-                    }
-                }
-            } else {
-                notify("Error: Couldn't open file chooser!");
-            }
+            save_game_wrapper();
         }
     } else if(strcmp(name, "Load") == 0) {
         load_game_wrapper();
@@ -8053,6 +8112,16 @@ static void init_messagelog(void) {
     g.log->font = g.font;
 }
 
+enum TileKind {
+    TILE_GRASS = 0,
+    TILE_WOOD,
+    TILE_CITY,
+    TILE_SWAMP,
+    TILE_HILL,
+    TILE_DIRT,
+    TILE_CRACKED_DIRT
+};
+
 static void init_tileinfo(void) {
     g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, 16, 16);
 
@@ -8135,6 +8204,11 @@ MiniMapUI::~MiniMapUI(void) {
     // info("~MiniMapUI()");
 }
 
+static void init_map_stories(void) {
+    g.map_stories.clear();
+    g.map_stories.emplace(g.map->player->n + 3, "strange_building");
+}
+
 static void init_player(void) {
     Character *c = new Character;
 
@@ -8167,9 +8241,10 @@ static void init_player(void) {
 
     g.map->player = c;
 
-    g.map->tiles[c->n].info_index = 5;
-    g.map->addLabel(c->n, strdup("Dead field"));
-    g.map->addLabel(c->n + 3, strdup("Mysterious Tile"));
+    g.map->tiles[c->n].info_index = TILE_DIRT;
+    g.map->addLabel(c->n, strdup("Dead Field"));
+    g.map->tiles[c->n + 3].info_index = TILE_CITY;
+    g.map->addLabel(c->n + 3, strdup("Strange Building"));
 }
 
 static char *random_human_NPC_name(void) {
@@ -8209,6 +8284,8 @@ static void init_characters(void) {
     g.map->updateCharsByPos();
     g.map->player->update_visibility();
     g.map->focusOnPlayer();
+
+    init_map_stories();
 }
 
 MainMapUI::MainMapUI() {
@@ -8375,6 +8452,8 @@ struct PerfTimer {
 
 // delets all the things that are created by new_game and load_game
 static void unload_game(void) {
+    if(g.minimap == NULL)
+        return;
     delete g.health_indicator;
     delete g.pain_indicator;
     delete g.temperature_indicator;
@@ -8393,10 +8472,13 @@ static void unload_game(void) {
     delete g.ui_Camp;
     delete g.ui_Scavenge;
     delete g.ui_Interact;
-    delete g.map;
-    g.map = NULL;
-    delete g.minimap;
+    // the map may already be unloaded if the player dies
+    if(g.map != NULL) {
+        delete g.map;
+        g.map = NULL;
+    }
     delete g.log;
+    delete g.minimap;
 }
 
 static void init_UIs(void) {
@@ -8411,13 +8493,14 @@ static void init_UIs(void) {
     g.ui_Camp      = new CampUI;
     g.ui_Scavenge  = new ScavengeUI;
     g.ui_Interact  = new InteractUI;
+
+    g.time_display->calculate_tod();
 }
 
 static void new_game(void) {
     PerfTimer t("New game");
 
-    if(g.map != NULL)
-        unload_game();
+    unload_game();
 
     init_tilemap();
     init_characters();
@@ -8644,7 +8727,8 @@ void Location::load(istream &is) {
 
 void TileMap::save(ostream &os) {
     os << cols << ' ' << rows << ' ' << view_x << ' ' << view_y << ' ';
-    os << size_x << ' ' << size_y << ' ' << r_off_x << ' ' << r_off_y << ' ';
+    os << size_x << ' ' << size_y << ' ' << pos.x1 << ' ' << pos.y1 << ' ';
+    os << pos.x2 << ' ' << pos.y2 << ' ';
     os << max_t << ' ';
     os << '\n';
 
@@ -8694,7 +8778,7 @@ void TileMap::save(ostream &os) {
 
 void TileMap::load(istream &is) {
     is >> cols >> rows >> view_x >> view_y;
-    is >> size_x >> size_y >> r_off_x >> r_off_y;
+    is >> size_x >> size_y >> pos.x1 >> pos.y1 >> pos.x2 >> pos.y2;
     is >> max_t;
     size_t n;
     is >> n;
@@ -8767,6 +8851,7 @@ static bool save_game(const char *filename) {
 
     try {
         out << "project_x " << COMPILED_VERSION << '\n';
+        out << g.log->visible << ' ' << '\n';
         g.map->save(out);
     } catch (exception &e) {
         out.close();
@@ -8787,9 +8872,8 @@ static bool load_game(const char *filename) {
         return false;
     }
 
-    if(g.map != NULL) {
-        unload_game();
-    }
+    unload_game();
+    bool log_visible;
 
     try {
         char str[10] = { '\0' };
@@ -8810,6 +8894,7 @@ static bool load_game(const char *filename) {
         }
 
         init_tileinfo();
+        in >> log_visible;
         g.map->load(in);
     } catch (exception &e) {
         in.close();
@@ -8820,6 +8905,7 @@ static bool load_game(const char *filename) {
 
     init_minimap();
     init_messagelog();
+    g.log->visible = log_visible;
     init_indicators();
 
     init_UIs();
@@ -8893,8 +8979,8 @@ int main(int argc, char **argv) {
         g.ui_FadeTransition = new FadeTransitionUI;
         g.ui_Notification = new NotificationUI;
 
-        g.map = NULL;
-        g.ui = NULL;
+        g.map = NULL; // game is over
+        g.minimap = NULL; // game is fully unloaded
     }
 
     al_set_target_backbuffer(g.display);
@@ -8905,7 +8991,7 @@ int main(int argc, char **argv) {
      */
 
     if(argc <= 1) {
-        runMainMenu();
+        switchToMainMenu();
         notify("This is pre-alpha software. Please report bugs and give feedback!");
         fade_to_UI();
     } else {
@@ -8997,14 +9083,14 @@ int main(int argc, char **argv) {
         g.dt = frame_end - frame_start;
         frame_time += g.dt;
         if(frame_time >= 10.0) {
-            printf("FPS: %f\n",
-                   frame_counter / 10.0);
+            // printf("FPS: %f\n", frame_counter / 10.0);
             frame_time = 0;
             frame_counter = 0;
         }
     }
 
     unload_bitmaps();
+
     unload_game();
 
     al_destroy_display(g.display);
