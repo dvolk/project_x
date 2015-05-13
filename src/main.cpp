@@ -24,7 +24,7 @@
 #include "./widget.h"
 
 const bool DEBUG_VISIBILITY = false;
-const int COMPILED_VERSION = 8; // save game version
+const int COMPILED_VERSION = 9; // save game version
 
 using namespace std;
 
@@ -66,8 +66,8 @@ struct Game {
     bool running;
 
     // display dimensions
-    const int display_x = 1280;
-    const int display_y = 720;
+    int display_x;
+    int display_y;
 
     const char *font_filename = "media/fonts/DejaVuSans-Bold.ttf";
     const int font_height = 14;
@@ -3787,14 +3787,16 @@ void TileMap::drawTile(int i, int x, int y) {
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
                                   g.color_tile_tint,
                                   pos.x1 + off_x,
-                                  pos.y1 + off_y, 0);
+                                  pos.y1 + off_y,
+                                  0);
         }
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
                                   g.color_active_tile_tint,
                                   pos.x1 + off_x,
-                                  pos.y1 + off_y, 0);
+                                  pos.y1 + off_y,
+                                  0);
         }
     }
 }
@@ -7370,10 +7372,7 @@ struct MenuEntry : public Widget {
 };
 
 struct MainMenuUI : public UI {
-    const float x = 590;
-    const float y = 300;
-    const float sx = 100;
-    const float sy = 50;
+    float x, y, sx, sy;
 
     ALLEGRO_BITMAP *background;
     ALLEGRO_BITMAP *title;
@@ -7400,9 +7399,13 @@ MainMenuUI::~MainMenuUI() {
 }
 
 void MainMenuUI::draw(void) {
-    al_draw_bitmap(background, 0, 0, 0);
+    al_draw_scaled_bitmap(background,
+                          0, 0, 1280, 720,
+                          0, 0, g.display_x, g.display_y,
+                          0);
+
     if(title != NULL)
-        al_draw_bitmap(title, title_offset, 150, 0);
+        al_draw_bitmap(title, title_offset, y - 150, 0);
     UI::draw();
 }
 
@@ -7573,6 +7576,10 @@ void MainMenuUI::createTitle(void) {
 
 MainMenuUI::MainMenuUI() {
     background = g.bitmaps[93];
+    sx = 100;
+    sy = 50;
+    x = round((g.display_x - sx) / 2);
+    y = round((g.display_y - sy * 6) / 1.5);
     title = NULL;
     createTitle();
     setFadeColors();
@@ -7637,7 +7644,7 @@ struct HelpUI : public UI {
 
 void HelpUI::draw(void) {
     if(background != NULL) {
-        al_draw_bitmap(background, 0, 0, 0);
+        al_draw_bitmap(background, (g.display_x - 1280) / 2, (g.display_y - 720) / 2, 0);
     }
     UI::draw();
 }
@@ -7660,7 +7667,8 @@ static ALLEGRO_BITMAP *little_pink_bitmap(void) {
 }
 
 HelpUI::HelpUI() {
-    button_back = new TextButton("Back", round((g.display_x - 75) / 2), 630, 85, 45);
+    button_back = new TextButton("Back", round((g.display_x - 85) / 2),
+                                 (g.display_y - 720) / 2 + 630, 85, 45);
     button_back->onMouseDown = press_Help_back;
     background = al_load_bitmap("media/backgrounds/help.png");
     if(background == NULL) {
@@ -8003,7 +8011,6 @@ static void init_buttons(void) {
     g.button_Crafting->down = g.bitmaps[7];
     g.button_Crafting->onMouseDown = button_Crafting_press;
 
-    // right
     g.button_Items->pos.x1 = 0;
     g.button_Items->pos.y1 = off_y + 5 * step;
     g.button_Items->pos.x2 = 75;
@@ -8036,26 +8043,27 @@ static void init_buttons(void) {
     g.button_Vehicle->down = g.bitmaps[15];
     g.button_Vehicle->onMouseDown = button_Vehicle_press;
 
-    g.button_endturn->pos.x1 = 1180;
-    g.button_endturn->pos.y1 = 0;
+    // right
     g.button_endturn->pos.x2 = 100;
     g.button_endturn->pos.y2 = 30;
+    g.button_endturn->pos.x1 = g.display_x - g.button_endturn->pos.x2;
+    g.button_endturn->pos.y1 = 0;
     g.button_endturn->up = g.bitmaps[25];
     g.button_endturn->down = NULL;
     g.button_endturn->onMouseDown = button_endturn_press;
 
-    g.button_scavenge->pos.x1 = 1180;
-    g.button_scavenge->pos.y1 = 30;
     g.button_scavenge->pos.x2 = 100;
     g.button_scavenge->pos.y2 = 30;
+    g.button_scavenge->pos.x1 = g.display_x - g.button_scavenge->pos.x2;
+    g.button_scavenge->pos.y1 = 30;
     g.button_scavenge->up = g.bitmaps[44];
     g.button_scavenge->down = NULL;
     g.button_scavenge->onMouseDown = button_Scavenge_press;
 
-    g.button_sleep->pos.x1 = 1180;
-    g.button_sleep->pos.y1 = 60;
     g.button_sleep->pos.x2 = 100;
     g.button_sleep->pos.y2 = 30;
+    g.button_sleep->pos.x1 = g.display_x - g.button_sleep->pos.x2;
+    g.button_sleep->pos.y1 = 60;
     g.button_sleep->up = g.bitmaps[48];
     g.button_sleep->down = NULL;
     g.button_sleep->onMouseDown = button_Sleep_press;
@@ -8072,10 +8080,10 @@ static void init_buttons(void) {
 
 static void init_weaponswitcher(void) {
     g.weapon_switcher = new WeaponSwitcher;
-    g.weapon_switcher->pos.x1 = 910;
-    g.weapon_switcher->pos.y1 = 570;
     g.weapon_switcher->pos.x2 = 270;
     g.weapon_switcher->pos.y2 = 150;
+    g.weapon_switcher->pos.x1 = 910;
+    g.weapon_switcher->pos.y1 = g.display_y - g.weapon_switcher->pos.y2;
 }
 
 static void init_timedisplay(void) {
@@ -8174,10 +8182,10 @@ static void init_indicators(void) {
 
 static void init_messagelog(void) {
     g.log = new(MessageLog);
-    g.log->pos.x1 = 100;
-    g.log->pos.y1 = 570;
     g.log->pos.x2 = 1080;
-    g.log->pos.y2 = 200;
+    g.log->pos.y2 = 150;
+    g.log->pos.x1 = 100;
+    g.log->pos.y1 = g.display_y - g.log->pos.y2;
     g.log->background = g.bitmaps[16];
     g.log->font = g.font;
 }
@@ -8193,7 +8201,12 @@ enum TileKind {
 };
 
 static void init_tileinfo(void) {
-    g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, 16, 16);
+    int cols = g.display_x / TileMap::hex_step_x;
+    int rows = g.display_y / TileMap::hex_step_y;
+    if(cols % 2 == 1) cols++;
+    if(rows % 2 == 1) rows++;
+    printf("cols, rows: %d %d\n", cols, rows);
+    g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, cols, rows);
 
     TileInfo i;
     // grass
@@ -8436,7 +8449,25 @@ static void allegro_init(void) {
     if(g.load_filechooser == NULL)
         errorQuit("Failed to initialize load game filechooser");
 
+    g.display_x = 1280;
+    g.display_y = 720;
+    // try fullscreen windowed mode
+    al_set_new_display_flags(ALLEGRO_FULLSCREEN_WINDOW);
+    al_set_new_display_option(ALLEGRO_VSYNC, 1, ALLEGRO_SUGGEST);
+    al_set_new_display_option(ALLEGRO_SAMPLE_BUFFERS, 1, ALLEGRO_REQUIRE);
+    al_set_new_display_option(ALLEGRO_SAMPLES, 4, ALLEGRO_SUGGEST);
     g.display = al_create_display(g.display_x, g.display_y);
+
+    // g.display = NULL;
+    if(g.display != NULL) {
+        g.display_x = al_get_display_width(g.display);
+        g.display_y = al_get_display_height(g.display);
+    }
+    else {
+        al_set_new_display_flags(ALLEGRO_WINDOWED);
+        g.display = al_create_display(g.display_x, g.display_y);
+    }
+    al_set_new_bitmap_flags(ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
 
     if(g.display == NULL)
         errorQuit("Failed to create display.");
@@ -8797,7 +8828,6 @@ void Location::load(istream &is) {
 }
 
 void TileMap::save(ostream &os) {
-    os << cols << ' ' << rows << '\n';
     os << view_x << ' ' << view_y << ' ' << view_px << ' ' << view_py << ' ';
     os << res_px << ' ' << res_py << '\n';
     os << size_x << ' ' << size_y << ' ' << pos.x1 << ' ' << pos.y1 << ' ';
@@ -8850,7 +8880,7 @@ void TileMap::save(ostream &os) {
 }
 
 void TileMap::load(istream &is) {
-    is >> cols >> rows >> view_x >> view_y >> view_px >> view_py >> res_px >> res_py;
+    is >> view_x >> view_y >> view_px >> view_py >> res_px >> res_py;
     is >> size_x >> size_y >> pos.x1 >> pos.y1 >> pos.x2 >> pos.y2;
     is >> max_t;
     size_t n;
