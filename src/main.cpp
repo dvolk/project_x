@@ -23,7 +23,8 @@
 #include "./rect.h"
 #include "./widget.h"
 
-const bool DEBUG_VISIBILITY = false;
+bool DEBUG_VISIBILITY = false;
+bool RESOLUTION_SCALING = true;
 const int COMPILED_VERSION = 9; // save game version
 
 using namespace std;
@@ -61,14 +62,26 @@ struct MainMenuUI;
 struct FadeTransitionUI;
 struct NotificationUI;
 
+struct Config {
+    int frame_rate;
+    bool fullscreen;
+    bool resolutionScaling;
+    bool debugVisibility;
+    int displayX;
+    int displayY;
+};
+
 // global state
 struct Game {
     bool running;
 
+    Config config;
+
     // display dimensions
     int display_x;
     int display_y;
-
+    float scale;
+    int tx, ty;
     const char *font_filename = "media/fonts/DejaVuSans-Bold.ttf";
     const int font_height = 14;
 
@@ -76,7 +89,7 @@ struct Game {
     ALLEGRO_FONT *font;
     ALLEGRO_KEYBOARD_STATE keyboard_state;
     ALLEGRO_MOUSE_STATE mouse_state;
-
+    ALLEGRO_TRANSFORM trans;
     ALLEGRO_FILECHOOSER *save_filechooser;
     ALLEGRO_FILECHOOSER *load_filechooser;
 
@@ -8399,6 +8412,11 @@ static void init_misc(void) {
     g.ai_encounterInterrupt = -1;
 }
 
+const char *with_default(const char *str, const char *def) {
+    if(str == NULL) return def;
+    else return str;
+}
+
 static void allegro_init(void) {
     int ret = 0;
 
@@ -8407,6 +8425,40 @@ static void allegro_init(void) {
         errorQuit("Failed to initialize core allegro library.");
     else
         info("Initialized core allegro library.");
+
+    ALLEGRO_CONFIG *cfg = al_load_config_file("game.conf");
+    if(cfg == NULL) {
+        info("Couldn't load game.conf");
+        g.config.frame_rate = 60;
+        g.config.fullscreen = false;
+        g.config.resolutionScaling = false;
+        g.config.debugVisibility = false;
+        g.config.displayX = 1280;
+        g.config.displayY = 720;
+    }
+    else {
+        info("Loaded game.conf");
+        const char *s;
+
+        s = al_get_config_value(cfg, 0, "frame-rate");
+        g.config.frame_rate = atoi(with_default(s, "60"));
+
+        s = al_get_config_value(cfg, 0, "fullscreen");
+        g.config.fullscreen = atoi(with_default(s, "1"));
+
+        s =al_get_config_value(cfg, 0, "resolution-scaling");
+        g.config.resolutionScaling = atoi(with_default(s, "1"));
+
+        s = al_get_config_value(cfg, 0, "debug-visibility");
+        g.config.debugVisibility = atoi(with_default(s, "1"));
+
+        s = al_get_config_value(cfg, 0, "display-x");
+        g.config.displayX = atoi(with_default(s, "1280"));
+
+        s = al_get_config_value(cfg, 0, "display-y");
+        g.config.displayY = atoi(with_default(s, "720"));
+    }
+    al_destroy_config(cfg);
 
     ret = al_init_primitives_addon();
     if(ret == false)
@@ -8449,19 +8501,34 @@ static void allegro_init(void) {
     if(g.load_filechooser == NULL)
         errorQuit("Failed to initialize load game filechooser");
 
-    g.display_x = 1280;
-    g.display_y = 720;
+    g.display_x = g.config.displayX;
+    g.display_y = g.config.displayY;
+
     // try fullscreen windowed mode
-    al_set_new_display_flags(ALLEGRO_FULLSCREEN_WINDOW);
+    if(g.config.fullscreen == true)
+        al_set_new_display_flags(ALLEGRO_FULLSCREEN_WINDOW);
+    else
+        al_set_new_display_flags(ALLEGRO_WINDOWED);
+
     al_set_new_display_option(ALLEGRO_VSYNC, 1, ALLEGRO_SUGGEST);
-    al_set_new_display_option(ALLEGRO_SAMPLE_BUFFERS, 1, ALLEGRO_REQUIRE);
+    al_set_new_display_option(ALLEGRO_SAMPLE_BUFFERS, 1, ALLEGRO_SUGGEST);
     al_set_new_display_option(ALLEGRO_SAMPLES, 4, ALLEGRO_SUGGEST);
     g.display = al_create_display(g.display_x, g.display_y);
 
+    al_identity_transform(&g.trans);
+    al_use_transform(&g.trans);
     // g.display = NULL;
     if(g.display != NULL) {
-        g.display_x = al_get_display_width(g.display);
-        g.display_y = al_get_display_height(g.display);
+        int sx = al_get_display_width(g.display);
+        int sy = al_get_display_height(g.display);
+        if(g.config.resolutionScaling == true) {
+            g.scale = min(sx / (float)g.display_x, sy / (float)g.display_y);
+            g.tx = 
+            al_scale_transform(&g.trans, g.scale, g.scale);
+        } else {
+            g.display_x = sx;
+            g.display_y = sy;
+        }
     }
     else {
         al_set_new_display_flags(ALLEGRO_WINDOWED);
@@ -8473,6 +8540,8 @@ static void allegro_init(void) {
         errorQuit("Failed to create display.");
     else
         info("Created display.");
+
+    al_use_transform(&g.trans);
 
     ret = al_install_keyboard();
     if(ret == false)
@@ -9039,7 +9108,7 @@ int main(int argc, char **argv) {
     else
         info("Created event queue.");
 
-    ALLEGRO_TIMER *timer = al_create_timer(1.0 / 60);
+    ALLEGRO_TIMER *timer = al_create_timer(1.0 / g.config.frame_rate);
     if(timer == NULL)
         errorQuit("Error: failed to create timer.");
     else
