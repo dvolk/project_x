@@ -202,6 +202,7 @@ struct Game {
     int ai_encounterInterrupt; // AI at index (value is position)
 
     // current mouse state
+    // TODO: remove this
     int mouse_x;
     int mouse_y;
     int mouse_button;
@@ -638,8 +639,8 @@ struct Grid {
 
     // grid spacing in pixels.
     // can be changed, but items won't be scaled
-    static const int8_t grid_px_x = 18;
-    static const int8_t grid_px_y = 18;
+    static constexpr int8_t grid_px_x = 18;
+    static constexpr int8_t grid_px_y = 18;
 
     // grid size in grid units
     int8_t grid_size_x;
@@ -1771,21 +1772,21 @@ struct TileMap : public Widget {
     // current view (pixel offset)
     int view_px;
     int view_py;
-    // offset pixels
+    // offset pixels from view_x and view_y
     int res_px;
     int res_py;
-    // dimensions of the map
+    // dimensions of the map tiles
     int size_x;
     int size_y;
     /*
       TODO: replace the magic numbers throughout with these
     */
     // size of the hex bitmaps
-    const int hex_size_x = 100;
-    const int hex_size_y = 80;
+    static constexpr int hex_size_x = 100;
+    static constexpr int hex_size_y = 80;
     // size of the hex render steps
-    const int hex_step_x = 80;
-    const int hex_step_y = 40;
+    static constexpr int hex_step_x = 80;
+    static constexpr int hex_step_y = 40;
 
     // stuff that's constant between TileMap::draw
     // and TileMap::drawTile
@@ -1867,32 +1868,30 @@ struct TileMap : public Widget {
 
 void TileMap::update(void) {
     // handles smooth scrolling
-    resetViewXY();
     int d = 1000 * g.dt;
-    if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_UP)) {
-        if(view_y > 0) { view_py -= d; }
-    }
-    else if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_DOWN)) {
-        if(view_y < size_y - rows) { view_py += d; }
-    }
-    if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_LEFT)) {
-        if(view_x > 0) { view_px -= d; }
-    }
-    else if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_RIGHT)) {
-        if(view_x < size_x - cols) { view_px += d; }
-    }
 
-    // TODO: what if the player comes into the map while holding mmb?
-    static int old_mx;
+    // keyboard scrolling
+    if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_UP))
+        view_py -= d;
+    else if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_DOWN))
+        view_py += d;
+
+    if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_LEFT))
+        view_px -= d;
+    else if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_RIGHT))
+        view_px += d;
+
+    // mouse scrolling (hold MMB)
+    static int old_mx; // stores mouse position before we pressed MMB
     static int old_my;
 
     // TODO: draw symbol on (old_mx, old_my)
 
     if (g.mouse_state.buttons & 4) {
-        int dx = (old_mx - g.mouse_x) / 15;
-        int dy = (old_my - g.mouse_y) / 15;
-        view_px = std::max(0, std::min(view_px - dx, (size_x - cols) * hex_step_x));
-        view_py = std::max(0, std::min(view_py - dy, (size_y - rows) * hex_step_y));
+        // scroll map proportional to distance from position before
+        // we pressed MMB
+        view_px -= (old_mx - g.mouse_x) * g.dt * 4;
+        view_py -= (old_my - g.mouse_y) * g.dt * 4;
     } else {
         old_mx = g.mouse_x;
         old_my = g.mouse_y;
@@ -1903,13 +1902,20 @@ void TileMap::update(void) {
 void TileMap::resetViewPXPY(void) {
     view_px = view_x * hex_step_x;
     view_py = view_y * hex_step_y;
+
     res_px = 0;
     res_py = 0;
 }
 
 void TileMap::resetViewXY(void) {
+    // clamp view_x to [0, size_x - cols]
     view_x = max(0, min(size_x - cols, view_px / hex_step_x));
     view_y = max(0, min(size_y - rows, view_py / hex_step_y));
+
+    // clamp view_px to [0, (size_x - cols) * hex_step_x]
+    view_px = max(0, min(view_px, (size_x - cols) * hex_step_x));
+    view_py = max(0, min(view_py, (size_y - rows) * hex_step_y));
+
     res_px = view_px % hex_step_x;
     res_py = view_py % hex_step_y;
 }
@@ -1953,9 +1959,9 @@ void Label::draw(void) {
     int r_x = x - g.map->view_x;
     int r_y = y - g.map->view_y;
 
-    int off_x = 80 * r_x - g.map->res_px;
+    int off_x = TileMap::hex_step_x * r_x - g.map->res_px;
     int off_y = n % 2  == 0 ? 0 : 20;
-    off_y += 40 * r_y - g.map->res_py;
+    off_y += TileMap::hex_step_y * r_y - g.map->res_py;
 
     al_draw_text(g.font,
                  g.color_white,
@@ -3755,9 +3761,9 @@ void TileMap::drawTile(int i, int x, int y) {
         // can the player currently see the tile?
         bool currently_seeing = playerSees(t);
 
-        int off_x = (i % cols) * 80 - res_px;
+        int off_x = (i % cols) * hex_step_x - res_px;
         int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
-        off_y = off_y + (40 * floor(i / cols)) - res_py;
+        off_y = off_y + (hex_step_y * floor(i / cols)) - res_py;
 
         if(currently_seeing == true) {
             // draw the tile at full brightness
@@ -3794,7 +3800,7 @@ void TileMap::drawTile(int i, int x, int y) {
 }
 
 void TileMap::draw(void) {
-    resetViewXY();
+    // resetViewXY();
     start = size_x * view_y + view_x;
     mouse_n = mouseToTileN();
 
@@ -8537,6 +8543,7 @@ static void unload_game(void) {
     }
     delete g.log;
     delete g.minimap;
+    g.minimap = NULL;
 }
 
 static void init_UIs(void) {
@@ -9148,7 +9155,6 @@ int main(int argc, char **argv) {
     }
 
     unload_bitmaps();
-
     unload_game();
 
     al_destroy_display(g.display);
