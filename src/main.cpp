@@ -201,6 +201,9 @@ struct Game {
     bool encounterInterrupt; // player
     int ai_encounterInterrupt; // AI at index (value is position)
 
+    int old_mx; // stores mouse position before we pressed MMB
+    int old_my;
+
     // current mouse state
     // TODO: remove this
     int mouse_x;
@@ -1882,19 +1885,16 @@ void TileMap::update(void) {
         view_px += d;
 
     // mouse scrolling (hold MMB)
-    static int old_mx; // stores mouse position before we pressed MMB
-    static int old_my;
-
     // TODO: draw symbol on (old_mx, old_my)
 
     if (g.mouse_state.buttons & 4) {
         // scroll map proportional to distance from position before
         // we pressed MMB
-        view_px -= (old_mx - g.mouse_x) * g.dt * 4;
-        view_py -= (old_my - g.mouse_y) * g.dt * 4;
+        view_px -= (g.old_mx - g.mouse_x) * g.dt * 4;
+        view_py -= (g.old_my - g.mouse_y) * g.dt * 4;
     } else {
-        old_mx = g.mouse_x;
-        old_my = g.mouse_y;
+        g.old_mx = g.mouse_x;
+        g.old_my = g.mouse_y;
     }
     resetViewXY();
 }
@@ -3009,9 +3009,9 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     res_py = 0;
 
     pos.x1 = 100;
-    pos.y1 = 0;
-    pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x);
-    pos.y2 = min(g.display_y - 150, (int)pos.y1 + (size_y + 1) * hex_step_y);
+    pos.y1 = 40;
+    pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x) - 81 - pos.x1;
+    pos.y2 = min(g.display_y - 150, (int)pos.y1 + (size_y + 1) * hex_step_y) - 1 - pos.y1;
 
     max_t = size_x * size_y - 1;
 
@@ -3143,9 +3143,9 @@ void TileMap::mouseToTileXY(int &x, int &y) {
 
 int TileMap::mouseToTileN(void) {
     if(g.mouse_x < pos.x1 ||
-       g.mouse_y < pos.y1 + 40 ||
-       g.mouse_x > pos.x2 - 81 ||
-       g.mouse_y > pos.y2 - 1) {
+       g.mouse_y < pos.y1 ||
+       g.mouse_x > pos.x1 + pos.x2 ||
+       g.mouse_y > pos.y1 + pos.y2) {
         return -1;
     }
     int x, y;
@@ -3842,12 +3842,18 @@ void TileMap::draw(void) {
     }
 
     if(DEBUG_VISIBILITY == true) {
-        al_draw_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_red, 1);
-        al_draw_rectangle(pos.x1, pos.y1 + 40, pos.x2 - 81, pos.y2 - 1, g.color_white, 1);
+        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, g.color_red, 1);
     }
 
     for(auto&& label : labels)
         label.draw();
+
+    // draw target reticle if we're holding MMB at the position
+    // where the mouse was before we started holding it.
+    if (g.mouse_state.buttons & 4) {
+        al_draw_line(g.old_mx, g.old_my - 10, g.old_mx, g.old_my + 10, g.color_red, 4);
+        al_draw_line(g.old_mx - 10, g.old_my, g.old_mx + 10, g.old_my, g.color_red, 4);
+    }
 }
 
 // redraws the top half of a tile (the part that overlaps with the
