@@ -1,5 +1,5 @@
 SANITIZE=-fsanitize=address -fsanitize=leak -fsanitize=undefined
-override CXXFLAGS+=-g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned-char
+override CXXFLAGS+=-g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned-char -Wno-unused-parameter
 #override CXX=clang++-3.5
 INCLUDES=
 
