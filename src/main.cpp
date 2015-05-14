@@ -23,7 +23,7 @@
 #include "./rect.h"
 #include "./widget.h"
 
-const int COMPILED_VERSION = 9; // save game version
+const int COMPILED_VERSION = 10; // save game version
 
 using namespace std;
 
@@ -59,6 +59,7 @@ struct Interact;
 struct MainMenuUI;
 struct FadeTransitionUI;
 struct NotificationUI;
+struct World;
 
 struct Config {
     int8_t frame_rate;
@@ -74,6 +75,21 @@ struct Config {
     int8_t aa_samples;
     bool start_nag;
     bool ui_fading;
+
+    void load(const char *filename);
+};
+
+// misc data that is stored with the save game file
+struct World {
+    vector<int> player_faction_kills;
+    bool visited_strange_building;
+    // 1 - quest accepted
+    // 2 - questgiver is dead
+    // 3 - quest completed
+    int lake_quest_state;
+
+    void save(ostream &os);
+    void load(istream &os);
 };
 
 // global state
@@ -210,7 +226,7 @@ struct Game {
     unordered_map<const char *, Interact *> stories;
     //              ^^
     //            story name
-    unordered_multimap<int, const char *> map_stories;
+    unordered_multimap<int, char *> map_stories;
     //                 ^^          ^^
     //           map position     story name
 
@@ -231,6 +247,8 @@ struct Game {
     int key;
     // time in seconds since last ui update
     double dt;
+
+    World world;
 
     // add a message to the message log
     void AddMessage(string str);
@@ -458,10 +476,31 @@ struct MessageLog : public Widget {
     ALLEGRO_FONT *font;
     vector<string> lines;
 
+    void save(ostream &os);
+    void load(istream &is);
+
     void mouseDown(void) override;
 
     void draw(void);
 };
+
+void MessageLog::save(ostream &os) {
+    os << visible << ' ';
+    os << '\n';
+    os << lines.size() << '\n';
+    for(auto&& line : lines)
+        os << line << ' ' << '\n';
+}
+
+void MessageLog::load(istream &is) {
+    is >> visible;
+    int lines_size;
+    is >> lines_size;
+    lines.resize(lines_size);
+    is.ignore(1); // ignore '\n'
+    for(auto&& line : lines)
+        getline(is, line);
+}
 
 struct GridInfo {
     ALLEGRO_BITMAP *sprite;
@@ -1082,6 +1121,12 @@ bool Grid::item_compatible(Item *i) {
 
 Item::~Item() {
     delete storage;
+    if(g.item_info[info_index].is_text_item == true) {
+        free((char*)g.item_info[info_index].name);
+        g.item_info[info_index].name = NULL;
+        al_destroy_bitmap(g.item_info[info_index].sprite);
+        g.item_info[info_index].sprite = NULL;
+    }
     //    info("~Item()");
 }
 
@@ -3086,12 +3131,12 @@ MiniMap::MiniMap() {
     pos.y2 = off_y + size_y;
 
     // TODO should this always be a memory bitmap?
+    // buf = al_create_bitmap(size_x, size_y);
+    // if(buf == NULL) {
+    al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
     buf = al_create_bitmap(size_x, size_y);
-    if(buf == NULL) {
-        al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
-        buf = al_create_bitmap(size_x, size_y);
-        al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
-    }
+    al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+    // }
 }
 
 MiniMap::~MiniMap() {
@@ -3102,8 +3147,10 @@ MiniMap::~MiniMap() {
 static void notify(const char *text);
 
 void MiniMap::recreate() {
-    if(buf == NULL)
+    if(buf == NULL) {
         notify("Couldn't create minimap bitmap");
+        return;
+    }
 
     al_set_target_bitmap(buf);
 
@@ -3129,20 +3176,18 @@ void MiniMap::recreate() {
 
     ALLEGRO_COLOR red = al_map_rgb(255, 0, 0);
 
-    // if the tilemap dimensions are larger than the screen
-    if(g.map->pos.x1 == 0 || g.map->pos.y1 == 0) {
-        // draw player location lines
-        int p_x = g.map->player->n % g.map->size_x;
-        int p_y = g.map->player->n / g.map->size_x;
-        al_draw_line(p_x * 2 + 2, 2, p_x * 2 + 2, size_y - 2, red, 2);
-        al_draw_line(2, p_y * 2 + 2, size_x, p_y * 2 + 2, red, 2);
+    // draw player location lines
+    int p_x = g.map->player->n % g.map->size_x;
+    int p_y = g.map->player->n / g.map->size_x;
+    al_draw_line(p_x * 2 + 2, 2, p_x * 2 + 2, size_y - 2, red, 2);
+    al_draw_line(2, p_y * 2 + 2, size_x, p_y * 2 + 2, red, 2);
 
-        // draw mainmap view rectangle
-        al_draw_rectangle(g.map->view_x * 2 + 2,
-                          g.map->view_y * 2 + 2,
-                          (g.map->view_x + 20) * 2 + 2,
-                          (g.map->view_y + 18) * 2 + 2, red, 2);
-    }
+    // draw mainmap view rectangle
+    al_draw_rectangle(g.map->view_x * 2 + 2,
+                      g.map->view_y * 2 + 2,
+                      (g.map->view_x + g.map->cols) * 2 + 2,
+                      (g.map->view_y + g.map->rows) * 2 + 2, red, 2);
+
     al_set_target_backbuffer(g.display);
 }
 
@@ -4556,6 +4601,16 @@ static void player_hurt_messages(void) {
     // cout << endl << g.map->player->health << endl;
 }
 
+void isGameOver(void) {
+    int total = 0;
+    for(auto&& k : g.world.player_faction_kills) {
+        total += k;
+    }
+    if(total >= 10) {
+        runInteract("player_wins");
+    }
+}
+
 static void end_turn() {
     Character *c;
 
@@ -4598,6 +4653,8 @@ static void end_turn() {
     g.map->runEcology();
 
     end_turn_debug_print();
+
+    isGameOver();
 }
 
 struct CraftingGridSystem : public GridSystem {
@@ -5337,6 +5394,7 @@ bool Encounter::isEncounterNPCdead(int n) {
 
     if(c->health < 0.01) {
         if(involvesPlayer() == true) {
+            g.world.player_faction_kills[c->faction] += 1;
             g.AddMessage("The adversary succumbs to their wounds.");
             g.AddMessage("Encounter ends.");
             // g.map->updateCharsByPos();
@@ -5850,8 +5908,8 @@ struct InteractPage {
     ~InteractPage();
 
     // functions that run when coming into and leaving the page
-    void (*pre)(void);
-    void (*post)(void);
+    void (*pre)(InteractPage *p);
+    void (*post)(InteractPage *p, const char *choice_name);
 
     void (*frame_draw)(void);
     void (*frame_update)(void);
@@ -5886,6 +5944,7 @@ struct Interact : public Widget {
       TODO: how to not leak this
     */
     void *data;
+    int (*setup)(void);
 
     Interact();
     ~Interact();
@@ -5971,6 +6030,7 @@ void InteractUI::setup(void) {
 
 Interact::Interact(void) {
     current_page = NULL;
+    setup = NULL;
 }
 
 InteractPage::InteractPage(void) {
@@ -6067,19 +6127,34 @@ void InteractPage::draw(void) {
 static void runInteractStep(InteractPage *x);
 
 static void runInteract(const char *story_name) {
-    Interact *x = g.stories.at(story_name);
+    Interact *x = NULL;
+
+    for(auto&& s : g.stories)
+        if(strcmp(s.first, story_name) == 0)
+            x = s.second;
+
+    if(x == NULL) {
+        errorQuit("Couldn't find story with name: " + string(story_name));
+    }
+
+    int start_page = 0;
+    if(x->setup != NULL) {
+        start_page = x->setup();
+        if(start_page == -1)
+            return;
+    }
 
     g.ui_Interact->current_interact = x;
     g.ui = g.ui_Interact;
 
-    runInteractStep(x->pages.front());
+    runInteractStep(x->pages.at(start_page));
 }
 
 static void runInteractStep(InteractPage *x) {
     x->switch_to();
 
     if(x->pre != NULL) {
-        x->pre();
+        x->pre(x);
     }
 
     g.ui_Interact->current_interact->current_page = x;
@@ -6118,9 +6193,11 @@ static void runInteractStepCB(void) {
     // -1: exit
     // -2: exit to main menu (game over)
     // -3: choice pair not found
+    const char *choice_name;
     int new_page = -3;
     for(auto&& c : p->choices) {
         if(c.first == choice) {
+            choice_name = c.first->getName();
             new_page = c.second;
             break;
         }
@@ -6130,7 +6207,7 @@ static void runInteractStepCB(void) {
     g.ui_Interact->setup();
 
     if(p->post != NULL) {
-        p->post();
+        p->post(p, choice_name);
     }
 
     if(new_page >= 0) {
@@ -6197,6 +6274,43 @@ static void drop_item_at_player(const char *item_name) {
     PlaceItemOnMultiGrid(ground_at_player(), new Item (item_name));
 }
 
+static void init_world() {
+    g.world.player_faction_kills.resize(5);
+    for(auto&& k : g.world.player_faction_kills) k = 0;
+    g.world.visited_strange_building = false;
+    g.world.lake_quest_state = 0;
+}
+
+// if you create choices in pre(), you must delete them in post()
+void delete_choices(InteractPage *p) {
+    for(auto&& c : p->choices) delete c.first;
+    p->choices.clear();
+}
+
+/*
+  TODO: this should really be recursive
+ */
+bool player_has_item_containing(const char *searched_name) {
+    for(auto&& grid : g.map->player->inventory_hardpoints) {
+        for(auto&& i : grid->items) {
+            if(i->storage != NULL) {
+                for(auto&& is : i->storage->items) {
+                    cout << is->getName() << endl;
+                    if(is->storage != NULL) {
+                        for(auto&& iss : is->storage->items) {
+                            cout << '\t' << iss->getName() << endl;
+                            if(strcmp(searched_name, iss->getName()) == 0) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 /*
  * Constructs CYOA like stories.
  */
@@ -6205,6 +6319,20 @@ static void init_interactions(void) {
 
     { // "intro"
         // this plays when the game starts
+
+        intro->setup = []() {
+            if(g.world.lake_quest_state == 2 ||
+               // dies after 2 weeks
+               g.map->player->nextMove > 1000 * 24 * 14) {
+                g.world.lake_quest_state = 2;
+                return 4;
+            }
+            else if(g.world.lake_quest_state == 0) return 0;
+            else if(g.world.lake_quest_state == 1) return 3; // accepted
+            else
+                return -1;
+        };
+
         { // page 0
             Item *opt1 = make_text_item("Explore the field", al_map_rgb(200, 100, 100));
             Item *opt2 = make_text_item("Leave", al_map_rgb(100, 100, 200));
@@ -6221,12 +6349,10 @@ static void init_interactions(void) {
             page->tell("");
             page->tell("You brush off the dirt from your clothes and look around.");
 
-            page->pre = []()
+            page->pre = [](InteractPage *p)
                 {
                     drop_item_at_player("pill bottle");
                 };
-            // page->frame_draw = frame0_draw_test;
-            // page->frame_update = frame0_update_test;
             intro->pages.push_back(page);
             intro->current_page = page;
         }
@@ -6245,23 +6371,21 @@ static void init_interactions(void) {
             intro->pages.push_back(page);
         }
         { // page 2
-            Item *opt1 = make_text_item("Leave");
+            Item *opt1 = make_text_item("I have questions", al_map_rgb(100, 100, 200));
+            Item *opt2 = make_text_item("Leave");
             InteractPage *page = new InteractPage;
             page->wrap_and_tell("\"Help?\" says the man, \"Are you insane? There's no help for me now\" He stops looking at you and turns his head toward the sky \"Don't you get it? I'm infected. I'll be dead soon, like everyone who gets the virus.\"");
             page->tell("");
             page->tell("He rolls his head again and looks at you. \"You too, probably.\"");
-            page->tell("");
-            page->wrap_and_tell("\"But since you're here you can take my gear. It should be clean. The virus doesn't live long without the host.\"");
-            page->tell("");
-            page->tell("\"Now leave me\" He looks toward the sky again.");
 
             page->right = g.bitmaps[92];
-            page->pre = []()
+            page->pre = [](InteractPage *p)
                 {
                     drop_item_at_player("backpack");
                     drop_item_at_player("blue jeans");
                     drop_item_at_player("makeshift wood bow");
                     drop_item_at_player("arrow");
+                    drop_item_at_player("water bottle");
                     drop_item_at_player("clean rag");
                     drop_item_at_player("clean rag");
                     drop_item_at_player("clean rag");
@@ -6272,10 +6396,65 @@ static void init_interactions(void) {
                       TODO: infect with some disease?
                      */
                 };
+            page->choices.push_back({ opt1, 3 });
+            page->choices.push_back({ opt2, -1 });
+            intro->pages.push_back(page);
+        }
+        { // page 3
+            InteractPage *page = new InteractPage;
+            page->wrap_and_tell("\"I am not in the mood to entertain you, stranger.\"");
+            page->tell("");
+            page->wrap_and_tell("\"There are rumors of a special lake to the south of here. It is said to heal all wounds and diseases. Bring me a bottle of water from it, and I'll answer your questions.\"");
+            page->tell("");
+            page->wrap_and_tell("\"I only have enough supplies to last a couple of days, so hurry!\"");
+
+            page->right = g.bitmaps[92];
+            intro->pages.push_back(page);
+
+            page->pre = [](InteractPage *p) {
+                // check if player has water
+                if(player_has_item_containing("water") == true) {
+                    Item *opt1 = make_text_item("Give water", al_map_rgb(100, 150, 200));
+                    p->choices.push_back({ opt1, 5 });
+                }
+                if(g.world.lake_quest_state == 0) {
+                    Item *opt1 = make_text_item("Accept", al_map_rgb(100, 150, 100));
+                    p->choices.push_back({ opt1, -1 });
+                }
+                Item *opt2 = make_text_item("Leave");
+                p->choices.push_back({ opt2, -1 });
+                // check if player has bottle with healing water
+            };
+            page->post = [](InteractPage *p, const char *choice) {
+                if(strcmp(choice, "Accept") == 0)
+                    g.world.lake_quest_state = 1;
+
+                delete_choices(p);
+            };
+        }
+        { // page 4
+            Item *opt1 = make_text_item("Leave");
+            InteractPage *page = new InteractPage;
+            page->wrap_and_tell("A man lies here, dead.");
+
+            page->right = g.bitmaps[92];
             page->choices.push_back({ opt1, -1 });
             intro->pages.push_back(page);
         }
-        intro->data = NULL;
+
+        { // page 5
+            Item *opt1 = make_text_item("Leave");
+            InteractPage *page = new InteractPage;
+            page->wrap_and_tell("\"By Jove, you have it!\"");
+
+            page->pre = [](InteractPage *p) {
+                g.world.lake_quest_state = 3;
+            };
+
+            page->right = g.bitmaps[92];
+            page->choices.push_back({ opt1, -1 });
+            intro->pages.push_back(page);
+        }
     }
 
     Interact *fall_down = new Interact;
@@ -6292,9 +6471,9 @@ static void init_interactions(void) {
             page->tell("");
             page->tell("It hurts, but at least nobody saw you.");
 
-            page->pre = []()
+            page->pre = [](InteractPage *p)
                 {
-                    uniform_int_distribution<> hurt_dist(0.05, 0.1);
+                    uniform_int_distribution<> hurt_dist(0.1, 0.2);
                     g.map->player->hurt(hurt_dist(*g.rng));
                 };
             fall_down->pages.push_back(page);
@@ -6323,6 +6502,15 @@ static void init_interactions(void) {
 
     { // "strange_building"
 
+        strange_building->setup = []()
+            // only run this once
+            {
+                if(g.world.visited_strange_building == true)
+                    return -1;
+                else
+                    return 0;
+            };
+
         { // page 0
             Item *opt1 = make_text_item("Enter building", al_map_rgb(200, 100, 100));
             Item *opt2 = make_text_item("Leave", al_map_rgb(100, 100, 100));
@@ -6334,10 +6522,6 @@ static void init_interactions(void) {
             page->wrap_and_tell("Most buildings in the vicinity are in gross disrepair, but one stands out as newer than the others.");
             page->tell("");
             page->tell("Perhaps there are people living in it?");
-            page->pre = []() {
-                cout << "hello";
-                // mark as seen
-            };
 
             strange_building->pages.push_back(page);
             strange_building->current_page = page;
@@ -6353,15 +6537,41 @@ static void init_interactions(void) {
             page->tell("");
             page->tell("Disappointing, but not unexpected.");
 
+            page->pre = [](InteractPage *p)
+                {
+                    // mark as seen
+                    g.world.visited_strange_building = true;
+                };
+
             strange_building->pages.push_back(page);
             strange_building->current_page = page;
         }
     }
+    Interact *player_wins = new Interact;
+
+    { // "player_wins"
+
+        { // page 0
+            Item *opt1 = make_text_item("End it", al_map_rgb(200, 100, 100));
+            InteractPage *page = new InteractPage;
+            page->right = NULL;
+            page->choices.push_back({ opt1, -2 });
+
+            page->tell("Congratulations!");
+            page->tell("");
+            page->wrap_and_tell("You've defeated an impressive amount of foes. The world, such as it is, quakes at your feet. Clay would be proud.");
+
+            player_wins->pages.push_back(page);
+            player_wins->current_page = page;
+        }
+    }
+
 
     g.stories.emplace("intro", intro);
     g.stories.emplace("fall_down", fall_down);
     g.stories.emplace("player_dead", player_dead);
     g.stories.emplace("strange_building", strange_building);
+    g.stories.emplace("player_wins", player_wins);
 }
 
 struct InventoryGridSystem;
@@ -7478,7 +7688,7 @@ static void load_game_wrapper(void) {
             }
         }
     } else {
-        notify("Error: Couldn't open file chooser!");
+        // notify("Error: Couldn't open file chooser!");
     }
 }
 
@@ -7497,7 +7707,10 @@ static void save_game_wrapper(void) {
             }
         }
     } else {
-        notify("Error: Couldn't open file chooser!");
+        /*
+          This triggers on windows if the user cancels the dialog
+         */
+        // notify("Error: Couldn't open file chooser!");
     }
 }
 
@@ -8311,7 +8524,8 @@ MiniMapUI::~MiniMapUI(void) {
 
 static void init_map_stories(void) {
     g.map_stories.clear();
-    g.map_stories.emplace(g.map->player->n + 3, "strange_building");
+    g.map_stories.emplace(g.map->player->n + 3, strdup("strange_building"));
+    g.map_stories.emplace(g.map->player->n, strdup("intro"));
 }
 
 static void init_player(void) {
@@ -8426,6 +8640,60 @@ const char *with_default(const char *str, const char *def) {
     else return str;
 }
 
+void Config::load(const char *filename) {
+    ALLEGRO_CONFIG *cfg = al_load_config_file(filename);
+
+    if(cfg == NULL) {
+        info("Couldn't load game.conf");
+        cfg = al_create_config();
+    } else {
+        info("Loaded game.conf");
+    }
+
+    const char *s;
+
+    s = al_get_config_value(cfg, 0, "frame-rate");
+    frame_rate = atoi(with_default(s, "60"));
+
+    s = al_get_config_value(cfg, 0, "v-sync");
+    vsync = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "fullscreen");
+    fullscreen = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "resolution-scaling");
+    resolutionScaling = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "debug-visibility");
+    debugVisibility = atoi(with_default(s, "0"));
+
+    s = al_get_config_value(cfg, 0, "display-x");
+    displayX = atoi(with_default(s, "1280"));
+
+    s = al_get_config_value(cfg, 0, "display-y");
+    displayY = atoi(with_default(s, "720"));
+
+    s = al_get_config_value(cfg, 0, "font-filename");
+    font_filename = strdup(with_default(s, "media/fonts/DejaVuSans-Bold.ttf"));
+
+    s = al_get_config_value(cfg, 0, "font-height");
+    font_height = atoi(with_default(s, "14"));
+
+    s = al_get_config_value(cfg, 0, "grid-sorting");
+    sorting = atoi(with_default(s, "0"));
+
+    s = al_get_config_value(cfg, 0, "aa-samples");
+    aa_samples = atoi(with_default(s, "4"));
+
+    s = al_get_config_value(cfg, 0, "start-nag");
+    start_nag = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "ui-fading");
+    ui_fading = atoi(with_default(s, "1"));
+
+    al_destroy_config(cfg);
+}
+
 static void allegro_init(void) {
     int ret = 0;
 
@@ -8435,59 +8703,7 @@ static void allegro_init(void) {
     else
         info("Initialized core allegro library.");
 
-    {
-        ALLEGRO_CONFIG *cfg = al_load_config_file("game.conf");
-
-        if(cfg == NULL) {
-            info("Couldn't load game.conf");
-            cfg = al_create_config();
-        } else {
-            info("Loaded game.conf");
-        }
-
-        const char *s;
-
-        s = al_get_config_value(cfg, 0, "frame-rate");
-        g.config.frame_rate = atoi(with_default(s, "60"));
-
-        s = al_get_config_value(cfg, 0, "v-sync");
-        g.config.vsync = atoi(with_default(s, "1"));
-
-        s = al_get_config_value(cfg, 0, "fullscreen");
-        g.config.fullscreen = atoi(with_default(s, "1"));
-
-        s =al_get_config_value(cfg, 0, "resolution-scaling");
-        g.config.resolutionScaling = atoi(with_default(s, "1"));
-
-        s = al_get_config_value(cfg, 0, "debug-visibility");
-        g.config.debugVisibility = atoi(with_default(s, "0"));
-
-        s = al_get_config_value(cfg, 0, "display-x");
-        g.config.displayX = atoi(with_default(s, "1280"));
-
-        s = al_get_config_value(cfg, 0, "display-y");
-        g.config.displayY = atoi(with_default(s, "720"));
-
-        s = al_get_config_value(cfg, 0, "font-filename");
-        g.config.font_filename = strdup(with_default(s, "media/fonts/DejaVuSans-Bold.ttf"));
-
-        s = al_get_config_value(cfg, 0, "font-height");
-        g.config.font_height = atoi(with_default(s, "14"));
-
-        s = al_get_config_value(cfg, 0, "grid-sorting");
-        g.config.sorting = atoi(with_default(s, "0"));
-
-        s = al_get_config_value(cfg, 0, "aa-samples");
-        g.config.aa_samples = atoi(with_default(s, "4"));
-
-        s = al_get_config_value(cfg, 0, "start-nag");
-        g.config.start_nag = atoi(with_default(s, "1"));
-
-        s = al_get_config_value(cfg, 0, "ui-fading");
-        g.config.ui_fading = atoi(with_default(s, "1"));
-
-        al_destroy_config(cfg);
-    }
+    g.config.load("game.conf");
 
     ret = al_init_primitives_addon();
     if(ret == false)
@@ -8693,9 +8909,11 @@ static void unload_game(void) {
         delete g.map;
         g.map = NULL;
     }
-    delete g.log;
+    g.log->lines.clear();
     delete g.minimap;
     g.minimap = NULL;
+    for(auto&& s : g.map_stories) free(s.second);
+    g.map_stories.clear();
 }
 
 static void init_UIs(void) {
@@ -8722,10 +8940,29 @@ static void new_game(void) {
     init_tilemap();
     init_characters();
     init_minimap();
-    init_messagelog();
     init_indicators();
+    init_world();
 
     init_UIs();
+}
+
+void World::save(ostream &os) {
+    os << player_faction_kills.size() << ' ';
+    for(auto&& k : player_faction_kills) os << k << ' ';
+    os << '\n';
+    os << visited_strange_building;
+    os << '\n';
+    os << lake_quest_state;
+    os << '\n';
+}
+
+void World::load(istream &is) {
+    int pfk_size;
+    is >> pfk_size;
+    player_faction_kills.resize(pfk_size);
+    for(auto&& k : player_faction_kills) is >> k;
+    is >> visited_strange_building;
+    is >> lake_quest_state;
 }
 
 void Disease::save(ostream &os) {
@@ -9054,6 +9291,30 @@ void TileMap::load(istream &is) {
     }
 }
 
+void save_map_stories(ostream &os) {
+    os << g.map_stories.size();
+    os << '\n';
+    for(auto&& s : g.map_stories) {
+        os << s.first << ' ' << strlen(s.second) << ' ' << s.second << '\n';
+    }
+}
+
+void load_map_stories(istream &is) {
+    int ms_size;
+    is >> ms_size;
+    for(int i = 0; i < ms_size; i++) {
+        int n_pos;
+        int name_len;
+        is >> n_pos;
+        is >> name_len;
+        char *name = (char *)malloc(name_len + 1);
+        is.ignore(1);
+        is.read(&name[0], name_len);
+        name[name_len] = '\0';
+        g.map_stories.emplace(n_pos, name);
+    }
+}
+
 static bool save_game(const char *filename) {
     PerfTimer t("Save game");
 
@@ -9069,8 +9330,10 @@ static bool save_game(const char *filename) {
 
     try {
         out << "project_x " << COMPILED_VERSION << '\n';
-        out << g.log->visible << ' ' << '\n';
         g.map->save(out);
+        g.log->save(out);
+        g.world.save(out);
+        save_map_stories(out);
     } catch (exception &e) {
         out.close();
         return false;
@@ -9091,7 +9354,6 @@ static bool load_game(const char *filename) {
     }
 
     unload_game();
-    bool log_visible;
 
     try {
         char str[10] = { '\0' };
@@ -9112,8 +9374,10 @@ static bool load_game(const char *filename) {
         }
 
         init_tileinfo();
-        in >> log_visible;
         g.map->load(in);
+        g.log->load(in);
+        g.world.load(in);
+        load_map_stories(in);
     } catch (exception &e) {
         in.close();
         return false;
@@ -9122,8 +9386,6 @@ static bool load_game(const char *filename) {
     in.close();
 
     init_minimap();
-    init_messagelog();
-    g.log->visible = log_visible;
     init_indicators();
 
     init_UIs();
@@ -9190,6 +9452,7 @@ int main(int argc, char **argv) {
         init_timedisplay();
         init_misc();
         init_interactions();
+        init_messagelog();
 
         g.ui_MainMenu  = new MainMenuUI;
         g.ui_FadeTransition = new FadeTransitionUI;
