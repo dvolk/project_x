@@ -6669,6 +6669,7 @@ static void init_interactions(void) {
         { // page 0
             InteractPage *page = new InteractPage;
             healing_lake->pages.push_back(page);
+            page->right = g.bitmaps[99];
 
             page->tell("You come upon an extraordinary lake.");
             page->tell("");
@@ -8299,6 +8300,7 @@ static void load_bitmaps(void) {
     /* 96 */ filenames.push_back("media/items/moldy_bread.png");
     /* 97 */ filenames.push_back("media/items/water.png");
     /* 98 */ filenames.push_back("media/indicators/tile_has_storage.png");
+    /* 99 */ filenames.push_back("media/backgrounds/story-field2.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -8654,7 +8656,7 @@ static void init_map_stories(void) {
     g.map_stories.clear();
     g.map_stories.emplace(pn + 3, strdup("strange_building"));
     g.map_stories.emplace(pn, strdup("intro"));
-    g.map_stories.emplace(pn + 20, strdup("healing_lake"));
+    g.map_stories.emplace(pn + 5, strdup("healing_lake"));
 }
 
 static void init_player(void) {
