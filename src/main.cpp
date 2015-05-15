@@ -75,6 +75,7 @@ struct Config {
     int8_t aa_samples;
     bool start_nag;
     bool ui_fading;
+    bool alt_grid_movement;
 
     void load(const char *filename);
 };
@@ -1064,9 +1065,9 @@ Item *Grid::PlaceItem(Item *to_place) {
         }
         AddItem(to_place);
         to_place->setHpDims();
-        printf("Adding item %s at %f,%f, size: %f x %f\n",
-               to_place->getName(), to_place->pos.x1, to_place->pos.y1,
-               to_place->pos.x2, to_place->pos.y2);
+        // printf("Adding item %s at %f,%f, size: %f x %f\n",
+        //        to_place->getName(), to_place->pos.x1, to_place->pos.y1,
+        //        to_place->pos.x2, to_place->pos.y2);
         return NULL;
     }
     else {
@@ -1087,6 +1088,8 @@ bool Grid::item_compatible(Item *i) {
 
     // you can place anything in a grid
     if(info == NULL)
+        return true;
+    if(info == g.ground)
         return true;
 
     ItemSlot slot = i->getItemSlot();
@@ -2812,6 +2815,7 @@ struct GridSystem : public Widget {
     // grids for which we can't manually take or place items (the crafting results)
     vector<Grid *> interaction_forbidden;
 
+    bool just_picked_up_item;
     Item *held;
     bool auto_move_to_ground;
     Grid *auto_target;
@@ -2846,7 +2850,8 @@ struct GridSystem : public Widget {
     void hoverOver(void);
 
     void gsMouseDownEvent(void);
-    void gsMouseUpEvent(void);
+    bool placeItemAtMouse(void);
+    void returnHeldToSender(void);
 
     void draw(void);
     void drawItemTooltip(void);
@@ -2868,6 +2873,7 @@ GridSystem::GridSystem(void) {
     pos.y2 = 720;
 
     auto_move_to_ground = false;
+    just_picked_up_item = false;
     auto_target = NULL;
     held = NULL;
     change = NULL;
@@ -2910,7 +2916,21 @@ void GridSystem::mouseDown(void) {
 }
 
 void GridSystem::mouseUp(void) {
-    gsMouseUpEvent();
+    if(held != NULL) {
+        if(g.config.alt_grid_movement == true) {
+            if(just_picked_up_item == true) {
+                just_picked_up_item = false;
+            } else {
+                if(held != NULL) {
+                    placeItemAtMouse();
+                    if(held == NULL)
+                        just_picked_up_item = false;
+                }
+            }
+        } else {
+            placeItemAtMouse();
+        }
+    }
     if(change != NULL) change();
 }
 
@@ -4040,14 +4060,26 @@ void GridSystem::draw(void) {
 
 void GridSystem::gsMouseDownEvent() {
     if(g.mouse_button == 1) {
-        GrabItem();
+        if(held != NULL) {
+            if(g.config.alt_grid_movement == true) {
+                just_picked_up_item = false;
+            }
+        }
+        if(held == NULL)
+            GrabItem();
     }
     else if(g.mouse_button == 2) {
-        if(auto_move_to_ground == true) {
-            MouseAutoMoveItemToGround();
+        if(held != NULL) {
+            if(g.config.alt_grid_movement == true) {
+                returnHeldToSender();
+            }
         } else {
-            if(auto_target != NULL) {
-                MouseAutoMoveItemToTarget();
+            if(auto_move_to_ground == true) {
+                MouseAutoMoveItemToGround();
+            } else {
+                if(auto_target != NULL) {
+                    MouseAutoMoveItemToTarget();
+                }
             }
         }
     } else if(g.mouse_button == 4) {
@@ -4101,6 +4133,7 @@ void GridSystem::GrabItem() {
 
  got_it:
     held = i;
+    just_picked_up_item = true;
     was_rotated = i->rotated;
     i->setHpDims();
     cout << was_rotated << endl;
@@ -4139,7 +4172,8 @@ void GridSystem::addStorageGrid(void) {
                         held->parent->info) ||
         (held->isClothing() == false &&
          (held->parent->info == g.right_hand_hold ||
-          held->parent->info == g.left_hand_hold)))) {
+          held->parent->info == g.left_hand_hold ||
+          held->parent->info == g.vehicle)))) {
         // ^^ we only want to add it if it's on the correct hardpoint
         // for this item
         // or if it's on the left or right hand, but not if it's clothing
@@ -4152,10 +4186,10 @@ void GridSystem::addStorageGrid(void) {
 /*
   TODO: this function is too big
 */
-void GridSystem::gsMouseUpEvent() {
+bool GridSystem::placeItemAtMouse() {
     // are we holding an item?
     if(held == NULL)
-        return;
+        return false;
 
     // proposed position to drop it into relative to the
     // grid currently being examined
@@ -4220,14 +4254,14 @@ void GridSystem::gsMouseUpEvent() {
                             Item *ret = item->storage->PlaceItem(held);
                             if(ret == NULL) {
                                 held = NULL;
-                                return;
+                                return true;
                             } else {
                                 // We couldn't place it in storage.
                                 // dump it on the ground instead
                                 vector<Grid *> *ground = ground_at_player();
                                 PlaceItemOnMultiGrid(ground, ret);
                                 held = NULL;
-                                return;
+                                return true;
                             }
                         }
                         // there's an item there already:
@@ -4285,7 +4319,7 @@ void GridSystem::gsMouseUpEvent() {
                     if(held->cur_stack == 1) {
                         delete held;
                         held = NULL;
-                        return;
+                        return true;
                     } else {
                         held->cur_stack--;
                         goto blocked;
@@ -4311,29 +4345,23 @@ void GridSystem::gsMouseUpEvent() {
             // g.AddMessage(b);
             // the item is placed. we're done
             held = NULL;
-            return;
+            return true;
         }
         i++;
     }
 
  blocked:
-    // couldn't place it anywhere. send it back to where
-    // it was before we picked it up
-    if(was_rotated != held->rotated) {
-        // rotate back to original orientation
-        held->rotate();
+    if(g.config.alt_grid_movement == true) {
+        return false;
     }
-    held->parent->items.push_back(held);
-    held->setHpDims();
+    else {
+        returnHeldToSender();
 
-    addStorageGrid();
-
-    held = NULL;
-
-    char b[40];
-    snprintf(b, sizeof(b), "Blocked on grid %d", i);
-    cout << b;
-    return;
+        char b[40];
+        snprintf(b, sizeof(b), "Blocked on grid %d", i);
+        cout << b;
+        return false;
+    }
 
  stack_it:
     held->parent = merge_grid;
@@ -4348,7 +4376,7 @@ void GridSystem::gsMouseUpEvent() {
         // if so, delete the item
         delete held;
         held = NULL;
-        return;
+        return true;
     } else {
         // otherwise we still have some number of them to place
         int16_t moved = g.item_info[held->info_index].maxStack - merge_with->cur_stack;
@@ -4364,7 +4392,23 @@ void GridSystem::gsMouseUpEvent() {
         }
         held = NULL;
     }
-    return;
+    return true;
+}
+
+void GridSystem::returnHeldToSender(void) {
+    assert(held != NULL);
+    // couldn't place it anywhere. send it back to where
+    // it was before we picked it up
+    if(was_rotated != held->rotated) {
+        // rotate back to original orientation
+        held->rotate();
+    }
+    held->parent->items.push_back(held);
+    held->setHpDims();
+
+    addStorageGrid();
+
+    held = NULL;
 }
 
 void Grid::draw(void) {
@@ -6325,13 +6369,19 @@ static void init_world() {
 */
 static Item *player_has_item_containing(const char *searched_name) {
     for(auto&& grid : g.map->player->inventory_hardpoints)
-        for(auto&& i : grid->items)
+        for(auto&& i : grid->items) {
+            if(strcmp(searched_name, i->getName()) == 0)
+                return i;
             if(i->storage != NULL)
-                for(auto&& is : i->storage->items)
+                for(auto&& is : i->storage->items) {
+                    if(strcmp(searched_name, is->getName()) == 0)
+                        return is;
                     if(is->storage != NULL)
                         for(auto&& iss : is->storage->items)
                             if(strcmp(searched_name, iss->getName()) == 0)
                                 return iss;
+                }
+        }
     return NULL;
 }
 
@@ -6357,6 +6407,7 @@ void init_text_items(void) {
     text_item("Poor me", al_map_rgb(0, 0, 0));
     text_item("Enter building", al_map_rgb(200, 100, 100));
     text_item("End it", al_map_rgb(200, 100, 100));
+    text_item("Approach the pool", al_map_rgb(100, 150, 200));
 }
 
 /*
@@ -6401,6 +6452,7 @@ static void init_interactions(void) {
             page->pre = [](InteractPage *p)
                 {
                     drop_item_at_player("pill bottle");
+                    drop_item_at_player("shopping trolley");
                 };
         }
 
@@ -6454,14 +6506,14 @@ static void init_interactions(void) {
 
             page->wrap_and_tell("\"I am not in the mood to entertain you, stranger.\"");
             page->tell("");
-            page->wrap_and_tell("\"There are rumors of a special lake to the south of here. It is said to heal all wounds and diseases. Bring me a bottle of water from it, and I'll answer your questions.\"");
+            page->wrap_and_tell("\"There are rumors of a special lake to the east of here. It is said to heal all wounds and diseases. Bring me a bottle of water from it, and I'll answer your questions.\"");
             page->tell("");
             page->wrap_and_tell("\"I only have enough supplies to last a couple of days, so hurry!\"");
 
             page->pre = [](InteractPage *p)
                 {
                     p->choices.clear();
-                    Item *i = player_has_item_containing("water");
+                    Item *i = player_has_item_containing("clear water");
                     if(i != NULL) {
                         g.ui_Interact->current_interact->data = i;
                         p->addChoice("Give water", 5);
@@ -6566,7 +6618,7 @@ static void init_interactions(void) {
             page->tell("");
             page->tell("Perhaps there are people living in it?");
 
-            page->addChoice("Leave", -11);
+            page->addChoice("Leave", -1);
             page->addChoice("Enter building", 1);
         }
 
@@ -6587,6 +6639,7 @@ static void init_interactions(void) {
                 };
         }
     }
+
     Interact *player_wins = new Interact;
 
     { // "player_wins"
@@ -6603,11 +6656,40 @@ static void init_interactions(void) {
         }
     }
 
+    Interact *healing_lake = new Interact;
+
+    { // "healing_lake"
+
+        { // page 0
+            InteractPage *page = new InteractPage;
+            healing_lake->pages.push_back(page);
+
+            page->tell("You come upon an extraordinary lake.");
+            page->tell("");
+            page->wrap_and_tell("The water is perfectly clear, and nature, so often thought of as frightful and deadly, seems benign here.");
+            page->tell("");
+            page->wrap_and_tell("There's a small pool nearby. It seems especially strange.");
+
+            page->addChoice("Approach the pool", -1);
+            page->addChoice("Leave", -1);
+
+            page->post = [](InteractPage *p, const char *choice)
+                {
+                    if(strcmp(choice, "Approach the pool") == 0) {
+                        drop_item_at_player("clear water");
+                        drop_item_at_player("clear water");
+                        drop_item_at_player("clear water");
+                    }
+                };
+        }
+    }
+
     g.stories.emplace("intro", intro);
     g.stories.emplace("fall_down", fall_down);
     g.stories.emplace("player_dead", player_dead);
     g.stories.emplace("strange_building", strange_building);
     g.stories.emplace("player_wins", player_wins);
+    g.stories.emplace("healing_lake", healing_lake);
 }
 
 struct InventoryGridSystem;
@@ -8561,9 +8643,12 @@ MiniMapUI::~MiniMapUI(void) {
 }
 
 static void init_map_stories(void) {
+    int pn = g.map->player->n;
+
     g.map_stories.clear();
-    g.map_stories.emplace(g.map->player->n + 3, strdup("strange_building"));
-    g.map_stories.emplace(g.map->player->n, strdup("intro"));
+    g.map_stories.emplace(pn + 3, strdup("strange_building"));
+    g.map_stories.emplace(pn, strdup("intro"));
+    g.map_stories.emplace(pn + 20, strdup("healing_lake"));
 }
 
 static void init_player(void) {
@@ -8602,6 +8687,8 @@ static void init_player(void) {
     g.map->addLabel(c->n, strdup("Dead Field"));
     g.map->tiles[c->n + 3].info_index = TILE_CITY;
     g.map->addLabel(c->n + 3, strdup("Strange Building"));
+    g.map->tiles[c->n + 20].info_index = TILE_SWAMP;
+    g.map->addLabel(c->n + 20, strdup("Strange Lake"));
 }
 
 static char *random_human_NPC_name(void) {
@@ -8728,6 +8815,9 @@ void Config::load(const char *filename) {
 
     s = al_get_config_value(cfg, 0, "ui-fading");
     ui_fading = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "alt-grid-movement");
+    alt_grid_movement = atoi(with_default(s, "0"));
 
     al_destroy_config(cfg);
 }
