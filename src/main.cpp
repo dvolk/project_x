@@ -3852,39 +3852,76 @@ bool TileMap::playerSees(int n) {
 void TileMap::drawTile(int i, int x, int y) {
     int t = start + (size_x * y) + x;
 
-    if(g.config.debugVisibility || tiles[t].visible == true) {
-        // can the player currently see the tile?
-        bool currently_seeing = playerSees(t);
+    // only draw the tile if it's revealed
+    if(tiles[t].visible == false ||
+       g.config.debugVisibility == false)
+        return;
 
-        int off_x = (i % cols) * hex_step_x - res_px;
-        int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
-        off_y = off_y + (hex_step_y * floor(i / cols)) - res_py;
+    // can the player currently see the tile?
+    bool currently_seeing = playerSees(t);
 
-        if(currently_seeing == true) {
-            // draw the tile at full brightness
-            al_draw_bitmap(tile_info[tiles[t].info_index].sprite,
+    int off_x = (i % cols) * hex_step_x - res_px;
+    int off_y = (i + view_x) % 2  == 0 ? 0 : 20;
+    off_y = off_y + (hex_step_y * floor(i / cols)) - res_py;
+
+    if(currently_seeing == true) {
+        // draw the tile at full brightness
+        al_draw_bitmap(tile_info[tiles[t].info_index].sprite,
+                       pos.x1 + off_x,
+                       pos.y1 + off_y,
+                       0);
+
+        // draw a small box if there's a ground grid at the tile
+        // (currently even if it's empty)
+        if(tiles[t].ground_items != NULL) {
+            al_draw_bitmap(g.bitmaps[98],
                            pos.x1 + off_x,
                            pos.y1 + off_y,
                            0);
-            if(tiles[t].ground_items != NULL) {
-                al_draw_bitmap(g.bitmaps[98],
-                               pos.x1 + off_x,
-                               pos.y1 + off_y,
-                               0);
-            }
         }
-        else {
-            /*
-              TODO: this causes allocations? so it might be better
-              generate and store tinted bitmaps
-            */
-            // otherwise draw it 50% tinted
+        if(t == mouse_n) {
+            // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                                  g.color_tile_tint,
+                                  g.color_active_tile_tint,
                                   pos.x1 + off_x,
                                   pos.y1 + off_y,
                                   0);
         }
+
+        // draw characters
+        int num_there = charsByPos.count(t);
+        if(num_there > 0) {
+            auto p = charsByPos.equal_range(t);
+            int offset_x = 0;
+            int offset_y = 0;
+            if(num_there > 1) {
+                // offset them symmetrically if there's more than
+                // 1 on a tile
+                offset_x = 5 * num_there;
+                offset_y = -2.5 * num_there;
+            }
+            for(auto& it = p.first; it != p.second; it++) {
+                // it->second->drawOffset(off_x, off_y);
+                al_draw_bitmap(it->second->sprite,
+                               pos.x1 + off_x + offset_x + 25.0,
+                               pos.y1 + off_y + offset_y,
+                               0);
+                offset_x -= 20;
+                offset_y += 10;
+            }
+        }
+    }
+    else {
+        /*
+          TODO: this causes allocations? so it might be better
+          generate and store tinted bitmaps
+        */
+        // otherwise draw it 50% tinted
+        al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
+                              g.color_tile_tint,
+                              pos.x1 + off_x,
+                              pos.y1 + off_y,
+                              0);
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
@@ -3910,32 +3947,10 @@ void TileMap::draw(void) {
         }
     }
 
-    // characters are drawn as part of the map
-    int j = 0;
     if(g.config.debugVisibility == true) {
         player->draw();
         for(auto& character : characters)
             character->draw();
-    } else {
-        for(auto& see_n : player->currently_seeing) {
-            int num_there = charsByPos.count(see_n);
-            if(num_there > 0) {
-                auto pos = charsByPos.equal_range(see_n);
-                int off_x = 0;
-                int off_y = 0;
-                if(num_there > 1) {
-                    off_x = 5 * num_there;
-                    off_y = -2.5 * num_there;
-                }
-                for(auto& it = pos.first; it != pos.second; it++) {
-                    it->second->drawOffset(off_x, off_y);
-                    j++;
-                    off_x -= 20;
-                    off_y += 10;
-                }
-            }
-        }
-        // cout << "drew " << j << endl;
     }
 
     if(g.config.debugVisibility == true) {
