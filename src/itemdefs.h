@@ -885,5 +885,27 @@ void init_iteminfo(void) {
     tmp.improves_satiety = 0.05;
     tmp.slot = WATER_BOTTLE;
     g.item_info.push_back(tmp);
+
+    // 32
+    tmp.name = "clear water";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 5;
+    tmp.weight = 50;
+    tmp.sprite = g.bitmaps[97];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = true;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = true;
+    tmp.consumed_on_application = true;
+    tmp.consumed_on_use = true;
+    tmp.improves_hydration = 0.3;
+    tmp.improves_satiety = 0.05;
+    tmp.slot = WATER_BOTTLE;
+    g.item_info.push_back(tmp);
 }
 */
