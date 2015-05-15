@@ -2053,7 +2053,7 @@ void TileMap::addLabel(int n, const char *text) {
     tmp.x = n % g.map->size_x;
     tmp.y = n / g.map->size_y;
     tmp.text = text;
-    tmp.offset_x = (100 - (strlen(text) * 8)) / 2;
+    tmp.offset_x = (100 - ((int)strlen(text) * 8)) / 2;
     labels.push_back(tmp);
 }
 
@@ -3161,12 +3161,12 @@ MiniMap::MiniMap() {
     pos.y2 = off_y + size_y;
 
     // TODO should this always be a memory bitmap?
-    // buf = al_create_bitmap(size_x, size_y);
-    // if(buf == NULL) {
-    al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
     buf = al_create_bitmap(size_x, size_y);
-    al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
-    // }
+    if(buf == NULL) {
+        al_set_new_bitmap_flags(ALLEGRO_MEMORY_BITMAP);
+        buf = al_create_bitmap(size_x, size_y);
+        al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+    }
 }
 
 MiniMap::~MiniMap() {
@@ -6282,7 +6282,7 @@ static void runInteractStepCB(void) {
     // -1: exit
     // -2: exit to main menu (game over)
     // -3: choice pair not found
-    const char *choice_name;
+    const char *choice_name = NULL;
     int new_page = -3;
     for(auto&& c : p->choices) {
         if(c.first == choice) {
@@ -8656,7 +8656,7 @@ static void init_map_stories(void) {
     g.map_stories.clear();
     g.map_stories.emplace(pn + 3, strdup("strange_building"));
     g.map_stories.emplace(pn, strdup("intro"));
-    g.map_stories.emplace(pn + 5, strdup("healing_lake"));
+    g.map_stories.emplace(pn + 20, strdup("healing_lake"));
 }
 
 static void init_player(void) {
