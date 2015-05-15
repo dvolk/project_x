@@ -2921,11 +2921,9 @@ void GridSystem::mouseUp(void) {
             if(just_picked_up_item == true) {
                 just_picked_up_item = false;
             } else {
-                if(held != NULL) {
-                    placeItemAtMouse();
-                    if(held == NULL)
-                        just_picked_up_item = false;
-                }
+                placeItemAtMouse();
+                if(held == NULL)
+                    just_picked_up_item = false;
             }
         } else {
             placeItemAtMouse();
@@ -3265,9 +3263,10 @@ void TileMap::mouseDown(void) {
     // LMB - movement
     if(g.mouse_button == 1) {
         if(clicked_n == player_n) {
-            notify("Yes, that's you!");
-            g.AddMessage("Hee.");
+            if(g.map_stories.count(clicked_n) > 0) {
+                runInteract(g.map_stories.find(clicked_n)->second);
             return;
+            }
         }
 
         for(int dir = 1; dir <= 6; dir++) {
@@ -3524,14 +3523,6 @@ void Character::drawOffset(int offset_x, int offset_y) {
     al_draw_bitmap(sprite,
                    g.map->pos.x1 + off_x + 25 + offset_x,
                    g.map->pos.y1 + off_y + offset_y, 0);
-
-    if(y + 1 >= g.map->size_y)
-        return;
-
-    if(g.config.debugVisibility == true ||
-       g.map->tiles[g.map->size_x * (y + 1) + x].visible == true) {
-        g.map->drawTopHalfOfTileAt(x, y + 1);
-    }
 }
 
 static void toggleMsgLogVisibility(void) {
@@ -3853,7 +3844,7 @@ void TileMap::drawTile(int i, int x, int y) {
     int t = start + (size_x * y) + x;
 
     // only draw the tile if it's revealed
-    if(tiles[t].visible == false ||
+    if(tiles[t].visible == false &&
        g.config.debugVisibility == false)
         return;
 
