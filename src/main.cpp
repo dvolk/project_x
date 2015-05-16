@@ -1363,6 +1363,8 @@ struct Character {
     void save(ostream &os);
     void load(istream &is);
 
+    void ai_avoid(void);
+
     void update_visibility(void);
 
     void draw(void);
@@ -1497,18 +1499,6 @@ Character::~Character() {
 
     delete vehicle;
     // info("~Character()");
-}
-
-void Character::sleep(void) {
-    g.AddMessage("You go to sleep...");
-    activity = ACTIVITY_SLEEP;
-    spendTime(10000);
-}
-
-void Character::wait(void) {
-    g.AddMessage("You play with yourself for a while...");
-    activity = ACTIVITY_WAIT;
-    spendTime(1000);
 }
 
 Wound * Character::random_wound(void) {
@@ -2166,6 +2156,20 @@ void Character::setPos(int x, int y) {
     n = y * g.map->size_x + x;
 }
 
+void Character::sleep(void) {
+    if(this == g.map->player)
+        g.AddMessage("You go to sleep...");
+    activity = ACTIVITY_SLEEP;
+    spendTime(10000);
+}
+
+void Character::wait(void) {
+    if(this == g.map->player)
+        g.AddMessage("You play with yourself for a while...");
+    activity = ACTIVITY_WAIT;
+    spendTime(1000);
+}
+
 static char *random_human_NPC_name(void);
 
 Character *TileMap::addRandomCharacterNearPlayer(void) {
@@ -2303,14 +2307,43 @@ void TileMap::updateCharsByPos(void) {
     }
 }
 
+void Character::ai_avoid(void) {
+    array<int, 6> ocs = { -1, -1, -1,
+                          -1, -1, -1 };
+
+    for(int dir = 1; dir <= 6; dir++) {
+        int new_n = dir_transform(this->n, dir);
+        if(good_index(new_n) == true)
+            if(g.map->charsByPos.count(new_n) == 0)
+                ocs[dir - 1] = new_n;
+    }
+
+    shuffle(ocs.begin(), ocs.end(), *g.rng);
+
+    for(auto&& oc : ocs) {
+        if(oc != -1) {
+            move(oc);
+            return;
+        }
+    }
+
+    wait();
+}
+
 // do stuff on the map
 void Character::do_AI(void) {
     if(health < 0.01) {
         this->die();
         return;
     }
+
     update();
-    randomMove();
+
+    if(health < 0.5)
+        ai_avoid();
+    else
+        randomMove();
+
     post_update();
 }
 
