@@ -8657,6 +8657,42 @@ static void init_map_stories(void) {
     g.map_stories.emplace(pn + 20, strdup("healing_lake"));
 }
 
+vector<int> path_find(const int start, const int goal) {
+    priority_queue<int> frontier;
+    frontier.push(start);
+
+    unordered_map<int, int> came_from;
+    came_from.emplace(start, 0);
+
+    while(frontier.empty() == false) {
+        int current = frontier.top();
+        frontier.pop();
+        for(int dir = 1; dir <= 6; dir++) {
+            int next = dir_transform(current, dir);
+
+            if(good_index(next) == true &&
+               g.map->blocks_los(next) == false &&
+               came_from.find(next) == came_from.end())
+                {
+                    frontier.push(next);
+                    came_from.emplace(next, current);
+                }
+        }
+    }
+
+    int current = goal;
+
+    vector<int> path = { current };
+
+    while(current != start) {
+        current = came_from[current];
+        path.push_back(current);
+    }
+
+    return path;
+
+}
+
 static void init_player(void) {
     Character *c = new Character;
 
@@ -8695,6 +8731,12 @@ static void init_player(void) {
     g.map->addLabel(c->n + 3, strdup("Strange Building"));
     g.map->tiles[c->n + 20].info_index = TILE_SWAMP;
     g.map->addLabel(c->n + 20, strdup("Strange Lake"));
+
+    // create a dirt path from one corner to the other
+    for(auto&& p : path_find(0, g.map->max_t))
+        {
+        g.map->tiles[p].info_index = TILE_DIRT;
+        }
 }
 
 static char *random_human_NPC_name(void) {
