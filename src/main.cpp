@@ -6027,8 +6027,8 @@ struct InteractPage {
     ~InteractPage();
 
     // functions that run when coming into and leaving the page
-    void (*pre)(InteractPage *p);
-    void (*post)(InteractPage *p, const char *choice_name);
+    void (*pre)(void);
+    void (*post)(const char *choice_name);
 
     void (*frame_draw)(void);
     void (*frame_update)(void);
@@ -6062,13 +6062,12 @@ struct Interact : public Widget {
     vector<InteractPage *> pages;
 
     // additional state
-    /*
-      TODO: how to not leak this
-    */
     void *data;
+    // runs every time the interact is triggered. returns
+    // starting page index. return -1 to not run at all.
     int (*setup)(void);
 
-    Interact();
+    Interact(const char *name);
     ~Interact();
 
     void draw(void) override;
@@ -6098,6 +6097,13 @@ struct InteractUI : public UI {
     void setup(void);
     void draw(void) override;
 };
+
+Interact::Interact(const char *name) {
+    current_page = NULL;
+    setup = NULL;
+    g.stories.emplace(name, this);
+    g.ui_Interact->current_interact = this;
+}
 
 InteractUI::~InteractUI() {
     delete gridsystem;
@@ -6150,11 +6156,6 @@ void InteractUI::setup(void) {
     g.color_bg = g.color_grey;
 }
 
-Interact::Interact(void) {
-    current_page = NULL;
-    setup = NULL;
-}
-
 InteractPage::InteractPage(void) {
     pre = NULL;
     post = NULL;
@@ -6162,6 +6163,8 @@ InteractPage::InteractPage(void) {
     frame_draw = NULL;
     frame_update = NULL;
     right = NULL;
+    g.ui_Interact->current_interact->pages.push_back(this);
+    g.ui_Interact->current_interact->current_page = this;
 }
 
 void InteractPage::tell(const char *line) {
@@ -6262,12 +6265,15 @@ static void runInteract(const char *story_name) {
     int start_page = 0;
     if(x->setup != NULL) {
         start_page = x->setup();
-        if(start_page == -1)
+        if(start_page == -1) {
             return;
+        }
+    } else {
+        start_page = 0;
     }
 
-    g.ui_Interact->current_interact = x;
     g.ui = g.ui_Interact;
+    g.ui_Interact->current_interact = x;
 
     runInteractStep(x->pages.at(start_page));
 }
@@ -6275,11 +6281,12 @@ static void runInteract(const char *story_name) {
 static void runInteractStep(InteractPage *x) {
     x->switch_to();
 
+    g.ui_Interact->current_interact->current_page = x;
+
     if(x->pre != NULL) {
-        x->pre(x);
+        x->pre();
     }
 
-    g.ui_Interact->current_interact->current_page = x;
     g.ui_Interact->setup();
     // add page choices to the options pane
     for(auto&& choice : x->choices) {
@@ -6329,7 +6336,7 @@ static void runInteractStepCB(void) {
     g.ui_Interact->setup();
 
     if(p->post != NULL) {
-        p->post(p, choice_name);
+        p->post(choice_name);
     }
 
     if(new_page >= 0) {
@@ -6449,77 +6456,76 @@ void init_text_items(void) {
     text_item("Approach the pool", al_map_rgb(100, 150, 200));
 }
 
+static inline Interact *story(void) {
+    return g.ui_Interact->current_interact;
+}
+
+static inline InteractPage *page(void) {
+    return story()->current_page;
+}
+
 /*
  * Constructs CYOA like stories.
  */
 static void init_interactions(void) {
 
-    Interact *intro = new Interact;
+    { new Interact ("intro"); // this plays when the game starts
 
-    { // "intro"
-        // this plays when the game starts
+        story()->setup = []()
+            {
+                if(g.world.lake_quest_state == 2 ||
+                   // dies 2 weeks after game start
+                   g.map->player->nextMove > 1000 * 24 * 14) {
+                    g.world.lake_quest_state = 2;
+                    return 4;
+                }
+                else if(g.world.lake_quest_state == 0) return 0;
+                else if(g.world.lake_quest_state == 1) return 3; // accepted
+                else return -1;
+            };
 
-        intro->setup = []() {
-            if(g.world.lake_quest_state == 2 ||
-               // dies after 2 weeks
-               g.map->player->nextMove > 1000 * 24 * 14) {
-                g.world.lake_quest_state = 2;
-                return 4;
-            }
-            else if(g.world.lake_quest_state == 0) return 0;
-            else if(g.world.lake_quest_state == 1) return 3; // accepted
-            else
-                return -1;
-        };
+        { new InteractPage; // 0
+            page()->right = g.bitmaps[92];
 
-        { // page 0
-            InteractPage *page = new InteractPage;
-            intro->pages.push_back(page);
-            page->right = g.bitmaps[92];
+            page()->tell("You wake up.");
+            page()->tell("");
+            page()->tell("In front is a desolate field.");
+            page()->tell("");
+            page()->wrap_and_tell("Your mind feels like a broken dam as questions form but find no immediate answer. It seems that you have no memory of who you are or of recent events.");
+            page()->tell("");
+            page()->tell("You brush off the dirt from your clothes and look around.");
 
-            page->tell("You wake up.");
-            page->tell("");
-            page->tell("In front is a desolate field.");
-            page->tell("");
-            page->wrap_and_tell("Your mind feels like a broken dam as questions form but find no immediate answer. It seems that you have no memory of who you are or of recent events.");
-            page->tell("");
-            page->tell("You brush off the dirt from your clothes and look around.");
+            page()->addChoice("Explore the field", 1);
+            page()->addChoice("Leave", -1);
 
-            page->addChoice("Explore the field", 1);
-            page->addChoice("Leave", -1);
-
-            page->pre = [](InteractPage *p)
-                {
-                    drop_item_at_player("pill bottle");
-                    drop_item_at_player("shopping trolley");
+            page()->pre = []()
+                { drop_item_at_player("pill bottle");
+                  drop_item_at_player("shopping trolley");
                 };
         }
 
-        { // page 1
-            InteractPage *page = new InteractPage;
-            intro->pages.push_back(page);
-            page->right = g.bitmaps[92];
+        { new InteractPage; // 1
+            page()->right = g.bitmaps[92];
 
-            page->wrap_and_tell("You walk around the field and come upon a body. It's turned away from you. As you draw closer, the noise of your movement stirs it and it rolls to face you. The hoarse voice of a man obviously in pain yells at you:");
-            page->tell("");
-            page->tell("\"What are you doing? Get away!\"");
+            page()->wrap_and_tell("You walk around the field and come upon a body. It's turned away from you. As you draw closer, the noise of your movement stirs it and it rolls to face you. The hoarse voice of a man obviously in pain yells at you:");
+            page()->tell("");
+            page()->tell("\"What are you doing? Get away!\"");
 
-            page->addChoice("Leave", -1);
-            page->addChoice("Offer to help", 2);
+            page()->addChoice("Leave", -1);
+            page()->addChoice("Offer to help", 2);
         }
-        { // page 2
-            InteractPage *page = new InteractPage;
-            intro->pages.push_back(page);
-            page->right = g.bitmaps[92];
 
-            page->wrap_and_tell("\"Help?\" says the man, \"Are you insane? There's no help for me now\" He stops looking at you and turns his head toward the sky \"Don't you get it? I'm infected. I'll be dead soon, like everyone who gets the virus.\"");
-            page->tell("");
-            page->tell("He rolls his head again and looks at you. \"You too, probably.\"");
+        { new InteractPage; // 2
+            page()->right = g.bitmaps[92];
 
-            page->addChoice("I have questions", 3);
-            page->addChoice("Leave", -1);
+            page()->wrap_and_tell("\"Help?\" says the man, \"Are you insane? There's no help for me now\" He stops looking at you and turns his head toward the sky \"Don't you get it? I'm infected. I'll be dead soon, like everyone who gets the virus.\"");
+            page()->tell("");
+            page()->tell("He rolls his head again and looks at you. \"You too, probably.\"");
 
-            page->pre = [](InteractPage *p)
+            page()->addChoice("I have questions", 3);
+            page()->addChoice("Leave", -1);
+
+            page()->pre = []()
                 {
                     drop_item_at_player("backpack");
                     drop_item_at_player("blue jeans");
@@ -6532,63 +6538,56 @@ static void init_interactions(void) {
                     drop_item_at_player("clean rag");
                     drop_item_at_player("arrow");
                     drop_item_at_player("crowbar");
-                    /*
-                      TODO: infect with some disease?
-                     */
                 };
         }
 
-        { // page 3
-            InteractPage *page = new InteractPage;
-            page->right = g.bitmaps[92];
-            intro->pages.push_back(page);
+        { new InteractPage; // 3
+            page()->right = g.bitmaps[92];
 
-            page->wrap_and_tell("\"I am not in the mood to entertain you, stranger.\"");
-            page->tell("");
-            page->wrap_and_tell("\"There are rumors of a special lake to the east of here. It is said to heal all wounds and diseases. Bring me a bottle of water from it, and I'll answer your questions.\"");
-            page->tell("");
-            page->wrap_and_tell("\"I only have enough supplies to last a couple of days, so hurry!\"");
+            page()->wrap_and_tell("\"I am not in the mood to entertain you, stranger.\"");
+            page()->tell("");
+            page()->wrap_and_tell("\"There are rumors of a special lake to the east of here. It is said to heal all wounds and diseases. Bring me a bottle of water from it, and I'll answer your questions.\"");
+            page()->tell("");
+            page()->wrap_and_tell("\"I only have enough supplies to last a couple of days, so hurry!\"");
 
-            page->pre = [](InteractPage *p)
+            page()->pre = []()
                 {
-                    p->choices.clear();
+                    page()->choices.clear();
                     Item *i = player_has_item_containing("clear water");
                     if(i != NULL) {
                         g.ui_Interact->current_interact->data = i;
-                        p->addChoice("Give water", 5);
+                        page()->addChoice("Give water", 5);
                     }
                     if(g.world.lake_quest_state == 0) {
-                        p->addChoice("Accept", -1);
+                        page()->addChoice("Accept", -1);
                     }
-                    p->addChoice("Leave", -1);
+                    page()->addChoice("Leave", -1);
                 };
-            page->post = [](InteractPage *p, const char *choice)
+            page()->post = [](const char *choice)
                 {
                     if(strcmp(choice, "Accept") == 0)
                         g.world.lake_quest_state = 1;
                 };
         }
-        { // page 4
-            InteractPage *page = new InteractPage;
-            intro->pages.push_back(page);
-            page->right = g.bitmaps[92];
 
-            page->wrap_and_tell("A man lies here, dead.");
+        { new InteractPage; // 4
+            page()->right = g.bitmaps[92];
 
-            page->addChoice("Leave", -1);
+            page()->wrap_and_tell("A man lies here, dead.");
+
+            page()->addChoice("Leave", -1);
         }
 
-        { // page 5
-            InteractPage *page = new InteractPage;
-            intro->pages.push_back(page);
-            page->right = g.bitmaps[92];
+        { new InteractPage; // 5
+            page()->right = g.bitmaps[92];
 
-            page->tell("\"By Jove, you got it! Thank you!\"");
-            page->tell("");
-            page->tell("Om nom nom");
+            page()->tell("\"By Jove, you got it! Thank you!\"");
+            page()->tell("");
+            page()->tell("Om nom nom");
 
-            page->pre = [](InteractPage *p) {
-                Item *i = (Item *)g.ui_Interact->current_interact->data;
+            page()->pre = []() {
+                // dude drinks the water
+                Item *i = (Item *)story()->data;
                 if(i != NULL) {
                     i->parent->RemoveItem(i);
                     delete i;
@@ -6596,25 +6595,20 @@ static void init_interactions(void) {
                 g.world.lake_quest_state = 3;
             };
 
-            page->addChoice("Leave", -1);
+            page()->addChoice("Leave", -1);
         }
     }
 
-    Interact *fall_down = new Interact;
+    { new Interact ("fall_down");
 
-    { // "fall_down"
+        { new InteractPage; // 0
+            page()->tell("You trip and fall down!");
+            page()->tell("");
+            page()->tell("It hurts, but at least nobody saw you.");
 
-        { // page 0
-            InteractPage *page = new InteractPage;
-            fall_down->pages.push_back(page);
+            page()->addChoice("Leave", -1);
 
-            page->tell("You trip and fall down!");
-            page->tell("");
-            page->tell("It hurts, but at least nobody saw you.");
-
-            page->addChoice("Leave", -1);
-
-            page->pre = [](InteractPage *p)
+            page()->pre = []()
                 {
                     uniform_real_distribution<> hurt_dist(0.01, 0.1);
                     g.map->player->hurt(hurt_dist(*g.rng));
@@ -6622,26 +6616,19 @@ static void init_interactions(void) {
         }
     }
 
-    Interact *player_dead = new Interact;
 
-    { // "player_dead"
 
-        { // page 0
-            InteractPage *page = new InteractPage;
-            player_dead->pages.push_back(page);
+    { new Interact ("player_dead");
+        { new InteractPage; // 0
+            page()->tell("Like most humans in these cursed times you too have perished.");
 
-            page->tell("Like most humans in these cursed times you too have perished.");
-
-            page->addChoice("Poor me", -2);
+            page()->addChoice("Poor me", -2);
         }
     }
 
-    Interact *strange_building = new Interact;
+    { new Interact ("strange_building");
 
-    { // "strange_building"
-
-        strange_building->setup = []()
-            // only run this once
+        story()->setup = []()
             {
                 if(g.world.visited_strange_building == true)
                     return -1;
@@ -6649,29 +6636,23 @@ static void init_interactions(void) {
                     return 0;
             };
 
-        { // page 0
-            InteractPage *page = new InteractPage;
-            strange_building->pages.push_back(page);
+        { new InteractPage; // 0
+            page()->wrap_and_tell("Most buildings in the vicinity are in gross disrepair, but one stands out as newer than the others.");
+            page()->tell("");
+            page()->tell("Perhaps there are people living in it?");
 
-            page->wrap_and_tell("Most buildings in the vicinity are in gross disrepair, but one stands out as newer than the others.");
-            page->tell("");
-            page->tell("Perhaps there are people living in it?");
-
-            page->addChoice("Leave", -1);
-            page->addChoice("Enter building", 1);
+            page()->addChoice("Leave", -1);
+            page()->addChoice("Enter building", 1);
         }
 
-        { // page 1
-            InteractPage *page = new InteractPage;
-            strange_building->pages.push_back(page);
+        { new InteractPage; // 1
+            page()->wrap_and_tell("You enter and explore the building. There doesn't seem to be anything here.");
+            page()->tell("");
+            page()->tell("Disappointing, but not unexpected.");
 
-            page->wrap_and_tell("You enter and explore the building. There doesn't seem to be anything here.");
-            page->tell("");
-            page->tell("Disappointing, but not unexpected.");
+            page()->addChoice("Leave", -1);
 
-            page->addChoice("Leave", -1);
-
-            page->pre = [](InteractPage *p)
+            page()->pre = []()
                 {
                     // mark as seen
                     g.world.visited_strange_building = true;
@@ -6679,41 +6660,32 @@ static void init_interactions(void) {
         }
     }
 
-    Interact *player_wins = new Interact;
 
-    { // "player_wins"
 
-        { // page 0
-            InteractPage *page = new InteractPage;
-            player_wins->pages.push_back(page);
+    { new Interact ("player_wins");
+        { new InteractPage; // 0
+            page()->tell("Congratulations!");
+            page()->tell("");
+            page()->wrap_and_tell("You've defeated an impressive amount of foes. The world, such as it is, quakes at your feet. Clay would be proud.");
 
-            page->tell("Congratulations!");
-            page->tell("");
-            page->wrap_and_tell("You've defeated an impressive amount of foes. The world, such as it is, quakes at your feet. Clay would be proud.");
-
-            page->addChoice("End it", -2);
+            page()->addChoice("End it", -2);
         }
     }
 
-    Interact *healing_lake = new Interact;
+    { new Interact ("healing_lake");
+        { new InteractPage; // 0
+            page()->right = g.bitmaps[99];
 
-    { // "healing_lake"
+            page()->tell("You come upon an extraordinary lake.");
+            page()->tell("");
+            page()->wrap_and_tell("The water is perfectly clear, and nature, so often thought of as frightful and deadly, seems benign here.");
+            page()->tell("");
+            page()->wrap_and_tell("There's a small pool nearby. It is especially strange.");
 
-        { // page 0
-            InteractPage *page = new InteractPage;
-            healing_lake->pages.push_back(page);
-            page->right = g.bitmaps[99];
+            page()->addChoice("Approach the pool", -1);
+            page()->addChoice("Leave", -1);
 
-            page->tell("You come upon an extraordinary lake.");
-            page->tell("");
-            page->wrap_and_tell("The water is perfectly clear, and nature, so often thought of as frightful and deadly, seems benign here.");
-            page->tell("");
-            page->wrap_and_tell("There's a small pool nearby. It seems especially strange.");
-
-            page->addChoice("Approach the pool", -1);
-            page->addChoice("Leave", -1);
-
-            page->post = [](InteractPage *p, const char *choice)
+            page()->post = [](const char *choice)
                 {
                     if(strcmp(choice, "Approach the pool") == 0) {
                         drop_item_at_player("clear water");
@@ -6723,13 +6695,6 @@ static void init_interactions(void) {
                 };
         }
     }
-
-    g.stories.emplace("intro", intro);
-    g.stories.emplace("fall_down", fall_down);
-    g.stories.emplace("player_dead", player_dead);
-    g.stories.emplace("strange_building", strange_building);
-    g.stories.emplace("player_wins", player_wins);
-    g.stories.emplace("healing_lake", healing_lake);
 }
 
 struct InventoryGridSystem;
@@ -9072,7 +9037,6 @@ static void unload_game(void) {
     delete g.ui_Condition;
     delete g.ui_Camp;
     delete g.ui_Scavenge;
-    delete g.ui_Interact;
     // the map may already be unloaded if the player dies
     if(g.map != NULL) {
         delete g.map;
@@ -9096,7 +9060,6 @@ static void init_UIs(void) {
     g.ui_Condition = new ConditionUI;
     g.ui_Camp      = new CampUI;
     g.ui_Scavenge  = new ScavengeUI;
-    g.ui_Interact  = new InteractUI;
 
     g.time_display->calculate_tod();
 }
@@ -9621,10 +9584,12 @@ int main(int argc, char **argv) {
         init_timedisplay();
         init_misc();
         init_text_items();
-        init_interactions();
         init_messagelog();
 
-        g.ui_MainMenu  = new MainMenuUI;
+        g.ui_Interact = new InteractUI;
+        init_interactions();
+
+        g.ui_MainMenu = new MainMenuUI;
         g.ui_FadeTransition = new FadeTransitionUI;
         g.ui_Notification = new NotificationUI;
 
@@ -9745,10 +9710,13 @@ int main(int argc, char **argv) {
     al_destroy_display(g.display);
     al_destroy_font(g.font);
 
+    delete g.ui_MainMenu;
+    delete g.ui_FadeTransition;
+    delete g.ui_Notification;
+    delete g.ui_Interact;
     delete g.rng;
     delete g.time_display;
     delete g.weapon_switcher;
-    delete g.ui_MainMenu;
     delete g.hand_combat;
 
     for(auto&& button : g.main_buttons)
