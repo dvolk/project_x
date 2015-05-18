@@ -1969,21 +1969,16 @@ void TileMap::resetViewPXPY(void) {
     view_px = view_x * hex_step_x;
     view_py = view_y * hex_step_y;
 
-    res_px = 0;
-    res_py = 0;
+    res_px = 120;
+    res_py = 120;
 }
 
 void TileMap::resetViewXY(void) {
-    // clamp view_x to [0, size_x - cols]
-    view_x = max(0, min(size_x - cols, view_px / hex_step_x));
-    view_y = max(0, min(size_y - rows, view_py / hex_step_y));
+    view_x = view_px / hex_step_x;
+    view_y = view_py / hex_step_y;
 
-    // clamp view_px to [0, (size_x - cols) * hex_step_x]
-    view_px = max(0, min(view_px, (size_x - cols) * hex_step_x));
-    view_py = max(0, min(view_py, (size_y - rows) * hex_step_y));
-
-    res_px = view_px % hex_step_x;
-    res_py = view_py % hex_step_y;
+    res_px = 120 + view_px % hex_step_x;
+    res_py = 120 + view_py % hex_step_y;
 }
 
 void Character::awaken(void) {
@@ -2076,7 +2071,7 @@ float TileMap::getCurrentTemperature(__attribute__ ((unused)) int n) {
     return 0.9;
 }
 
-static bool good_index(int n) {
+static inline bool good_index(int n) {
     return n >= 0 && n <= g.map->max_t;
 }
 
@@ -3124,22 +3119,18 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     size_x = sx;
     size_y = sy;
 
-    cols = min(sx, c);
-    rows = min(sy, r);
+    cols = c;
+    rows = r;
 
-    view_px = 0;
-    view_py = 0;
-    res_px = 0;
-    res_py = 0;
+    res_px = 120;
+    res_py = 120;
 
     pos.x1 = 100;
-    pos.y1 = 40;
-    pos.x2 = min(g.display_x, (int)pos.x1 + (size_x + 1) * hex_step_x) - 81 - pos.x1;
-    pos.y2 = min(g.display_y - 150, (int)pos.y1 + (size_y + 1) * hex_step_y) - 1 - pos.y1;
+    pos.y1 = 0;
+    pos.x2 = g.display_x - 200;
+    pos.y2 = g.display_y - 150;
 
     max_t = size_x * size_y - 1;
-
-    printf("TileMap: (%f, %f) (%f, %f)\n", pos.x1, pos.y1, pos.x2, pos.y2);
 
     eco.want_creatures = 2 + max_t / 20;
 
@@ -3153,10 +3144,8 @@ void TileMap::focusOnPlayer(void) {
 void TileMap::focusOn(int n) {
     int p_x = n % size_x;
     int p_y = n / size_x;
-    view_x = max(0, p_x - cols/2 + 1);
-    view_y = max(0, p_y - rows/2 + 2);
-    view_x = max(0, min(view_x, size_x - cols));
-    view_y = max(0, min(view_y, size_y - rows));
+    view_x = p_x - cols/2 + 1;
+    view_y = p_y - rows/2 + 2;
     resetViewPXPY();
     resetViewXY();
 }
@@ -3266,15 +3255,17 @@ void TileMap::mouseToTileXY(int &x, int &y) {
 }
 
 int TileMap::mouseToTileN(void) {
-    if(g.mouse_x < pos.x1 ||
-       g.mouse_y < pos.y1 ||
-       g.mouse_x > pos.x1 + pos.x2 ||
-       g.mouse_y > pos.y1 + pos.y2) {
-        return -1;
-    }
     int x, y;
     mouseToTileXY(x, y);
-    return size_x * y + x;
+
+    int n = size_x * y + x;
+
+    if(good_index(n) == false ||
+       x < 0 ||
+       x >= size_x)
+        return -1;
+
+    return n;
 }
 
 static void end_turn(void);
@@ -3877,8 +3868,11 @@ void TileMap::drawTile(int i, int x, int y) {
     int t = start + (size_x * y) + x;
 
     // only draw the tile if it's revealed
-    if(tiles[t].visible == false &&
-       g.config.debugVisibility == false)
+    if(good_index(t) == false ||
+       view_x + x < 0 ||
+       view_x + x >= size_x ||
+       (tiles[t].visible == false &&
+        g.config.debugVisibility == false))
         return;
 
     // can the player currently see the tile?
@@ -8562,8 +8556,8 @@ enum TileKind {
 };
 
 static void init_tileinfo(void) {
-    int cols = g.display_x / TileMap::hex_step_x;
-    int rows = g.display_y / TileMap::hex_step_y;
+    int cols = g.display_x / TileMap::hex_step_x + 1;
+    int rows = g.display_y / TileMap::hex_step_y + 3;
     if(cols % 2 == 1) cols++;
     if(rows % 2 == 1) rows++;
     printf("cols, rows: %d %d\n", cols, rows);
