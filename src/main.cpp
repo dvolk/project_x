@@ -76,6 +76,7 @@ struct Config {
     bool start_nag;
     bool ui_fading;
     bool alt_grid_movement;
+    bool setClipRectangle;
 
     void load(const char *filename);
 };
@@ -1951,7 +1952,6 @@ void TileMap::update(void) {
         view_px += d;
 
     // mouse scrolling (hold MMB)
-    // TODO: draw symbol on (old_mx, old_my)
 
     if (g.mouse_state.buttons & 4) {
         // scroll map proportional to distance from position before
@@ -8859,7 +8859,10 @@ void Config::load(const char *filename) {
     ui_fading = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "alt-grid-movement");
-    alt_grid_movement = atoi(with_default(s, "0"));
+    alt_grid_movement = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "set-clip-rectangle");
+    setClipRectangle = atoi(with_default(s, "1"));
 
     al_destroy_config(cfg);
 }
@@ -8950,6 +8953,12 @@ static void allegro_init(void) {
             printf("scale: %f, tx, ty: %d %d\n", g.scale, g.tx, g.ty);
             al_translate_transform(&g.trans, g.tx, g.ty);
             al_scale_transform(&g.trans, g.scale, g.scale);
+
+            if(g.config.fullscreen == true &&
+               g.config.setClipRectangle == true)
+                al_set_clipping_rectangle(g.tx * g.scale + 1, g.ty * g.scale + 1,
+                                          g.display_x * g.scale,
+                                          g.display_y * g.scale);
         }
         else {
             g.display_x = sx;
@@ -8966,6 +8975,7 @@ static void allegro_init(void) {
         g.tx = 0;
         g.ty = 0;
     }
+
     al_set_new_bitmap_flags(ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
 
     if(g.display == NULL)
