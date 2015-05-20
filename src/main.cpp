@@ -2082,7 +2082,9 @@ int TileMap::distance(int n1, int n2) {
     int y1 = n1 / size_y;
     int x2 = n2 % size_x;
     int y2 = n2 / size_y;
-    return pow(x1 - x2, 2) + pow(y1 - y2, 2);
+    int d1 = x1 - x2;
+    int d2 = y1 - y2;
+    return d1 * d1 - d2 * d2;
 }
 
 int TileMap::random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2) {
@@ -8656,11 +8658,15 @@ vector<int> path_find(const int start, const int goal) {
     frontier.push(start);
 
     unordered_map<int, int> came_from;
-    came_from.emplace(start, 0);
+    came_from.emplace(start, start);
 
     while(frontier.empty() == false) {
         int current = frontier.top();
         frontier.pop();
+
+        if(current == goal)
+            break;
+
         for(int dir = 1; dir <= 6; dir++) {
             int next = dir_transform(current, dir);
 
