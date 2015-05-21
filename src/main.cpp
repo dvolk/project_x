@@ -1365,6 +1365,7 @@ struct Character {
     void load(istream &is);
 
     void ai_avoid(void);
+    void ai_move_toward(int position);
 
     void update_visibility(void);
 
@@ -2084,7 +2085,7 @@ int TileMap::distance(int n1, int n2) {
     int y2 = n2 / size_y;
     int d1 = x1 - x2;
     int d2 = y1 - y2;
-    return d1 * d1 - d2 * d2;
+    return (d1 * d1) + (d2 * d2);
 }
 
 int TileMap::random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2) {
@@ -2304,6 +2305,25 @@ void TileMap::updateCharsByPos(void) {
     }
 }
 
+void Character::ai_move_toward(int position) {
+    int dist = 9999999;
+    int new_n;
+    for(int dir = 1; dir <= 6; dir++) {
+        int proposed_n = dir_transform(this->n, dir);
+        int proposed_dist = g.map->distance(proposed_n, position);
+        if(proposed_dist < dist) {
+            dist = proposed_dist;
+            new_n = proposed_n;
+        }
+    }
+    // printf("moving from %d to %d (dist: %d)\n", n, new_n, dist);
+    if(good_index(new_n) == true) {
+        move(new_n);
+    } else {
+        wait();
+    }
+}
+
 void Character::ai_avoid(void) {
     array<int, 6> ocs = { -1, -1, -1,
                           -1, -1, -1 };
@@ -2327,6 +2347,10 @@ void Character::ai_avoid(void) {
     wait();
 }
 
+int distance_to_player(int n) {
+    return g.map->distance(g.map->player->n, n);
+}
+
 // do stuff on the map
 void Character::do_AI(void) {
     if(health < 0.01) {
@@ -2336,10 +2360,13 @@ void Character::do_AI(void) {
 
     update();
 
-    if(health < 0.5)
+    if(health > 0.95 && distance_to_player(n) < 4) {
+        ai_move_toward(g.map->player->n);
+    } else if(health < 0.5)
         ai_avoid();
-    else
+    else {
         randomMove();
+    }
 
     post_update();
 }
