@@ -6570,6 +6570,7 @@ static void init_interactions(void) {
                     drop_item_at_player("gasoline can");
                     drop_item_at_player("matches");
                     drop_item_at_player("rope");
+                    drop_item_at_player("wood");
                 };
         }
 
@@ -8335,6 +8336,7 @@ static void load_bitmaps(void) {
     /* 101 */ filenames.push_back("media/items/matches.png");
     /* 102 */ filenames.push_back("media/items/rope.png");
     /* 103 */ filenames.push_back("media/items/gas_can.png");
+    /* 104 */ filenames.push_back("media/items/wood_log.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {

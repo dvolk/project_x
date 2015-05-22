@@ -995,5 +995,27 @@ void init_iteminfo(void) {
     tmp.improves_satiety = 0.0;
     tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
+
+    // 37
+    tmp.name = "wood";
+    tmp.grid_size_x = 8;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = 5000;
+    tmp.sprite = g.bitmaps[104];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = -1;
+    tmp.container_size_y = -1;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
 }
 */
