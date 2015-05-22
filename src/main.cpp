@@ -1736,6 +1736,8 @@ static void init_locationdata(void) {
     tmp.add_loot("blue jeans", 0.05);
     tmp.add_loot("left shoe", 0.1);
     tmp.add_loot("right shoe", 0.01);
+    tmp.add_loot("gasoline can", 0.1);
+    tmp.add_loot("gasoline can", 0.1);
     g.location_info.push_back(tmp);
 
     tmp.loot_table.clear();
@@ -1760,9 +1762,12 @@ static void init_locationdata(void) {
     tmp.add_loot("arrow", 0.2);
     tmp.add_loot("arrow", 0.2);
     tmp.add_loot("moldy bread", 0.2);
-    tmp.add_loot("moldy bread", 0.2);
-    tmp.add_loot("moldy bread", 0.2);
-    tmp.add_loot("moldy bread", 0.2);
+    tmp.add_loot("wild berries", 0.3);
+    tmp.add_loot("wild berries", 0.3);
+    tmp.add_loot("matches", 0.1);
+    tmp.add_loot("matches", 0.1);
+    tmp.add_loot("matches", 0.1);
+    tmp.add_loot("rope", 0.1);
     g.location_info.push_back(tmp);
     tmp.loot_table.clear();
 
@@ -6561,6 +6566,10 @@ static void init_interactions(void) {
                     drop_item_at_player("clean rag");
                     drop_item_at_player("arrow");
                     drop_item_at_player("crowbar");
+                    drop_item_at_player("wild berries");
+                    drop_item_at_player("gasoline can");
+                    drop_item_at_player("matches");
+                    drop_item_at_player("rope");
                 };
         }
 
@@ -8322,6 +8331,10 @@ static void load_bitmaps(void) {
     /* 97 */ filenames.push_back("media/items/water.png");
     /* 98 */ filenames.push_back("media/indicators/tile_has_storage.png");
     /* 99 */ filenames.push_back("media/backgrounds/story-field2.png");
+    /* 100 */ filenames.push_back("media/items/wild_berries.png");
+    /* 101 */ filenames.push_back("media/items/matches.png");
+    /* 102 */ filenames.push_back("media/items/rope.png");
+    /* 103 */ filenames.push_back("media/items/gas_can.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {

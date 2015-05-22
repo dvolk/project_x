@@ -907,5 +907,93 @@ void init_iteminfo(void) {
     tmp.improves_satiety = 0.05;
     tmp.slot = WATER_BOTTLE;
     g.item_info.push_back(tmp);
+
+    // 33
+    tmp.name = "wild berries";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = 300;
+    tmp.sprite = g.bitmaps[100];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = true;
+    tmp.improves_hydration = 0.1;
+    tmp.improves_satiety = 0.2;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
+
+    // 34
+    tmp.name = "matches";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 1;
+    tmp.maxStack = 5;
+    tmp.weight = 50;
+    tmp.sprite = g.bitmaps[101];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
+
+    // 35
+    tmp.name = "rope";
+    tmp.grid_size_x = 5;
+    tmp.grid_size_y = 5;
+    tmp.maxStack = 1;
+    tmp.weight = 1000;
+    tmp.sprite = g.bitmaps[102];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
+    tmp.slot = WATER_BOTTLE;
+    g.item_info.push_back(tmp);
+
+    // 36
+    tmp.name = "gasoline can";
+    tmp.grid_size_x = 4;
+    tmp.grid_size_y = 5;
+    tmp.maxStack = 1;
+    tmp.weight = 750;
+    tmp.sprite = g.bitmaps[103];
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isVehicle = false;
+    tmp.isContainer = true;
+    tmp.container_size_x = 3;
+    tmp.container_size_y = 3;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
 }
 */
