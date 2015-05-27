@@ -77,6 +77,7 @@ struct Config {
     bool ui_fading;
     bool alt_grid_movement;
     bool setClipRectangle;
+    char *custom_cursor;
 
     void load(const char *filename);
 };
@@ -8912,6 +8913,9 @@ void Config::load(const char *filename) {
     s = al_get_config_value(cfg, 0, "set-clip-rectangle");
     setClipRectangle = atoi(with_default(s, "1"));
 
+    s = al_get_config_value(cfg, 0, "custom-cursor");
+    if(s != NULL) custom_cursor = strdup(s);
+
     al_destroy_config(cfg);
 }
 
@@ -9044,6 +9048,23 @@ static void allegro_init(void) {
         errorQuit("Failed to initialize mouse.");
     else
         info("Initialized mouse.");
+
+    if(g.config.custom_cursor != NULL) {
+        ALLEGRO_BITMAP *cursor_bitmap = al_load_bitmap(g.config.custom_cursor);
+
+        if(cursor_bitmap == NULL)
+            errorQuit("Couldn't load cursor bitmap: " + string(g.config.custom_cursor));
+
+        ALLEGRO_MOUSE_CURSOR *cursor = al_create_mouse_cursor(cursor_bitmap, 0, 0);
+
+        if(cursor == NULL)
+            errorQuit("Couldn't set cursor");
+
+        al_set_mouse_cursor(g.display, cursor);
+        al_destroy_bitmap(cursor_bitmap);
+    }
+
+
 }
 
 static void load_fonts(void) {
