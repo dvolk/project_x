@@ -2313,7 +2313,7 @@ void TileMap::updateCharsByPos(void) {
 
 void Character::ai_move_toward(int position) {
     int dist = 9999999;
-    int new_n;
+    int new_n = -1;
     for(int dir = 1; dir <= 6; dir++) {
         int proposed_n = dir_transform(this->n, dir);
         int proposed_dist = g.map->distance(proposed_n, position);
@@ -9058,9 +9058,13 @@ static void allegro_init(void) {
         ALLEGRO_MOUSE_CURSOR *cursor = al_create_mouse_cursor(cursor_bitmap, 0, 0);
 
         if(cursor == NULL)
+            errorQuit("Couldn't create cursor");
+
+        bool ret = al_set_mouse_cursor(g.display, cursor);
+
+        if(ret == false)
             errorQuit("Couldn't set cursor");
 
-        al_set_mouse_cursor(g.display, cursor);
         al_destroy_bitmap(cursor_bitmap);
     }
 
@@ -9089,32 +9093,50 @@ static void init_rng(int seed) {
         errorQuit("Failed to initialize random number generator");
 }
 
-static void init_args(int argc, char **argv, int *seed) {
+#include <getopt.h>
 
-    if(argc >= 2) {
-        try {
-            *seed = std::stoi(argv[1]);
+static void init_args(int argc, char **argv, int *seed) {
+    int opt= 0;
+    *seed = -1;
+    g.tilemap_sx = 150;
+    g.tilemap_sy = 150;
+
+    //Specifying the expected options
+    //The two options l and b expect numbers as argument
+    static struct option long_options[] = {
+        {"map-x",   required_argument, 0,  'x' },
+        {"map-y",   required_argument, 0,  'y' },
+        {"seed",    required_argument, 0,  's' },
+        {"help",    no_argument,       0,  'h' },
+        {0,         0,                 0,  0   }
+    };
+
+    int long_index = 0;
+    while ((opt = getopt_long(argc, argv, "x:y:s:h",
+                              long_options, &long_index)) != -1) {
+        switch (opt) {
+        case 'x' :
+            g.tilemap_sx = std::stoi(optarg);
+            break;
+        case 'y' :
+            g.tilemap_sy = std::stoi(optarg);
+            break;
+        case 's' :
+            *seed = std::stoi(optarg);
+            break;
+        case 'h':
+            printf("Usage: %s [OPTION]\n", argv[0]);
+            printf("\n");
+            printf("  -x, -map-x=NUM      set x map dimension\n");
+            printf("  -y, -map-y=NUM      set y map dimension\n");
+            printf("  -s, -seed=NUM       set rng seed\n");
+            printf("\n");
+            exit(EXIT_SUCCESS);
+            break;
+        default:
+            exit(EXIT_FAILURE);
+            break;
         }
-        catch (exception &e) {
-            info("WARNING: couldn't parse seed argument");
-            *seed = -1;
-        }
-    } else {
-        *seed = -1;
-    }
-    if(argc >= 4) {
-        try {
-            g.tilemap_sx = std::stoi(argv[2]);
-            g.tilemap_sy = std::stoi(argv[3]);
-        }
-        catch (exception &e) {
-            info("WARNING: couldn't parse tilemap dimension arguments");
-            g.tilemap_sx = 150;
-            g.tilemap_sy = 150;
-        }
-    } else {
-        g.tilemap_sx = 150;
-        g.tilemap_sy = 150;
     }
 }
 
@@ -9655,6 +9677,9 @@ static void logo(void) {
 int main(int argc, char **argv) {
     logo();
 
+    int seed;
+    init_args(argc, argv, &seed);
+
     allegro_init();
 
     ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
@@ -9680,8 +9705,6 @@ int main(int argc, char **argv) {
     {
         PerfTimer t("Initialization");
 
-        int seed;
-        init_args(argc, argv, &seed);
         load_fonts();
         load_bitmaps();
         init_rng( seed );
