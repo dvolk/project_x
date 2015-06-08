@@ -175,6 +175,9 @@ struct Game {
     GridInfo *left_foot;
     GridInfo *vehicle;
 
+    // crafting
+    GridInfo *ingredients;
+
     // encounter UI
     GridInfo *encounter_selected;
 
@@ -565,6 +568,10 @@ void init_hardpointinfo(void) {
     g.ground = new GridInfo;
 
     g.encounter_selected = new GridInfo;
+
+    g.ingredients = new GridInfo;
+    g.ingredients->canHoldLiquid = true;
+    g.ingredients->noGrid = false;
 
     g.bottle->canHoldLiquid = true;
     g.bottle->noGrid = false;
@@ -1088,13 +1095,17 @@ bool Grid::item_compatible(Item *i) {
         }
     }
 
+    ItemSlot slot = i->getItemSlot();
+
+    // g.ingredients is both the ingredients grid and results grid
+    if(slot == SLOT_CRAFTING_ONLY && info != g.ingredients && info != g.ground)
+        return false;
+
     // you can place anything in a grid
     if(info == NULL)
         return true;
     if(info == g.ground)
         return true;
-
-    ItemSlot slot = i->getItemSlot();
 
     if(info == g.ammo_bow && slot != AMMO_BOW)
         return false;
@@ -1938,6 +1949,7 @@ struct TileMap : public Widget {
     void addLabel(int n, const char *text);
 
     void DeleteGroundIfEmpty(int n);
+    void removeTempItems(int n);
     void CollectGroundGrids(int n);
 
     void updateActiveCharacters(void);
@@ -2679,6 +2691,25 @@ void TileMap::CollectGroundGrids(int n) {
     }
 }
 
+void TileMap::removeTempItems(int n) {
+    vector<Grid *> *mg = tiles[n].ground_items;
+
+    if(mg == NULL)
+        return;
+
+    for(auto&& g : *mg) {
+        vector<Item *>::iterator it;
+        for(it = g->items.begin(); it != g->items.end() ;) {
+            if((*it)->getItemSlot() == SLOT_CRAFTING_ONLY) {
+                delete *it;
+                it = g->items.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+}
+
 // deletes the ground if there are zero items on the tile
 void TileMap::DeleteGroundIfEmpty(int n) {
     vector<Grid *> *mg = tiles[n].ground_items;
@@ -2715,6 +2746,7 @@ void Character::move(int new_n) {
             if(dist > 25)
                 g.map->updateActiveCharacters();
 
+            g.map->removeTempItems(this->n);
             g.map->CollectGroundGrids(this->n);
             // this character is the player and there's more than
             // one character on that tile
@@ -4948,29 +4980,30 @@ static void create_results(Recipe *recipe) {
 }
 
 static void init_recipes(void) {
-    Recipe *two_arrows_to_kit = new Recipe;
-    two_arrows_to_kit->name = "First aid kit";
-    two_arrows_to_kit->time_cost = 1234;
-    two_arrows_to_kit->ingredients.push_back(make_pair(9, 2));
-    two_arrows_to_kit->tools.push_back(3);
-    two_arrows_to_kit->results.push_back(make_pair(2, 1));
-
-    Recipe *arrow_to_bullet = new Recipe;
-    arrow_to_bullet->name = "Bullet";
-    arrow_to_bullet->time_cost = 1234;
-    arrow_to_bullet->ingredients.push_back(make_pair(9, 1));
-    arrow_to_bullet->tools.push_back(11);
-    arrow_to_bullet->results.push_back(make_pair(8, 1));
-
     Recipe *shopping_trolley_to_3crowbars = new Recipe;
     shopping_trolley_to_3crowbars->name = "Crowbars";
     shopping_trolley_to_3crowbars->time_cost = 1234;
     shopping_trolley_to_3crowbars->ingredients.push_back(make_pair(4, 1));
     shopping_trolley_to_3crowbars->results.push_back(make_pair(3, 3));
 
-    recipes.push_back(two_arrows_to_kit);
-    recipes.push_back(arrow_to_bullet);
+    Recipe *fire1 = new Recipe;
+    fire1->name = "fire";
+    fire1->time_cost = 1234;
+    fire1->ingredients.push_back(make_pair(37, 1));
+    fire1->ingredients.push_back(make_pair(34, 1));
+    fire1->results.push_back(make_pair(38, 1));
+
+    Recipe *clean_water1 = new Recipe;
+    clean_water1->name = "clean water";
+    clean_water1->time_cost = 1234;
+    clean_water1->ingredients.push_back(make_pair(31, 1));
+    clean_water1->tools.push_back(38);
+    clean_water1->tools.push_back(39);
+    clean_water1->results.push_back(make_pair(32, 1));
+
     recipes.push_back(shopping_trolley_to_3crowbars);
+    recipes.push_back(fire1);
+    recipes.push_back(clean_water1);
 }
 
 struct MainMapUI : public UI {
@@ -4984,8 +5017,8 @@ struct MiniMapUI : public UI {
 };
 
 CraftingGridSystem::CraftingGridSystem() {
-    ingredients = new Grid(500, 25, 33, 12, NULL);
-    results = new Grid(500, 310, 33, 12, NULL);
+    ingredients = new Grid(500, 25, 33, 12, g.ingredients);
+    results = new Grid(500, 310, 33, 12, g.ingredients);
     current_ground_page = 0;
 }
 
@@ -6526,11 +6559,6 @@ static void init_interactions(void) {
 
             page()->addChoice("Explore the field", 1);
             page()->addChoice("Leave", -1);
-
-            page()->pre = []()
-                { drop_item_at_player("pill bottle");
-                  drop_item_at_player("shopping trolley");
-                };
         }
 
         { new InteractPage; // 1
@@ -6572,6 +6600,9 @@ static void init_interactions(void) {
                     drop_item_at_player("matches");
                     drop_item_at_player("rope");
                     drop_item_at_player("wood");
+                    drop_item_at_player("cooking pot");
+                    drop_item_at_player("fire");
+                    drop_item_at_player("shopping trolley");
                 };
         }
 
@@ -8338,6 +8369,8 @@ static void load_bitmaps(void) {
     /* 102 */ filenames.push_back("media/items/rope.png");
     /* 103 */ filenames.push_back("media/items/gas_can.png");
     /* 104 */ filenames.push_back("media/items/wood_log.png");
+    /* 105 */ filenames.push_back("media/items/fire.png");
+    /* 106 */ filenames.push_back("media/items/cooking_pot.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
