@@ -79,6 +79,7 @@ struct Config {
     bool setClipRectangle;
     char *custom_cursor;
 
+    void save(const char *filename);
     void load(const char *filename);
 };
 
@@ -7925,6 +7926,7 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "Load") == 0) {
         load_game_wrapper();
     } else if(strcmp(name, "Options") == 0) {
+        g.config.save("game.conf");
         notify("Open the file game.conf in a text editor to change game settings");
     } else if(strcmp(name, "Help") == 0) {
         button_Help_press();
@@ -8889,6 +8891,50 @@ const char *with_default(const char *str, const char *def) {
     else return str;
 }
 
+void Config::save(const char *filename) {
+    ALLEGRO_CONFIG *cfg = al_create_config();
+    char buf[512];
+
+    snprintf(buf, sizeof(buf), "%d", frame_rate);
+    al_set_config_value(cfg, NULL, "frame-rate", buf);
+    snprintf(buf, sizeof(buf), "%d", vsync);
+    al_set_config_value(cfg, NULL, "v-sync", buf);
+    snprintf(buf, sizeof(buf), "%d", fullscreen);
+    al_set_config_value(cfg, NULL, "fullscreen", buf);
+    snprintf(buf, sizeof(buf), "%d", resolutionScaling);
+    al_set_config_value(cfg, NULL, "resolution-scaling", buf);
+    snprintf(buf, sizeof(buf), "%d", debugVisibility);
+    al_set_config_value(cfg, NULL, "debug-visibility", buf);
+    snprintf(buf, sizeof(buf), "%d", displayX);
+    al_set_config_value(cfg, NULL, "display-x", buf);
+    snprintf(buf, sizeof(buf), "%d", displayY);
+    al_set_config_value(cfg, NULL, "display-y", buf);
+    snprintf(buf, sizeof(buf), "%s", font_filename);
+    al_set_config_value(cfg, NULL, "font-filename", buf);
+    snprintf(buf, sizeof(buf), "%d", font_height);
+    al_set_config_value(cfg, NULL, "font-height", buf);
+    snprintf(buf, sizeof(buf), "%d", sorting);
+    al_set_config_value(cfg, NULL, "grid-sorting", buf);
+    snprintf(buf, sizeof(buf), "%d", aa_samples);
+    al_set_config_value(cfg, NULL, "aa-samples", buf);
+    snprintf(buf, sizeof(buf), "%d", start_nag);
+    al_set_config_value(cfg, NULL, "start-nag", buf);
+    snprintf(buf, sizeof(buf), "%d", ui_fading);
+    al_set_config_value(cfg, NULL, "ui-fading", buf);
+    snprintf(buf, sizeof(buf), "%d", alt_grid_movement);
+    al_set_config_value(cfg, NULL, "alt-grid-movement", buf);
+    snprintf(buf, sizeof(buf), "%d", setClipRectangle);
+    al_set_config_value(cfg, NULL, "set-clip-rectangle", buf);
+    if(custom_cursor == NULL) {
+        al_set_config_value(cfg, NULL, "custom-cursor", "0");
+    }
+    else {
+        snprintf(buf, sizeof(buf), "%s", custom_cursor);
+        al_set_config_value(cfg, NULL, "custom-cursor", buf);
+    }
+    al_save_config_file(filename, cfg);
+}
+
 void Config::load(const char *filename) {
     ALLEGRO_CONFIG *cfg = al_load_config_file(filename);
 
@@ -8947,7 +8993,10 @@ void Config::load(const char *filename) {
     setClipRectangle = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "custom-cursor");
-    if(s != NULL) custom_cursor = strdup(s);
+    if(s != NULL && strcmp(s, "0") != 0)
+        custom_cursor = strdup(s);
+    else
+        custom_cursor = NULL;
 
     al_destroy_config(cfg);
 }
