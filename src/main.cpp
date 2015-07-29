@@ -23,7 +23,7 @@
 #include "./rect.h"
 #include "./widget.h"
 
-const int COMPILED_VERSION = 10; // save game version
+const int COMPILED_VERSION = 11; // save game version
 
 using namespace std;
 
@@ -1284,7 +1284,6 @@ Disease::Disease() {
 }
 
 struct Character {
-    bool active;
     int n; // position by offset
     int x, y; // cache to avoid computations
 
@@ -1430,8 +1429,6 @@ struct Character {
     void recomputeWarmth(void);
 
     Wound *random_wound(void);
-
-    void awaken(void);
 };
 
 /*
@@ -1849,7 +1846,6 @@ struct Ecology {
 };
 
 struct RealityBubble {
-    int position; // center of reality bubble
     int radius;
 };
 
@@ -1888,7 +1884,6 @@ struct TileMap : public Widget {
     // map from positions to characters on that position
     unordered_multimap<int, Character *> charsByPos;
 
-    vector<Character *> all_characters;
     vector<Character *> characters;
     Character *player;
 
@@ -1954,8 +1949,6 @@ struct TileMap : public Widget {
     void DeleteGroundIfEmpty(int n);
     void removeTempItems(int n);
     void CollectGroundGrids(int n);
-
-    void updateActiveCharacters(void);
 };
 
 void TileMap::update(void) {
@@ -2003,31 +1996,6 @@ void TileMap::resetViewXY(void) {
     res_py = 120 + view_py % hex_step_y;
 }
 
-void Character::awaken(void) {
-    nextMove = g.map->player->nextMove + 100;
-    dt = 1000;
-}
-
-void TileMap::updateActiveCharacters(void) {
-    characters.clear();
-    bubble.position = g.map->player->n;
-
-    int i = 0;
-    for(auto&& c : all_characters) {
-        if(distance(c->n, bubble.position) < bubble.radius) {
-            if(c->active == false)
-                c->awaken();
-            characters.push_back(c);
-            i++;
-        } else {
-            c->active = false;
-        }
-    }
-
-    cout << "added " << i << " characters to the active list" << endl;
-}
-
-
 void Label::draw(void) {
     // is it on the screen?
     if(y >= g.map->view_y + g.map->rows ||
@@ -2067,10 +2035,25 @@ void TileMap::addLabel(int n, const char *text) {
 static char *random_human_NPC_name(void);
 
 void TileMap::runEcology() {
-    if((int)all_characters.size() < eco.want_creatures) {
-        Character *c = addRandomCharacterNearPlayer();
-        printf("Ecology added character %s at %d\n", c->name, c->n);
+    int removed = 0;
+    int added = 0;
+
+    // kill characters that walk out of the reality bubble
+    for(auto&& c : characters) {
+        if(distance(c->n, player->n) > bubble.radius) {
+            removeCharacter(c);
+            break;
+        }
     }
+
+    // add more characters if there's too few nearby
+    if((int)characters.size() < eco.want_creatures) {
+        Character *c = addRandomCharacterNearPlayer();
+        printf("runEcology(): added character %s at %d\n", c->name, c->n);
+        added++;
+    }
+
+    printf("runEcology(): removed/added %d/%d characters\n", removed, added);
 }
 
 bool TileMap::blocks_movement(int n) {
@@ -2135,6 +2118,8 @@ int TileMap::random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2)
             ok = true;
     } while(ok == false);
 
+    printf("poss: %d %d %d %d -> %d %d\n", x1, x2, y1, y2, x, y);
+
     return new_n;
 }
 
@@ -2193,12 +2178,11 @@ static char *random_human_NPC_name(void);
 
 Character *TileMap::addRandomCharacterNearPlayer(void) {
     Character *c = addRandomCharacter();
-    c->active = true;
-    int r = 10;
+    int r = 8;
     int x1 = max(0, g.map->player->x - r);
     int y1 = max(0, g.map->player->y - r);
-    int x2 = max(size_x /* ?? */ - 1, g.map->player->x + r);
-    int y2 = max(size_y /* ?? */ - 1, g.map->player->y + r);
+    int x2 = min(size_x /* ?? */ - 1, g.map->player->x + r);
+    int y2 = min(size_y /* ?? */ - 1, g.map->player->y + r);
     c->n = random_uninhabited_position_in_rect(x1, y1, x2, y2);
     return c;
 }
@@ -2225,7 +2209,6 @@ Character *TileMap::addRandomCharacter(void) {
 
 Character *TileMap::addRandomCharacter(Faction fac) {
     Character *new_char = new Character;
-    new_char->active = false;
     new_char->faction = fac;
 
     for(auto&& fac_rep : new_char->faction_reps) fac_rep = -1;
@@ -2284,7 +2267,7 @@ Character *TileMap::addRandomCharacter(Faction fac) {
         backpack->storage->PlaceItem(new Item("bullet", 3));
     }
 
-    all_characters.push_back(new_char);
+    characters.push_back(new_char);
     return new_char;
 }
 
@@ -2302,11 +2285,10 @@ void TileMap::removeCharacter(Character *to_kill) {
     DeleteGroundIfEmpty(to_kill->n);
 
     int i = 0;
-    for(auto& character : g.map->all_characters) {
+    for(auto& character : g.map->characters) {
         if(character == to_kill) {
-            g.map->all_characters.erase(g.map->all_characters.begin() + i);
+            g.map->characters.erase(g.map->characters.begin() + i);
             delete to_kill;
-            updateActiveCharacters();
             updateCharsByPos();
             return;
         }
@@ -2742,12 +2724,6 @@ void Character::move(int new_n) {
 
         // start an encounter if
         if(this == g.map->player) {
-            // only update the active character list if we moved more than
-            // 5 hexes
-            int dist = g.map->distance(this->n, g.map->bubble.position);
-            printf("distance: %d\n", dist);
-            if(dist > 25)
-                g.map->updateActiveCharacters();
 
             g.map->removeTempItems(this->n);
             g.map->CollectGroundGrids(this->n);
@@ -3156,7 +3132,7 @@ TileMap::~TileMap() {
     // info("~TileMap");
     // tilemap owns characters
     delete player;
-    for(auto& character : all_characters) {
+    for(auto& character : characters) {
         delete character;
     }
     // delete ground item and location vectors and their contents
@@ -3202,9 +3178,9 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
 
     max_t = size_x * size_y - 1;
 
-    eco.want_creatures = 2 + max_t / 20;
-
     bubble.radius = 200;
+
+    eco.want_creatures = sqrt(bubble.radius);
 }
 
 void TileMap::focusOnPlayer(void) {
@@ -4704,9 +4680,8 @@ static Character *next(void) {
 // }
 
 static void end_turn_debug_print(void) {
-    printf("turn ends (%d) with %d characters (%d active). Interrupt: %d\n",
+    printf("turn ends (%d) with %d characters. Interrupt: %d\n",
            g.map->player->nextMove,
-           (int)g.map->all_characters.size(),
            (int)g.map->characters.size(),
            g.encounterInterrupt
            );
@@ -4815,6 +4790,7 @@ static void end_turn() {
 
     isGameOver();
 }
+
 
 struct CraftingGridSystem : public GridSystem {
     Grid *ingredients;
@@ -8931,7 +8907,6 @@ static void init_player(void) {
     c->recomputeCarryWeight();
     c->recomputeWarmth();
     c->health = 1;
-    c->active = true; // doesn't do anything
 
     g.map->player = c;
 
@@ -8978,11 +8953,10 @@ static void init_characters(void) {
     cout << "Spawning " << n_start_npcs << " NPCs" << endl;
 
     for(int i = 0; i < n_start_npcs; i++) {
-        g.map->addRandomCharacter();
+        g.map->addRandomCharacterNearPlayer();
     }
 
     // init map stuff
-    g.map->updateActiveCharacters();
     g.map->updateCharsByPos();
     g.map->player->update_visibility();
     g.map->focusOnPlayer();
@@ -9571,7 +9545,7 @@ void Character::save(ostream &os) {
        << fatigue << ' ' << hydration << ' ' << satiety << ' '
        << burden << ' ' << maxBurden << ' ' << skills << ' '
        << (int)selected_weapon_slot << ' ' << nextMove << ' '
-       << (int)faction << ' ' << active << ' ';
+       << (int)faction << ' ';
 
     for(auto&& fac_rep : faction_reps) {
         os << fac_rep << ' ';
@@ -9620,7 +9594,7 @@ void Character::load(istream &is) {
     is >> health >> pain >> warmth
        >> fatigue >> hydration >> satiety
        >> burden >> maxBurden >> skills
-       >> w_slot >> nextMove >> i_fac >> active;
+       >> w_slot >> nextMove >> i_fac;
 
     selected_weapon_slot = w_slot;
     faction = (Faction)i_fac;
@@ -9700,9 +9674,9 @@ void TileMap::save(ostream &os) {
     os << '\n';
     player->save(os);
     os << '\n';
-    os << all_characters.size() << ' ';
+    os << characters.size() << ' ';
     os << '\n';
-    for(auto&& ch : all_characters) {
+    for(auto&& ch : characters) {
         ch->save(os);
         os << '\n';
     }
@@ -9758,13 +9732,12 @@ void TileMap::load(istream &is) {
     player = new Character;
     player->load(is);
     is >> n;
-    all_characters.resize(n);
-    for(auto&& ch : all_characters) {
+    characters.resize(n);
+    for(auto&& ch : characters) {
         ch = new Character;
         ch->load(is);
     }
     player->update_visibility();
-    updateActiveCharacters();
     updateCharsByPos();
     is >> n;
     for(size_t i = 0; i < n; i++) {
