@@ -7747,7 +7747,15 @@ void LabelledCheckBox::mouseDown(void) {
 struct OptionsUI : public UI {
     TextButton *button_cancel;
     TextButton *button_apply;
-    vector<LabelledCheckBox *> checkboxes;
+    LabelledCheckBox *fullscreenCB;
+    LabelledCheckBox *vsyncCB;
+    LabelledCheckBox *resolutionScalingCB;
+    LabelledCheckBox *debugVisibilityCB;
+    LabelledCheckBox *sortingCB;
+    LabelledCheckBox *startNagCB;
+    LabelledCheckBox *uiFadingCB;
+    LabelledCheckBox *altGridMovementCB;
+    LabelledCheckBox *clipRectangleCB;
 
     OptionsUI();
     ~OptionsUI();
@@ -7771,15 +7779,33 @@ OptionsUI::OptionsUI() {
     float start_y = 100;
     float step_y = 25;
 
-    LabelledCheckBox *fullscreenCB = new LabelledCheckBox(start_x, start_y, "Fullscreen", &g.config.fullscreen);
-    LabelledCheckBox *vsyncCB = new LabelledCheckBox(start_x, start_y + 1 * step_y,  "V-Sync", &g.config.vsync);
-    LabelledCheckBox *resolutionScalingCB = new LabelledCheckBox(start_x, start_y + 2 * step_y, "Resolution scaling", &g.config.resolutionScaling);
-    LabelledCheckBox *debugVisibilityCB = new LabelledCheckBox(start_x, start_y + 3 * step_y, "Debug Visibility", &g.config.debugVisibility);
-    LabelledCheckBox *sortingCB = new LabelledCheckBox(start_x, start_y + 4 * step_y,  "Inventory Sorting", &g.config.sorting);
-    LabelledCheckBox *startNagCB = new LabelledCheckBox(start_x, start_y + 5 * step_y, "Start Notifications", &g.config.start_nag);
-    LabelledCheckBox *uiFadingCB = new LabelledCheckBox(start_x, start_y + 6 * step_y, "UI Fading", &g.config.ui_fading);
-    LabelledCheckBox *altGridMovementCB = new LabelledCheckBox(start_x, start_y + 7 * step_y, "Alternative Grid Movement", &g.config.alt_grid_movement);
-    LabelledCheckBox *clipRectangleCB = new LabelledCheckBox(start_x, start_y + 8 * step_y, "Clip Rectangle", &g.config.setClipRectangle);
+    fullscreenCB
+        = new LabelledCheckBox(start_x, start_y,
+                               "Fullscreen", &g.config.fullscreen);
+    vsyncCB
+        = new LabelledCheckBox(start_x, start_y + 1 * step_y,
+                               "V-Sync", &g.config.vsync);
+    resolutionScalingCB
+        = new LabelledCheckBox(start_x, start_y + 2 * step_y,
+                               "Resolution scaling", &g.config.resolutionScaling);
+    debugVisibilityCB
+        = new LabelledCheckBox(start_x, start_y + 3 * step_y,
+                               "Debug Visibility", &g.config.debugVisibility);
+    sortingCB
+        = new LabelledCheckBox(start_x, start_y + 4 * step_y,
+                               "Inventory Sorting", &g.config.sorting);
+    startNagCB
+        = new LabelledCheckBox(start_x, start_y + 5 * step_y,
+                               "Start Notifications", &g.config.start_nag);
+    uiFadingCB
+        = new LabelledCheckBox(start_x, start_y + 6 * step_y,
+                               "UI Fading", &g.config.ui_fading);
+    altGridMovementCB
+        = new LabelledCheckBox(start_x, start_y + 7 * step_y,
+                               "Alternative Grid Movement", &g.config.alt_grid_movement);
+    clipRectangleCB
+        = new LabelledCheckBox(start_x, start_y + 8 * step_y,
+                               "Clip Rectangle", &g.config.setClipRectangle);
 
     widgets.push_back(fullscreenCB);
     widgets.push_back(vsyncCB);
@@ -8217,7 +8243,7 @@ static void button_Help_press(void) {
 }
 
 static void button_Options_press(void) {
-    g.color_bg = g.color_grey;
+    g.color_bg = g.color_grey3;
     g.ui = g.ui_Options;
 }
 
@@ -10040,6 +10066,7 @@ int main(int argc, char **argv) {
     delete g.ui_MainMenu;
     delete g.ui_FadeTransition;
     delete g.ui_Notification;
+    delete g.ui_Options;
     delete g.ui_Interact;
     delete g.rng;
     delete g.time_display;
