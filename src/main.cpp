@@ -60,6 +60,7 @@ struct MainMenuUI;
 struct FadeTransitionUI;
 struct NotificationUI;
 struct World;
+struct OptionsUI;
 
 struct Config {
     int8_t frame_rate;
@@ -229,6 +230,7 @@ struct Game {
     HelpUI *ui_Help;
     FadeTransitionUI *ui_FadeTransition;
     NotificationUI *ui_Notification;
+    OptionsUI *ui_Options;
 
     unordered_map<const char *, Interact *> stories;
     //              ^^
@@ -7661,6 +7663,144 @@ static void fade_to_UI(void) {
 }
 
 /*
+  Button with text in it
+ */
+struct TextButton : public Widget {
+    float text_offset_x;
+    float text_offset_y;
+    const char *name;
+
+    TextButton(const char *name, float x, float y, float sx, float sy);
+
+    void draw(void) override;
+    void hoverOver(void) override;
+};
+
+TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
+    this->name = name;
+    pos.x1 = x;
+    pos.y1 = y;
+    pos.x2 = sx;
+    pos.y2 = sy;
+    text_offset_x = round((pos.x2 - al_get_text_width(g.font, name)) / 2);
+    text_offset_y = round((pos.y2 - g.config.font_height) / 2);
+}
+
+void TextButton::draw(void) {
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, g.color_darkgrey);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 1);
+    al_draw_text(g.font, g.color_white,
+                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+void TextButton::hoverOver(void) {
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
+                             pos.y1 + pos.y2, g.color_grey2);
+    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
+                      g.color_black, 1);
+    al_draw_text(g.font, g.color_white,
+                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+/*
+  Checkbox with text to the right of it
+*/
+struct LabelledCheckBox : public Widget {
+    const char *name;
+    bool *state;
+
+    LabelledCheckBox(float x, float y, const char *name, bool *state);
+
+    void draw(void) override;
+    void mouseDown(void) override;
+};
+
+LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *state) {
+    this->name = name;
+    this->state = state;
+
+    pos.x1 = x;
+    pos.y1 = y;
+    pos.x2 = 16;
+    pos.y2 = 16;
+}
+
+void LabelledCheckBox::draw(void) {
+    if(*state == true)
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, g.color_black);
+    else
+        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, g.color_black, 1);
+
+    // TODO or draw cross?
+    // al_draw_line(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, g.color_black, 1);
+    // al_draw_line(pos.x1, pos.y1 + pos.y2, pos.x1 + pos.x2, pos.y1, g.color_black, 1);
+
+    al_draw_text(g.font, g.color_black, pos.x1 + 20, pos.y1, 0, name);
+}
+
+void LabelledCheckBox::mouseDown(void) {
+    *state = !*state;
+}
+
+struct OptionsUI : public UI {
+    TextButton *button_cancel;
+    TextButton *button_apply;
+    vector<LabelledCheckBox *> checkboxes;
+
+    OptionsUI();
+    ~OptionsUI();
+};
+
+static void runMainMenu(void);
+
+OptionsUI::OptionsUI() {
+    button_cancel = new TextButton("Cancel", round((g.display_x - 185) / 2), // TODO fix x coord
+                                 (g.display_y - 720) / 2 + 630, 85, 45);
+
+    button_cancel->onMouseDown = []{ runMainMenu(); };
+
+    button_apply = new TextButton("Apply", round((g.display_x + 85) / 2), // TODO fix x coord
+                                 (g.display_y - 720) / 2 + 630, 85, 45);
+
+    button_apply->onMouseDown = []{ g.config.save("game.conf");
+                                    runMainMenu(); };
+
+    float start_x = (g.display_x - 175) / 2;
+    float start_y = 100;
+    float step_y = 25;
+
+    LabelledCheckBox *fullscreenCB = new LabelledCheckBox(start_x, start_y, "Fullscreen", &g.config.fullscreen);
+    LabelledCheckBox *vsyncCB = new LabelledCheckBox(start_x, start_y + 1 * step_y,  "V-Sync", &g.config.vsync);
+    LabelledCheckBox *resolutionScalingCB = new LabelledCheckBox(start_x, start_y + 2 * step_y, "Resolution scaling", &g.config.resolutionScaling);
+    LabelledCheckBox *debugVisibilityCB = new LabelledCheckBox(start_x, start_y + 3 * step_y, "Debug Visibility", &g.config.debugVisibility);
+    LabelledCheckBox *sortingCB = new LabelledCheckBox(start_x, start_y + 4 * step_y,  "Inventory Sorting", &g.config.sorting);
+    LabelledCheckBox *startNagCB = new LabelledCheckBox(start_x, start_y + 5 * step_y, "Start Notifications", &g.config.start_nag);
+    LabelledCheckBox *uiFadingCB = new LabelledCheckBox(start_x, start_y + 6 * step_y, "UI Fading", &g.config.ui_fading);
+    LabelledCheckBox *altGridMovementCB = new LabelledCheckBox(start_x, start_y + 7 * step_y, "Alternative Grid Movement", &g.config.alt_grid_movement);
+    LabelledCheckBox *clipRectangleCB = new LabelledCheckBox(start_x, start_y + 8 * step_y, "Clip Rectangle", &g.config.setClipRectangle);
+
+    widgets.push_back(fullscreenCB);
+    widgets.push_back(vsyncCB);
+    widgets.push_back(resolutionScalingCB);
+    widgets.push_back(debugVisibilityCB);
+    widgets.push_back(sortingCB);
+    widgets.push_back(startNagCB);
+    widgets.push_back(uiFadingCB);
+    widgets.push_back(altGridMovementCB);
+    widgets.push_back(clipRectangleCB);
+    widgets.push_back(button_cancel);
+    widgets.push_back(button_apply);
+}
+
+OptionsUI::~OptionsUI() {
+    for(auto&& widget : widgets) {
+        delete widget;
+    }
+}
+
+/*
   Blocking notifications
 
   Construct with notify("message");
@@ -7863,6 +8003,7 @@ static void new_game(void);
 static bool save_game(const char *filename);
 static bool load_game(const char *filename);
 static void button_Help_press(void);
+static void button_Options_press(void);
 
 static void load_game_wrapper(void) {
     bool dialog_opened = al_show_native_file_dialog(NULL, g.load_filechooser);
@@ -7926,8 +8067,8 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "Load") == 0) {
         load_game_wrapper();
     } else if(strcmp(name, "Options") == 0) {
-        g.config.save("game.conf");
-        notify("Open the file game.conf in a text editor to change game settings");
+        button_Options_press();
+        // notify("Open the file game.conf in a text editor to change game settings");
     } else if(strcmp(name, "Help") == 0) {
         button_Help_press();
     } else {
@@ -8020,45 +8161,6 @@ MainMenuUI::MainMenuUI() {
     addEntry("Quit");
 }
 
-struct TextButton : public Widget {
-    float text_offset_x;
-    float text_offset_y;
-    const char *name;
-
-    TextButton(const char *name, float x, float y, float sx, float sy);
-
-    void draw(void) override;
-    void hoverOver(void) override;
-};
-
-TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
-    this->name = name;
-    pos.x1 = x;
-    pos.y1 = y;
-    pos.x2 = sx;
-    pos.y2 = sy;
-    text_offset_x = round((pos.x2 - al_get_text_width(g.font, name)) / 2);
-    text_offset_y = round((pos.y2 - g.config.font_height) / 2);
-}
-
-void TextButton::draw(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, g.color_darkgrey);
-    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 1);
-    al_draw_text(g.font, g.color_white,
-                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
-}
-
-void TextButton::hoverOver(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, g.color_grey2);
-    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 1);
-    al_draw_text(g.font, g.color_white,
-                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
-}
-
 struct HelpUI : public UI {
     ALLEGRO_BITMAP *background;
     TextButton *button_back;
@@ -8075,8 +8177,6 @@ void HelpUI::draw(void) {
     }
     UI::draw();
 }
-
-static void runMainMenu(void);
 
 static void press_Help_back(void) {
     delete g.ui_Help;
@@ -8116,6 +8216,11 @@ static void button_Help_press(void) {
     g.ui = g.ui_Help;
 }
 
+static void button_Options_press(void) {
+    g.color_bg = g.color_grey;
+    g.ui = g.ui_Options;
+}
+
 static void main_buttons_update(void) {
     for(auto& b : g.main_buttons)
         b->pressed = false;
@@ -8149,7 +8254,8 @@ static void runMainMenu(void) {
     if(g.ui == NULL ||
        g.ui == g.ui_MainMap ||
        g.ui == g.ui_MiniMap ||
-       g.ui == g.ui_Help) {
+       g.ui == g.ui_Help ||
+       g.ui == g.ui_Options) {
         switchToMainMenu();
     } else {
         info("You can only go to the main menu from the map or minimap");
@@ -9812,6 +9918,7 @@ int main(int argc, char **argv) {
         g.ui_MainMenu = new MainMenuUI;
         g.ui_FadeTransition = new FadeTransitionUI;
         g.ui_Notification = new NotificationUI;
+        g.ui_Options = new OptionsUI;
 
         g.map = NULL; // game is over
         g.minimap = NULL; // game is fully unloaded
