@@ -7651,6 +7651,10 @@ void TextButton::hoverOver(void) {
                  pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
 }
 
+struct ResolutionData {
+    int x, y;
+};
+
 /*
   Checkbox with text to the right of it
 */
@@ -7659,10 +7663,14 @@ struct LabelledCheckBox : public Widget {
     bool *cfg_state;
     bool state;
 
+    ResolutionData res_data; // TODO: mmm
+
     LabelledCheckBox(float x, float y, const char *name, bool *cfg_state);
 
     void draw(void) override;
     void mouseDown(void) override;
+
+    void (*callback)(void);
 
     void apply(void);
     void reset(void);
@@ -7678,8 +7686,13 @@ void LabelledCheckBox::reset(void) {
 
 LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *cfg_state) {
     this->name = name;
-    this->cfg_state = cfg_state;
-    this->state = *cfg_state;
+    if(cfg_state == NULL) {
+        state = false;
+    } else {
+        this->cfg_state = cfg_state;
+        this->state = *cfg_state;
+    }
+    this->callback = nullptr;
 
     pos.x1 = x;
     pos.y1 = y;
@@ -7701,6 +7714,9 @@ void LabelledCheckBox::draw(void) {
 }
 
 void LabelledCheckBox::mouseDown(void) {
+    if(callback != nullptr)
+        callback();
+
     state = !state;
 }
 
@@ -7709,6 +7725,7 @@ struct OptionsUI : public UI {
     TextButton *button_apply;
 
     vector<LabelledCheckBox *> checkboxes;
+    vector<LabelledCheckBox *> resolution_checkboxes;
 
     LabelledCheckBox *fullscreenCB;
     LabelledCheckBox *vsyncCB;
@@ -7729,10 +7746,24 @@ struct OptionsUI : public UI {
 
 void OptionsUI::reset_settings(void) {
     for(auto&& cb : checkboxes) cb->reset();
+    for(auto&& cb : resolution_checkboxes)
+        // reset all but the resolution we're in!
+        if(cb->res_data.x != g.config.displayX ||
+           cb->res_data.y != g.config.displayY)
+            cb->state = false;
+        else
+            cb->state = true;
 }
 
 void OptionsUI::apply_settings(void) {
     for(auto&& cb : checkboxes) cb->apply();
+    for(auto&& cb : resolution_checkboxes) {
+        if(cb->state == true) {
+            g.config.displayX = cb->res_data.x;
+            g.config.displayY = cb->res_data.y;
+            printf("selected resolution: %d %d\n", cb->res_data.x, cb->res_data.y);
+        }
+    }
 }
 
 static void runMainMenu(void);
@@ -7753,7 +7784,7 @@ OptionsUI::OptionsUI() {
                                      runMainMenu();
     };
 
-    float start_x = (g.display_x - 175) / 2;
+    float start_x = (g.display_x - 375) / 2;
     float start_y = 100;
     float step_y = 25;
 
@@ -7797,11 +7828,56 @@ OptionsUI::OptionsUI() {
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
 
+
+    /*
+      dynamically add resolution checkboxes
+    */
+    char buf[32];
+    start_x = (g.display_x + 275) / 2;
+    start_y = 100;
+    step_y = 0;
+    int old_x = 0;
+    int old_y = 0;
+
+    for (int i = 0 ; i < al_get_num_display_modes() ; ++i) {
+        ALLEGRO_DISPLAY_MODE mode;
+        if (al_get_display_mode(i , &mode) == &mode) {
+            // only add resolutions that are higher than 720p
+            // filter out different refresh rates for the same resolution
+            if((old_x != mode.width || old_y != mode.height) && mode.width >= 1280 && mode.height >= 720) {
+
+                old_x = mode.width;
+                old_y = mode.height;
+                snprintf(buf, sizeof(buf), "%dx%d", mode.width, mode.height);
+
+                LabelledCheckBox *cb = new LabelledCheckBox(start_x, start_y + 25 * step_y, strdup(buf), NULL);
+                cb->res_data.x = mode.width;
+                cb->res_data.y = mode.height;
+                if(cb->res_data.x == g.config.displayX &&
+                   cb->res_data.y == g.config.displayY)
+                    cb->state = true;
+
+                cb->callback = []{
+                    for(auto&& cb : g.ui_Options->resolution_checkboxes)
+                        cb->state = false;
+                };
+
+                resolution_checkboxes.push_back(cb);
+                step_y++;
+            }
+        }
+    }
+
+    for(auto&& cb : resolution_checkboxes) widgets.push_back(cb);
+
     widgets.push_back(button_cancel);
     widgets.push_back(button_apply);
 }
 
 OptionsUI::~OptionsUI() {
+    for(auto&& cb : resolution_checkboxes) {
+        free((char*)cb->name);
+    }
     for(auto&& widget : widgets) {
         delete widget;
     }
