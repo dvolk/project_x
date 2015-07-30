@@ -5499,6 +5499,20 @@ bool Encounter::isEncounterNPCdead(void) {
 bool Encounter::isEncounterNPCdead(int n) {
     Character *c = n == 0 ? c1 : c2;
 
+    // check if the npc has already been killed and removed
+    // this can happen if it dies in update()
+    bool alive = false;
+    for(auto&& ch : g.map->characters) {
+        if(ch == c) {
+            alive = true;
+            break;
+        }
+    }
+    if(alive == false) {
+        puts("isEncounterNPCdead(): gotcha");
+        return true;
+    }
+
     if(c->health < 0.01) {
         if(involvesPlayer() == true) {
             g.world.player_faction_kills[c->faction] += 1;
@@ -5529,6 +5543,8 @@ void Encounter::runPlayerEncounterStep(void) {
     char msg[100];
     string action1 = actions->front()->getName();
 
+    if(isEncounterNPCdead() == true) return;
+
     if(action1 == "Flee") {
         uniform_int_distribution<> fled_dist(0, 2);
         bool successfully_fled = fled_dist(*g.rng) > 0;
@@ -5546,6 +5562,7 @@ void Encounter::runPlayerEncounterStep(void) {
             snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
             g.AddMessage(msg);
             npcEncounterStep();
+            if(isEncounterNPCdead() == true) return;
             if(npcRelocated() == true) return;
         }
     } else if(action1 == "Single attack") {
@@ -5559,14 +5576,17 @@ void Encounter::runPlayerEncounterStep(void) {
 
         if(isEncounterNPCdead() == true) return;
         npcEncounterStep();
+        if(isEncounterNPCdead() == true) return;
         if(npcRelocated() == true) return;
     } else if(action1 == "Retreat") {
         retreat(2);
         npcEncounterStep();
+        if(isEncounterNPCdead() == true) return;
         if(npcRelocated() == true) return;
     } else if(action1 == "Advance") {
         advance(2);
         npcEncounterStep();
+        if(isEncounterNPCdead() == true) return;
         if(npcRelocated() == true) return;
     } else {
 
