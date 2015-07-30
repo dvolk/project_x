@@ -22,6 +22,8 @@
 #include "./util.h"
 #include "./rect.h"
 #include "./widget.h"
+#include "./config.h"
+#include "./colors.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -62,27 +64,7 @@ struct NotificationUI;
 struct World;
 struct OptionsUI;
 
-struct Config {
-    int8_t frame_rate;
-    bool vsync;
-    bool fullscreen;
-    bool resolutionScaling;
-    bool debugVisibility;
-    int16_t displayX;
-    int16_t displayY;
-    char *font_filename;
-    int8_t font_height;
-    bool sorting;
-    int8_t aa_samples;
-    bool start_nag;
-    bool ui_fading;
-    bool alt_grid_movement;
-    bool setClipRectangle;
-    char *custom_cursor;
-
-    void save(const char *filename);
-    void load(const char *filename);
-};
+extern Colors colors;
 
 // misc data that is stored with the save game file
 struct World {
@@ -119,17 +101,6 @@ struct Game {
 
     // global random number god
     mt19937 *rng;
-
-    ALLEGRO_COLOR color_white;
-    ALLEGRO_COLOR color_black;
-    ALLEGRO_COLOR color_red;
-    ALLEGRO_COLOR color_grey;
-    ALLEGRO_COLOR color_grey2;
-    ALLEGRO_COLOR color_grey3;
-    ALLEGRO_COLOR color_darkgrey;
-    ALLEGRO_COLOR color_tile_tint;
-    ALLEGRO_COLOR color_active_tile_tint;
-    ALLEGRO_COLOR color_bg;
 
     Button *button_MainMap;
     Button *button_MiniMap;
@@ -372,7 +343,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     al_set_target_bitmap(b);
     al_clear_to_color(al_map_rgba(0, 0, 0, 0));
     al_draw_filled_rounded_rectangle(0, 0, item_size_x, item_size_y, 7, 7, bg_col);
-    al_draw_text(g.font, g.color_white, offset_x, offset_y, 0, text);
+    al_draw_text(g.font, colors.white, offset_x, offset_y, 0, text);
 
     al_set_target_backbuffer(g.display);
 
@@ -400,7 +371,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
 }
 
 Item *make_text_item(const char *text) {
-    return make_text_item(text, g.color_darkgrey);
+    return make_text_item(text, colors.darkgrey);
 }
 
 Item::Item(const Item& i) {
@@ -687,7 +658,7 @@ BarIndicator::BarIndicator() {
 
 void BarIndicator::draw(void) {
     if(up != NULL && quantity != NULL && bars != NULL) {
-        al_draw_text(g.font, g.color_white, pos.x1 + 2, pos.y1 - 6, 0, indicator_name);
+        al_draw_text(g.font, colors.white, pos.x1 + 2, pos.y1 - 6, 0, indicator_name);
         al_draw_bitmap(up, pos.x1, pos.y1 + 10, 0);
         al_draw_bitmap_region(bars, 0, 0, *quantity * pos.x2, pos.y2, pos.x1, pos.y1 + 10, 0);
     }
@@ -2015,7 +1986,7 @@ void Label::draw(void) {
     off_y += TileMap::hex_step_y * r_y - g.map->res_py;
 
     al_draw_text(g.font,
-                 g.color_white,
+                 colors.white,
                  g.map->pos.x1 + off_x + offset_x,
                  g.map->pos.y1 + off_y + 55,
                  0,
@@ -2825,7 +2796,7 @@ void WeaponSwitcher::draw(void) {
     float weapon_y = pos.y1 + (pos.y2 - w->get_grid_size_y() * Grid::grid_px_y) / 2;
 
     al_draw_bitmap(w->get_sprite(), weapon_x, weapon_y, 0);
-    al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 8, 0, w->getName());
+    al_draw_text(g.font, colors.white, pos.x1 + 8, pos.y1 + 8, 0, w->getName());
 
     if(w->storage != NULL) {
         char buf[20];
@@ -2834,7 +2805,7 @@ void WeaponSwitcher::draw(void) {
         } else {
             sprintf(buf, "Ammo: empty");
         }
-        al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 2 * g.config.font_height, 0, buf);
+        al_draw_text(g.font, colors.white, pos.x1 + 8, pos.y1 + 2 * g.config.font_height, 0, buf);
     }
 }
 
@@ -2880,7 +2851,7 @@ void TimeDisplay::calculate_tod(void) {
 }
 
 void TimeDisplay::draw(void) {
-    al_draw_text(g.font, g.color_grey, pos.x1, pos.y1, 0, current_time_string);
+    al_draw_text(g.font, colors.grey, pos.x1, pos.y1, 0, current_time_string);
 }
 
 struct GridSystem : public Widget {
@@ -3252,8 +3223,8 @@ void MiniMap::recreate() {
 
     al_set_target_bitmap(buf);
 
-    al_clear_to_color(g.color_black);
-    al_draw_rectangle(1, 1, size_x - 1, size_y - 1, g.color_white, 2);
+    al_clear_to_color(colors.black);
+    al_draw_rectangle(1, 1, size_x - 1, size_y - 1, colors.white, 2);
 
     // draw the minimap
     Tile *t = NULL;
@@ -3747,8 +3718,8 @@ void Button::keyDown(void) {
 
 void Button::hoverOver(void) {
     if(name != NULL) {
-        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + name_len, pos.y1 + 30, g.color_black);
-        al_draw_text(g.font, g.color_white, pos.x1 + 8, pos.y1 + 8, 0, name);
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + name_len, pos.y1 + 30, colors.black);
+        al_draw_text(g.font, colors.white, pos.x1 + 8, pos.y1 + 8, 0, name);
     }
 }
 
@@ -3783,7 +3754,7 @@ void GridSortButton::draw(void) {
     if(up != NULL)
         al_draw_bitmap(up, pos.x1, pos.y1, 0);
     else
-        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_black);
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, colors.black);
 }
 
 /*
@@ -3843,7 +3814,7 @@ void MessageLog::draw(void) {
     int lines_n = lines.size();
     int start = max(0, lines_n - 9);
     for(int i = start; i < lines_n; i++) {
-        al_draw_text(font, g.color_grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
+        al_draw_text(font, colors.grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
         off_y = off_y + 14;
     }
 
@@ -3860,7 +3831,7 @@ void Button::draw(void) {
         al_draw_filled_rectangle(pos.x1, pos.y1,
                                  pos.x1 + pos.x2,
                                  pos.y1 + pos.y2,
-                                 g.color_black);
+                                 colors.black);
 }
 
 void Button::update() {
@@ -3946,7 +3917,7 @@ void TileMap::drawTile(int i, int x, int y) {
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                                  g.color_active_tile_tint,
+                                  colors.active_tile_tint,
                                   pos.x1 + off_x,
                                   pos.y1 + off_y,
                                   0);
@@ -3982,14 +3953,14 @@ void TileMap::drawTile(int i, int x, int y) {
         */
         // otherwise draw it 50% tinted
         al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                              g.color_tile_tint,
+                              colors.tile_tint,
                               pos.x1 + off_x,
                               pos.y1 + off_y,
                               0);
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                                  g.color_active_tile_tint,
+                                  colors.active_tile_tint,
                                   pos.x1 + off_x,
                                   pos.y1 + off_y,
                                   0);
@@ -4018,7 +3989,7 @@ void TileMap::draw(void) {
     }
 
     if(g.config.debugVisibility == true) {
-        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, g.color_red, 1);
+        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, colors.red, 1);
     }
 
     for(auto&& label : labels)
@@ -4027,8 +3998,8 @@ void TileMap::draw(void) {
     // draw target reticle if we're holding MMB at the position
     // where the mouse was before we started holding it.
     if (g.mouse_state.buttons & 4) {
-        al_draw_line(g.old_mx, g.old_my - 10, g.old_mx, g.old_my + 10, g.color_red, 4);
-        al_draw_line(g.old_mx - 10, g.old_my, g.old_mx + 10, g.old_my, g.color_red, 4);
+        al_draw_line(g.old_mx, g.old_my - 10, g.old_mx, g.old_my + 10, colors.red, 4);
+        al_draw_line(g.old_mx - 10, g.old_my, g.old_mx + 10, g.old_my, colors.red, 4);
     }
 }
 
@@ -4049,7 +4020,7 @@ void TileMap::drawTopHalfOfTileAt(int x, int y) {
 
     if(mouse_n == n) {
         al_draw_tinted_bitmap(tile_info[tiles[n].info_index].sprite,
-                                     g.color_active_tile_tint,
+                                     colors.active_tile_tint,
                                      pos.x1 + off_x,
                                      pos.y1 + off_y, 0);
     } else {
@@ -4095,19 +4066,19 @@ void GridSystem::drawItemTooltip(void) {
                     + (display_condition == true ? g.config.font_height : 0) + 8;
 
                 al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
-                                         g.mouse_x + 200, g.mouse_y + box_height, g.color_black);
+                                         g.mouse_x + 200, g.mouse_y + box_height, colors.black);
 
-                al_draw_text(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + 8,
+                al_draw_text(g.font, colors.grey3, g.mouse_x + 24, g.mouse_y + 8,
                              0, g.item_info[item->info_index].name);
 
                 if(display_condition == true) {
-                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
+                    al_draw_textf(g.font, colors.grey3, g.mouse_x + 24, g.mouse_y + off_y,
                                   0, "condition: %.1f%%", item->condition * 100);
                     off_y += 14;
                 }
 
                 if(display_weight == true) {
-                    al_draw_textf(g.font, g.color_grey3, g.mouse_x + 24, g.mouse_y + off_y,
+                    al_draw_textf(g.font, colors.grey3, g.mouse_x + 24, g.mouse_y + off_y,
                                   0, "%d g", weight * item->cur_stack);
                     off_y += 14;
                 }
@@ -4494,14 +4465,14 @@ void Grid::draw(void) {
     if(info != NULL && info->visible == false)
         goto draw_items;
 
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, g.color_grey2);
+    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, colors.grey2);
 
     if(info == NULL || info->noGrid == false) {
         for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x) {
-            al_draw_line(x, pos.y1, x, pos.y2, g.color_grey3, 1);
+            al_draw_line(x, pos.y1, x, pos.y2, colors.grey3, 1);
         }
         for (int y = pos.y1 + grid_px_y; y < pos.y2; y = y + grid_px_y) {
-            al_draw_line(pos.x1, y, pos.x2, y, g.color_grey3, 1);
+            al_draw_line(pos.x1, y, pos.x2, y, colors.grey3, 1);
         }
     }
 
@@ -4535,8 +4506,8 @@ void Item::draw(void) {
     float y2 = parent->pos.y1 + (pos.y1 + pos.y2) * Grid::grid_px_y;
 
     if(sprite == NULL) {
-        al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
-        al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
+        al_draw_filled_rectangle(x1, y1, x2, y2, colors.grey3);
+        al_draw_rectangle(x1, y1, x2, y2, colors.black, 1);
     }
     else {
         if(sprite_on_hp != NULL &&
@@ -4557,9 +4528,9 @@ void Item::draw(void) {
         char buf[4];
         sprintf(buf, "%d", cur_stack);
         if(cur_stack > 9)
-            al_draw_text(g.font, g.color_black, x2 - 19, y2 - 15, 0, buf);
+            al_draw_text(g.font, colors.black, x2 - 19, y2 - 15, 0, buf);
         else
-            al_draw_text(g.font, g.color_black, x2 - 11, y2 - 15, 0, buf);
+            al_draw_text(g.font, colors.black, x2 - 11, y2 - 15, 0, buf);
     }
 }
 
@@ -4573,8 +4544,8 @@ void Item::drawHeld(void) {
     if(sprite == NULL) {
         float x2 = g.mouse_x - g.hold_off_x + pos.x2 * 16;
         float y2 = g.mouse_y - g.hold_off_y + pos.y2 * 16;
-        al_draw_filled_rectangle(x1, y1, x2, y2, g.color_grey3);
-        al_draw_rectangle(x1, y1, x2, y2, g.color_black, 1);
+        al_draw_filled_rectangle(x1, y1, x2, y2, colors.grey3);
+        al_draw_rectangle(x1, y1, x2, y2, colors.black, 1);
     }
     else {
         if(rotated == true) {
@@ -4844,9 +4815,9 @@ struct CraftingUI : public UI {
 };
 
 void CraftingUI::draw(void) {
-    al_draw_text(g.font, g.color_white, 200, 8, 0, "ground:");
-    al_draw_text(g.font, g.color_white, 700, 8, 0, "ingredients:");
-    al_draw_text(g.font, g.color_white, 800, 295, 0, "preview:");
+    al_draw_text(g.font, colors.white, 200, 8, 0, "ground:");
+    al_draw_text(g.font, colors.white, 700, 8, 0, "ingredients:");
+    al_draw_text(g.font, colors.white, 800, 295, 0, "preview:");
     UI::draw();
 }
 
@@ -5651,7 +5622,7 @@ EncounterUI::EncounterUI() {
 static void button_MainMap_press(void);
 
 void EncounterUI::setup(void) {
-    g.color_bg = g.color_grey;
+    colors.bg = colors.grey;
 
     widgets.clear();
     widgets.push_back(button_confirm);
@@ -5686,12 +5657,12 @@ void EncounterUI::setup(void) {
 
 void EncounterUI::draw(void) {
     // g.map->draw();
-    // al_draw_filled_rectangle(off_x + 95, 0, off_x + 995, 500, g.color_grey);
+    // al_draw_filled_rectangle(off_x + 95, 0, off_x + 995, 500, colors.grey);
 
-    al_draw_filled_rectangle(off_x + 105, 25, off_x + 405, 295, g.color_grey2);
-    al_draw_filled_rectangle(off_x + 410, 25, off_x + 680, 295, g.color_grey2);
-    al_draw_filled_rectangle(off_x + 685, 25, off_x + 985, 295, g.color_grey2);
-    al_draw_text(g.font, g.color_white, off_x + 105, 7, 0,
+    al_draw_filled_rectangle(off_x + 105, 25, off_x + 405, 295, colors.grey2);
+    al_draw_filled_rectangle(off_x + 410, 25, off_x + 680, 295, colors.grey2);
+    al_draw_filled_rectangle(off_x + 685, 25, off_x + 985, 295, colors.grey2);
+    al_draw_text(g.font, colors.white, off_x + 105, 7, 0,
                  "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
 
     char buf[30];
@@ -5699,20 +5670,20 @@ void EncounterUI::draw(void) {
     // left pane
     al_draw_bitmap(encounter.get_character_sprite(0), off_x + 120, 40, 0);
     sprintf(buf, "Name: %s", encounter.getName(0));
-    al_draw_text(g.font, g.color_black, off_x + 120, 110, 0, buf);
+    al_draw_text(g.font, colors.black, off_x + 120, 110, 0, buf);
 
     if(encounter.seesOpponent(0) == true) {
-        al_draw_text(g.font, g.color_black, off_x + 120, 110 + g.config.font_height, 0,
+        al_draw_text(g.font, colors.black, off_x + 120, 110 + g.config.font_height, 0,
                      "Visible: yes");
     } else {
-        al_draw_text(g.font, g.color_black, off_x + 120, 110 + g.config.font_height, 0,
+        al_draw_text(g.font, colors.black, off_x + 120, 110 + g.config.font_height, 0,
                      "Visible: no");
     }
 
     sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(0));
-    al_draw_text(g.font, g.color_black, off_x + 120, 110 + 2 * g.config.font_height, 0, buf);
+    al_draw_text(g.font, colors.black, off_x + 120, 110 + 2 * g.config.font_height, 0, buf);
     // sprintf(buf, "Health: %f", encounter.getHealth(0));
-    // al_draw_text(g.font, g.color_black, off_x + 120, 140, 0, buf);
+    // al_draw_text(g.font, colors.black, off_x + 120, 140, 0, buf);
 
     float wound_severity = 0;
     float wound_bleeding = 0;
@@ -5723,30 +5694,30 @@ void EncounterUI::draw(void) {
     }
 
     if(wound_severity >= 0.001)
-        al_draw_text(g.font, g.color_red, off_x + 120, 160, 0, "Wounded");
+        al_draw_text(g.font, colors.red, off_x + 120, 160, 0, "Wounded");
     if(wound_bleeding >= 0.001)
-        al_draw_text(g.font, g.color_red, off_x + 120, 160 + g.config.font_height, 0, "Bleeding");
+        al_draw_text(g.font, colors.red, off_x + 120, 160 + g.config.font_height, 0, "Bleeding");
 
     // center pane
     al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
     sprintf(buf, "Terrain: %s", encounter.getTerrainName());
-    al_draw_text(g.font, g.color_black, off_x + 430, 160, 0, buf);
+    al_draw_text(g.font, colors.black, off_x + 430, 160, 0, buf);
     sprintf(buf, "Range: %d", encounter.getRange());
-    al_draw_text(g.font, g.color_black, off_x + 430, 160 + g.config.font_height, 0, buf);
+    al_draw_text(g.font, colors.black, off_x + 430, 160 + g.config.font_height, 0, buf);
 
     // right pane
     if(encounter.seesOpponent(1) == true) {
         al_draw_bitmap(encounter.get_character_sprite(1), off_x + 700, 40, 0);
         sprintf(buf, "Name: %s", encounter.getName(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 110, 0, buf);
+        al_draw_text(g.font, colors.black, off_x + 700, 110, 0, buf);
         sprintf(buf, "Faction: %s", encounter.getFaction(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 110 + g.config.font_height, 0, buf);
-        al_draw_text(g.font, g.color_black, off_x + 700, 110 + 2 * g.config.font_height, 0,
+        al_draw_text(g.font, colors.black, off_x + 700, 110 + g.config.font_height, 0, buf);
+        al_draw_text(g.font, colors.black, off_x + 700, 110 + 2 * g.config.font_height, 0,
                      "visible: yes");
         sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
-        al_draw_text(g.font, g.color_black, off_x + 700, 110 + 3 * g.config.font_height, 0, buf);
+        al_draw_text(g.font, colors.black, off_x + 700, 110 + 3 * g.config.font_height, 0, buf);
         // sprintf(buf, "Health: %f", encounter.getHealth(1));
-        // al_draw_text(g.font, g.color_black, off_x + 700, 150, 0, buf);
+        // al_draw_text(g.font, colors.black, off_x + 700, 150, 0, buf);
 
         wound_severity = 0;
         wound_bleeding = 0;
@@ -5756,15 +5727,15 @@ void EncounterUI::draw(void) {
         }
 
         if(wound_severity >= 0.001)
-            al_draw_text(g.font, g.color_red, off_x + 700, 170, 0, "Wounded");
+            al_draw_text(g.font, colors.red, off_x + 700, 170, 0, "Wounded");
         if(wound_bleeding >= 0.001)
-            al_draw_text(g.font, g.color_red, off_x + 700, 170 + g.config.font_height, 0, "Bleeding");
+            al_draw_text(g.font, colors.red, off_x + 700, 170 + g.config.font_height, 0, "Bleeding");
 
     } else {
         al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
-        al_draw_text(g.font, g.color_black, off_x + 700, 110, 0,
+        al_draw_text(g.font, colors.black, off_x + 700, 110, 0,
                      "Name: unknown");
-        al_draw_text(g.font, g.color_black, off_x + 700, 110 + g.config.font_height, 0,
+        al_draw_text(g.font, colors.black, off_x + 700, 110 + g.config.font_height, 0,
                      "Visible: no");
     }
 
@@ -5829,22 +5800,22 @@ void ScavengeUI::draw(void) {
     al_draw_bitmap(g.map->getBitmap(player->n), off_x, off_y - 120, 0);
     if(current_stage == 0) {
         if(items_to_locations.empty() == true) {
-            al_draw_text(g.font, g.color_white, 105, 365, 0, "There don't seem to be any worthwhile spots to scavenge here at the moment.");
+            al_draw_text(g.font, colors.white, 105, 365, 0, "There don't seem to be any worthwhile spots to scavenge here at the moment.");
         } else {
-            al_draw_text(g.font, g.color_white, 105, 365, 0, "Choose a location to scavenge:");
+            al_draw_text(g.font, colors.white, 105, 365, 0, "Choose a location to scavenge:");
         }
     } else if(current_stage == 1) {
-        al_draw_text(g.font, g.color_white, 105, 365, 0, "Choose what to use during scavenging:");
+        al_draw_text(g.font, colors.white, 105, 365, 0, "Choose what to use during scavenging:");
     } else {
-        al_draw_text(g.font, g.color_white, off_x, off_y - 20, 0, "Scavenging results:");
+        al_draw_text(g.font, colors.white, off_x, off_y - 20, 0, "Scavenging results:");
 
         if(scavenged_items.empty() == true) {
-            al_draw_text(g.font, g.color_white, off_x, off_y, 0, "You didn't find any items this time.");
+            al_draw_text(g.font, colors.white, off_x, off_y, 0, "You didn't find any items this time.");
         } else {
-            al_draw_text(g.font, g.color_white, off_x, off_y, 0, "You found some items:");
+            al_draw_text(g.font, colors.white, off_x, off_y, 0, "You found some items:");
             int i = 0;
             for(auto& item : scavenged_items) {
-                al_draw_text(g.font, g.color_white, off_x + 10, off_y + 20 + 10 * i, 0, item->getName());
+                al_draw_text(g.font, colors.white, off_x + 10, off_y + 20 + 10 * i, 0, item->getName());
                 i++;
             }
         }
@@ -5973,7 +5944,7 @@ ScavengeUI::~ScavengeUI() {
 static vector<Location *> *locations_at_character(Character *character);
 
 void ScavengeUI::setup(void) {
-    g.color_bg = g.color_grey;
+    colors.bg = colors.grey;
 
     widgets.clear();
     widgets.push_back(button_confirm);
@@ -6194,7 +6165,7 @@ void InteractUI::setup(void) {
     widgets.push_back(current_interact);
 
     addIndicatorWidgets();
-    g.color_bg = g.color_grey;
+    colors.bg = colors.grey;
 }
 
 InteractPage::InteractPage(void) {
@@ -6245,11 +6216,11 @@ void InteractPage::draw_description(void) {
         return;
 
     al_set_target_bitmap(left);
-    al_clear_to_color(g.color_grey2);
+    al_clear_to_color(colors.grey2);
 
     float y = (InteractUI::top_size - g.config.font_height * description.size()) / 3;
     for(auto&& line : description) {
-        al_draw_text(g.font, g.color_black, 5, y, 0, line);
+        al_draw_text(g.font, colors.black, 5, y, 0, line);
         y += 14;
     }
 
@@ -6259,7 +6230,7 @@ void InteractPage::draw_description(void) {
 void InteractUI::draw(void) {
     assert(current_interact != NULL);
     al_draw_filled_rectangle(off_x + 595, top_off_y, off_x + 1035,
-                             top_off_y + top_size, g.color_grey2);
+                             top_off_y + top_size, colors.grey2);
     UI::draw();
     // current_interact->draw();
 }
@@ -6412,7 +6383,7 @@ struct test_interact_data {
             r = gr(*g.rng);
             s = gs(*g.rng);
         }
-        void draw(void) { al_draw_filled_circle(x, y, r, g.color_white); }
+        void draw(void) { al_draw_filled_circle(x, y, r, colors.white); }
         void update(void) {
             r += g.dt * s * 3;
             if(r > max_size) { generate(); }
@@ -6797,8 +6768,8 @@ struct VehicleGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) {
-        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-        al_draw_text(g.font, g.color_white, 500, 135, 0, "Vehicle:");
+        al_draw_text(g.font, colors.white, 200, 10, 0, "Ground:");
+        al_draw_text(g.font, colors.white, 500, 135, 0, "Vehicle:");
         GridSystem::draw();
     }
 
@@ -6826,9 +6797,9 @@ struct CampGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) override {
-        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-        al_draw_text(g.font, g.color_white, 600, 10, 0, "Current campsite:");
-        al_draw_text(g.font, g.color_white, 950, 10, 0, "Available campsites:");
+        al_draw_text(g.font, colors.white, 200, 10, 0, "Ground:");
+        al_draw_text(g.font, colors.white, 600, 10, 0, "Current campsite:");
+        al_draw_text(g.font, colors.white, 950, 10, 0, "Available campsites:");
         GridSystem::draw();
     }
 
@@ -6880,7 +6851,7 @@ struct InventoryGridSystem : public GridSystem {
     void reset(void);
     void draw(void) {
         al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
-        al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
+        al_draw_text(g.font, colors.white, 200, 10, 0, "Ground:");
         GridSystem::draw();
     }
 
@@ -6906,9 +6877,9 @@ ConditionGridSystem::~ConditionGridSystem() {
 
 void ConditionGridSystem::draw(void) {
     al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
-    al_draw_text(g.font, g.color_white, 200, 10, 0, "Ground:");
-    // al_draw_filled_rectangle(700, 50, 1175, 500, g.color_grey);
-    // al_draw_text(g.font, g.color_black, 708, 58, 0, "Current conditions:");
+    al_draw_text(g.font, colors.white, 200, 10, 0, "Ground:");
+    // al_draw_filled_rectangle(700, 50, 1175, 500, colors.grey);
+    // al_draw_text(g.font, colors.black, 708, 58, 0, "Current conditions:");
 
     for (auto& g : grids) {
         // skip medical hardpoints
@@ -7664,19 +7635,19 @@ TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
 
 void TextButton::draw(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, g.color_darkgrey);
+                             pos.y1 + pos.y2, colors.darkgrey);
     al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 1);
-    al_draw_text(g.font, g.color_white,
+                      colors.black, 1);
+    al_draw_text(g.font, colors.white,
                  pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
 }
 
 void TextButton::hoverOver(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, g.color_grey2);
+                             pos.y1 + pos.y2, colors.grey2);
     al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 1);
-    al_draw_text(g.font, g.color_white,
+                      colors.black, 1);
+    al_draw_text(g.font, colors.white,
                  pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
 }
 
@@ -7685,17 +7656,30 @@ void TextButton::hoverOver(void) {
 */
 struct LabelledCheckBox : public Widget {
     const char *name;
-    bool *state;
+    bool *cfg_state;
+    bool state;
 
-    LabelledCheckBox(float x, float y, const char *name, bool *state);
+    LabelledCheckBox(float x, float y, const char *name, bool *cfg_state);
 
     void draw(void) override;
     void mouseDown(void) override;
+
+    void apply(void);
+    void reset(void);
 };
 
-LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *state) {
+void LabelledCheckBox::apply(void) {
+    *cfg_state = state;
+}
+
+void LabelledCheckBox::reset(void) {
+    state = *cfg_state;
+}
+
+LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *cfg_state) {
     this->name = name;
-    this->state = state;
+    this->cfg_state = cfg_state;
+    this->state = *cfg_state;
 
     pos.x1 = x;
     pos.y1 = y;
@@ -7704,25 +7688,28 @@ LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *sta
 }
 
 void LabelledCheckBox::draw(void) {
-    if(*state == true)
-        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, g.color_black);
+    if(state == true)
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, colors.black);
     else
-        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, g.color_black, 1);
+        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, colors.black, 1);
 
     // TODO or draw cross?
-    // al_draw_line(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, g.color_black, 1);
-    // al_draw_line(pos.x1, pos.y1 + pos.y2, pos.x1 + pos.x2, pos.y1, g.color_black, 1);
+    // al_draw_line(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, colors.black, 1);
+    // al_draw_line(pos.x1, pos.y1 + pos.y2, pos.x1 + pos.x2, pos.y1, colors.black, 1);
 
-    al_draw_text(g.font, g.color_black, pos.x1 + 20, pos.y1, 0, name);
+    al_draw_text(g.font, colors.black, pos.x1 + 20, pos.y1, 0, name);
 }
 
 void LabelledCheckBox::mouseDown(void) {
-    *state = !*state;
+    state = !state;
 }
 
 struct OptionsUI : public UI {
     TextButton *button_cancel;
     TextButton *button_apply;
+
+    vector<LabelledCheckBox *> checkboxes;
+
     LabelledCheckBox *fullscreenCB;
     LabelledCheckBox *vsyncCB;
     LabelledCheckBox *resolutionScalingCB;
@@ -7733,9 +7720,20 @@ struct OptionsUI : public UI {
     LabelledCheckBox *altGridMovementCB;
     LabelledCheckBox *clipRectangleCB;
 
+    void reset_settings(void);
+    void apply_settings(void);
+
     OptionsUI();
     ~OptionsUI();
 };
+
+void OptionsUI::reset_settings(void) {
+    for(auto&& cb : checkboxes) cb->reset();
+}
+
+void OptionsUI::apply_settings(void) {
+    for(auto&& cb : checkboxes) cb->apply();
+}
 
 static void runMainMenu(void);
 
@@ -7743,13 +7741,17 @@ OptionsUI::OptionsUI() {
     button_cancel = new TextButton("Cancel", round((g.display_x - 185) / 2), // TODO fix x coord
                                  (g.display_y - 720) / 2 + 630, 85, 45);
 
-    button_cancel->onMouseDown = []{ runMainMenu(); };
+    button_cancel->onMouseDown = [] { g.ui_Options->reset_settings();
+                                      runMainMenu();
+    };
 
     button_apply = new TextButton("Apply", round((g.display_x + 85) / 2), // TODO fix x coord
                                  (g.display_y - 720) / 2 + 630, 85, 45);
 
-    button_apply->onMouseDown = []{ g.config.save("game.conf");
-                                    runMainMenu(); };
+    button_apply->onMouseDown = [] { g.ui_Options->apply_settings();
+                                     g.config.save("game.conf");
+                                     runMainMenu();
+    };
 
     float start_x = (g.display_x - 175) / 2;
     float start_y = 100;
@@ -7783,15 +7785,18 @@ OptionsUI::OptionsUI() {
         = new LabelledCheckBox(start_x, start_y + 8 * step_y,
                                "Clip Rectangle", &g.config.setClipRectangle);
 
-    widgets.push_back(fullscreenCB);
-    widgets.push_back(vsyncCB);
-    widgets.push_back(resolutionScalingCB);
-    widgets.push_back(debugVisibilityCB);
-    widgets.push_back(sortingCB);
-    widgets.push_back(startNagCB);
-    widgets.push_back(uiFadingCB);
-    widgets.push_back(altGridMovementCB);
-    widgets.push_back(clipRectangleCB);
+    checkboxes.push_back(fullscreenCB);
+    checkboxes.push_back(vsyncCB);
+    checkboxes.push_back(resolutionScalingCB);
+    checkboxes.push_back(debugVisibilityCB);
+    checkboxes.push_back(sortingCB);
+    checkboxes.push_back(startNagCB);
+    checkboxes.push_back(uiFadingCB);
+    checkboxes.push_back(altGridMovementCB);
+    checkboxes.push_back(clipRectangleCB);
+
+    for(auto&& cb : checkboxes) widgets.push_back(cb);
+
     widgets.push_back(button_cancel);
     widgets.push_back(button_apply);
 }
@@ -7868,7 +7873,7 @@ void NotificationUI::go() {
     }
     if(bg != NULL) {
         al_set_target_bitmap(bg);
-        al_clear_to_color(g.color_bg);
+        al_clear_to_color(colors.bg);
         below->draw();
         al_set_target_backbuffer(g.display);
     }
@@ -7894,11 +7899,11 @@ void NotificationUI::draw(void) {
 
     // draw "the widget"
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, g.color_grey2);
+                             pos.y1 + pos.y2, colors.grey2);
     al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 3);
-    al_draw_text(g.font, g.color_black, pos.x1 + 50, pos.y1 + 24, 0, text);
-    al_draw_text(g.font, g.color_grey, pos.x1 + bottom_text_offset_x, pos.y1 + 65, 0, "Click to continue");
+                      colors.black, 3);
+    al_draw_text(g.font, colors.black, pos.x1 + 50, pos.y1 + 24, 0, text);
+    al_draw_text(g.font, colors.grey, pos.x1 + bottom_text_offset_x, pos.y1 + 65, 0, "Click to continue");
 }
 
 void NotificationUI::stop(void) {
@@ -7981,8 +7986,8 @@ void MenuEntry::draw(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
                              pos.y1 + pos.y2, menu_fade[fade_level]);
     al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 1);
-    al_draw_text(g.font, g.color_white,
+                      colors.black, 1);
+    al_draw_text(g.font, colors.white,
                  pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
 }
 
@@ -7992,8 +7997,8 @@ void MenuEntry::hoverOver(void) {
     al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
                              pos.y1 + pos.y2, menu_fade[0]);
     al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      g.color_black, 1);
-    al_draw_text(g.font, g.color_white,
+                      colors.black, 1);
+    al_draw_text(g.font, colors.white,
                  pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
 }
 
@@ -8135,9 +8140,9 @@ void MainMenuUI::createTitle(void) {
     al_set_target_bitmap(title);
     al_clear_to_color(al_map_rgba(0, 0, 0, 0));
 
-    al_draw_text(shadow_font, g.color_black, 0, 0, 0, title_text);
-    al_draw_text(f, g.color_white, shadow_offset, 0, 0, title_text);
-    al_draw_textf(g.font, g.color_black, version_offset, font_height + 4 + 20, 0, "(%s)", VERSION);
+    al_draw_text(shadow_font, colors.black, 0, 0, 0, title_text);
+    al_draw_text(f, colors.white, shadow_offset, 0, 0, title_text);
+    al_draw_textf(g.font, colors.black, version_offset, font_height + 4 + 20, 0, "(%s)", VERSION);
 
     al_set_target_backbuffer(g.display);
     al_destroy_font(f);
@@ -8213,13 +8218,13 @@ HelpUI::~HelpUI() {
 }
 
 static void button_Help_press(void) {
-    g.color_bg = g.color_grey;
+    colors.bg = colors.grey;
     g.ui_Help = new HelpUI;
     g.ui = g.ui_Help;
 }
 
 static void button_Options_press(void) {
-    g.color_bg = g.color_grey3;
+    colors.bg = colors.grey3;
     g.ui = g.ui_Options;
 }
 
@@ -8246,7 +8251,7 @@ static void main_buttons_update(void) {
 
 static void switchToMainMenu(void) {
     g.ui_MainMenu->resetFadeLevels();
-    g.color_bg = g.color_black;
+    colors.bg = colors.black;
     g.ui = g.ui_MainMenu;
 }
 
@@ -8269,7 +8274,7 @@ static void button_MainMap_press(void) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MainMap;
-        g.color_bg = g.color_black;
+        colors.bg = colors.black;
     }
     main_buttons_update();
 }
@@ -8280,7 +8285,7 @@ static void button_Items_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.ui_Items->gridsystem->reset();
         g.ui = g.ui_Items;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8291,7 +8296,7 @@ static void button_Vehicle_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.ui_Vehicle->gridsystem->reset();
         g.ui = g.ui_Vehicle;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8301,7 +8306,7 @@ static void button_MiniMap_press(void) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MiniMap;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
         g.minimap->recreate();
     }
     main_buttons_update();
@@ -8313,7 +8318,7 @@ static void button_Skills_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.ui_Skills->skillsGrid->reset();
         g.ui = g.ui_Skills;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8324,7 +8329,7 @@ static void button_Condition_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.ui_Condition->gridsystem->reset();
         g.ui = g.ui_Condition;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8335,7 +8340,7 @@ static void button_Camp_press(void) {
             g.ui_Crafting->craftGrids->exit();
         g.ui_Camp->gridsystem->reset();
         g.ui = g.ui_Camp;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8348,7 +8353,7 @@ static void button_Scavenge_press(void) {
         g.ui_Scavenge->setup();
         g.ui_Scavenge->gridsystem->reset();
         g.ui = g.ui_Scavenge;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8357,7 +8362,7 @@ static void button_Crafting_press(void) {
     if(g.ui != g.ui_Crafting) {
         g.ui_Crafting->craftGrids->reset();
         g.ui = g.ui_Crafting;
-        g.color_bg = g.color_grey;
+        colors.bg = colors.grey;
     }
     main_buttons_update();
 }
@@ -8974,137 +8979,9 @@ MainMapUI::~MainMapUI(void) {
     // info("~MainMapUI()");
 }
 
-static void init_colors(void) {
-    g.color_grey = al_color_name("grey");
-    g.color_grey2 = al_map_rgb(200, 200, 200);
-    g.color_grey3 = al_map_rgb(220, 220, 220);
-    g.color_darkgrey = al_map_rgb(100, 100, 110);
-    g.color_black = al_map_rgb(0, 0, 0);
-    g.color_white = al_map_rgb(255, 255, 255);
-    g.color_red = al_map_rgb(200, 0, 0);
-    g.color_tile_tint = al_map_rgba_f(0.5, 0.5, 0.5, 1.0);
-    g.color_active_tile_tint = al_map_rgba_f(1, 1, 1, 0.2);
-    g.color_bg = g.color_black;
-}
-
 static void init_misc(void) {
     g.hand_combat = new Item ("fist");
     g.ai_encounterInterrupt = -1;
-}
-
-const char *with_default(const char *str, const char *def) {
-    if(str == NULL) return def;
-    else return str;
-}
-
-void Config::save(const char *filename) {
-    ALLEGRO_CONFIG *cfg = al_create_config();
-    char buf[512];
-
-    snprintf(buf, sizeof(buf), "%d", frame_rate);
-    al_set_config_value(cfg, NULL, "frame-rate", buf);
-    snprintf(buf, sizeof(buf), "%d", vsync);
-    al_set_config_value(cfg, NULL, "v-sync", buf);
-    snprintf(buf, sizeof(buf), "%d", fullscreen);
-    al_set_config_value(cfg, NULL, "fullscreen", buf);
-    snprintf(buf, sizeof(buf), "%d", resolutionScaling);
-    al_set_config_value(cfg, NULL, "resolution-scaling", buf);
-    snprintf(buf, sizeof(buf), "%d", debugVisibility);
-    al_set_config_value(cfg, NULL, "debug-visibility", buf);
-    snprintf(buf, sizeof(buf), "%d", displayX);
-    al_set_config_value(cfg, NULL, "display-x", buf);
-    snprintf(buf, sizeof(buf), "%d", displayY);
-    al_set_config_value(cfg, NULL, "display-y", buf);
-    snprintf(buf, sizeof(buf), "%s", font_filename);
-    al_set_config_value(cfg, NULL, "font-filename", buf);
-    snprintf(buf, sizeof(buf), "%d", font_height);
-    al_set_config_value(cfg, NULL, "font-height", buf);
-    snprintf(buf, sizeof(buf), "%d", sorting);
-    al_set_config_value(cfg, NULL, "grid-sorting", buf);
-    snprintf(buf, sizeof(buf), "%d", aa_samples);
-    al_set_config_value(cfg, NULL, "aa-samples", buf);
-    snprintf(buf, sizeof(buf), "%d", start_nag);
-    al_set_config_value(cfg, NULL, "start-nag", buf);
-    snprintf(buf, sizeof(buf), "%d", ui_fading);
-    al_set_config_value(cfg, NULL, "ui-fading", buf);
-    snprintf(buf, sizeof(buf), "%d", alt_grid_movement);
-    al_set_config_value(cfg, NULL, "alt-grid-movement", buf);
-    snprintf(buf, sizeof(buf), "%d", setClipRectangle);
-    al_set_config_value(cfg, NULL, "set-clip-rectangle", buf);
-    if(custom_cursor == NULL) {
-        al_set_config_value(cfg, NULL, "custom-cursor", "0");
-    }
-    else {
-        snprintf(buf, sizeof(buf), "%s", custom_cursor);
-        al_set_config_value(cfg, NULL, "custom-cursor", buf);
-    }
-    al_save_config_file(filename, cfg);
-}
-
-void Config::load(const char *filename) {
-    ALLEGRO_CONFIG *cfg = al_load_config_file(filename);
-
-    if(cfg == NULL) {
-        info("Couldn't load game.conf");
-        cfg = al_create_config();
-    } else {
-        info("Loaded game.conf");
-    }
-
-    const char *s;
-
-    s = al_get_config_value(cfg, 0, "frame-rate");
-    frame_rate = atoi(with_default(s, "60"));
-
-    s = al_get_config_value(cfg, 0, "v-sync");
-    vsync = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "fullscreen");
-    fullscreen = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "resolution-scaling");
-    resolutionScaling = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "debug-visibility");
-    debugVisibility = atoi(with_default(s, "0"));
-
-    s = al_get_config_value(cfg, 0, "display-x");
-    displayX = atoi(with_default(s, "1280"));
-
-    s = al_get_config_value(cfg, 0, "display-y");
-    displayY = atoi(with_default(s, "720"));
-
-    s = al_get_config_value(cfg, 0, "font-filename");
-    font_filename = strdup(with_default(s, "media/fonts/DejaVuSans-Bold.ttf"));
-
-    s = al_get_config_value(cfg, 0, "font-height");
-    font_height = atoi(with_default(s, "14"));
-
-    s = al_get_config_value(cfg, 0, "grid-sorting");
-    sorting = atoi(with_default(s, "0"));
-
-    s = al_get_config_value(cfg, 0, "aa-samples");
-    aa_samples = atoi(with_default(s, "4"));
-
-    s = al_get_config_value(cfg, 0, "start-nag");
-    start_nag = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "ui-fading");
-    ui_fading = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "alt-grid-movement");
-    alt_grid_movement = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "set-clip-rectangle");
-    setClipRectangle = atoi(with_default(s, "1"));
-
-    s = al_get_config_value(cfg, 0, "custom-cursor");
-    if(s != NULL && strcmp(s, "0") != 0)
-        custom_cursor = strdup(s);
-    else
-        custom_cursor = NULL;
-
-    al_destroy_config(cfg);
 }
 
 static void allegro_init(void) {
@@ -10009,7 +9886,7 @@ int main(int argc, char **argv) {
 
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
-            al_clear_to_color(g.color_bg);
+            al_clear_to_color(colors.bg);
 
             { // drawing goes here
                 g.ui->draw();
