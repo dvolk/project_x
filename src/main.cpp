@@ -27,6 +27,7 @@
 #include "./fontmanager.h"
 #include "./button.h"
 #include "./textbutton.h"
+#include "./barindicator.h"
 #include "./world.h"
 
 const int COMPILED_VERSION = 11; // save game version
@@ -57,7 +58,6 @@ struct GridInfo;
 struct ItemInfo;
 struct LocationInfo;
 struct Item;
-struct BarIndicator;
 struct TimeDisplay;
 struct WeaponSwitcher;
 struct Interact;
@@ -596,38 +596,6 @@ void init_hardpointinfo(void) {
     g.gridinfo_store.push_back(g.ground);
     g.gridinfo_store.push_back(g.bottle);
     g.gridinfo_store.push_back(g.ammo_bow);
-}
-
-struct BarIndicator : public Widget {
-    float *quantity;
-    ALLEGRO_BITMAP *up;
-    ALLEGRO_BITMAP *bars;
-    const char *indicator_name;
-
-    BarIndicator();
-    ~BarIndicator() { };
-
-    void mouseDown(void) { };
-    void mouseUp(void) { };
-    void keyDown(void) { };
-    void hoverOver(void) { };
-
-    void press(void) { };
-    void draw(void);
-    void update(void) { };
-};
-
-BarIndicator::BarIndicator() {
-    up = NULL;
-    quantity = NULL;
-}
-
-void BarIndicator::draw(void) {
-    if(up != NULL && quantity != NULL && bars != NULL) {
-        al_draw_text(g_font, colors.white, pos.x1 + 2, pos.y1 - 6, 0, indicator_name);
-        al_draw_bitmap(up, pos.x1, pos.y1 + 10, 0);
-        al_draw_bitmap_region(bars, 0, 0, *quantity * pos.x2, pos.y2, pos.x1, pos.y1 + 10, 0);
-    }
 }
 
 struct GridSortButton : public Widget {
