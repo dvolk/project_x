@@ -25,7 +25,9 @@
 #include "./config.h"
 #include "./colors.h"
 #include "./fontmanager.h"
+#include "./button.h"
 #include "./textbutton.h"
+#include "./world.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -35,7 +37,6 @@ struct MessageLog;
 struct Grid;
 struct UI;
 struct Widget;
-struct Button;
 struct GridSystem;
 struct TileMap;
 struct Character;
@@ -63,26 +64,12 @@ struct Interact;
 struct MainMenuUI;
 struct FadeTransitionUI;
 struct NotificationUI;
-struct World;
 struct OptionsUI;
 
 Colors colors;
 ALLEGRO_FONT *g_font;
 Config config;
-
-// misc data that is stored with the save game file
-struct World { 
-   vector<int> player_faction_kills;
-    bool visited_strange_building;
-    // 1 - quest accepted
-    // 2 - questgiver is dead
-    // 3 - quest completed
-    int lake_quest_state;
-
-    void save(ostream &os);
-    void load(istream &os);
-};
-
+World world;
 
 // global state
 struct Game {
@@ -230,8 +217,6 @@ struct Game {
     int key;
     // time in seconds since last ui update
     double dt;
-
-    World world;
 
     // add a message to the message log
     void AddMessage(string str);
@@ -612,27 +597,6 @@ void init_hardpointinfo(void) {
     g.gridinfo_store.push_back(g.bottle);
     g.gridinfo_store.push_back(g.ammo_bow);
 }
-
-struct Button : public Widget {
-    bool pressed;
-    ALLEGRO_BITMAP *up;
-    ALLEGRO_BITMAP *down;
-    const char *name;
-    int name_len;
-
-    Button(void);
-    Button(const char *_name);
-    ~Button();
-
-    void mouseDown(void);
-    void mouseUp(void);
-    void keyDown(void);
-    void hoverOver(void);
-
-    void press(void);
-    void draw(void);
-    void update(void);
-};
 
 struct BarIndicator : public Widget {
     float *quantity;
@@ -2759,21 +2723,6 @@ void Character::drop_all_items(void) {
     }
 }
 
-Button::Button(void) {
-    name = NULL;
-    pressed = false;
-    up = NULL;
-    down = NULL;
-}
-
-Button::Button(const char *_name) {
-    name = _name;
-    name_len = 16 + al_get_text_width(g_font, _name);
-    pressed = false;
-    up = NULL;
-    down = NULL;
-}
-
 struct WeaponSwitcher : public Widget {
     WeaponSwitcher() { };
     ~WeaponSwitcher() { };
@@ -3710,23 +3659,6 @@ void UI::draw(void) {
     }
 }
 
-void Button::mouseUp(void) {
-
-}
-
-void Button::keyDown(void) {
-
-}
-
-void Button::hoverOver(void) {
-    if(name != NULL) {
-        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + name_len, pos.y1 + 30, colors.black);
-        al_draw_text(g_font, colors.white, pos.x1 + 8, pos.y1 + 8, 0, name);
-    }
-}
-
-void Button::mouseDown(void) { press(); }
-
 GridSortButton::GridSortButton(Grid *parent) {
     assert(parent);
     this->parent = parent;
@@ -3798,15 +3730,6 @@ void Game::AddMessage(string str) {
         log->lines.push_back(line);
 }
 
-void Button::press(void) {
-    //    pressed = !pressed;
-    //    g.AddMessage("pressed button");
-}
-
-Button::~Button(void) {
-    // info("~Button()");
-}
-
 void MessageLog::draw(void) {
     if(background != NULL) {
         al_draw_bitmap(background, pos.x1, pos.y1, 0);
@@ -3822,21 +3745,6 @@ void MessageLog::draw(void) {
 
     // ...
     g.weapon_switcher->draw();
-}
-
-void Button::draw(void) {
-    if(pressed == true && down != NULL)
-        al_draw_bitmap(down, pos.x1, pos.y1, 0);
-    else if(up != NULL)
-        al_draw_bitmap(up, pos.x1, pos.y1, 0);
-    else
-        al_draw_filled_rectangle(pos.x1, pos.y1,
-                                 pos.x1 + pos.x2,
-                                 pos.y1 + pos.y2,
-                                 colors.black);
-}
-
-void Button::update() {
 }
 
 // static void mkRingM(int n, int m) {
@@ -4711,7 +4619,7 @@ static void player_hurt_messages(void) {
 // player wins if they kill 10 enemies
 void isGameOver(void) {
     int total = 0;
-    for(auto&& k : g.world.player_faction_kills) {
+    for(auto&& k : world.player_faction_kills) {
         total += k;
     }
     if(total >= 10) {
@@ -5520,7 +5428,7 @@ bool Encounter::isEncounterNPCdead(int n) {
 
     if(c->health < 0.01) {
         if(involvesPlayer() == true) {
-            g.world.player_faction_kills[c->faction] += 1;
+            world.player_faction_kills[c->faction] += 1;
             g.AddMessage("The adversary succumbs to their wounds.");
             g.AddMessage("Encounter ends.");
             // g.map->updateCharsByPos();
@@ -6441,10 +6349,10 @@ static void drop_item_at_player(const char *item_name) {
 }
 
 static void init_world() {
-    g.world.player_faction_kills.resize(5);
-    for(auto&& k : g.world.player_faction_kills) k = 0;
-    g.world.visited_strange_building = false;
-    g.world.lake_quest_state = 0;
+    world.player_faction_kills.resize(5);
+    for(auto&& k : world.player_faction_kills) k = 0;
+    world.visited_strange_building = false;
+    world.lake_quest_state = 0;
 }
 
 /*
@@ -6510,14 +6418,14 @@ static void init_interactions(void) {
 
         story()->setup = []()
             {
-                if(g.world.lake_quest_state == 2 ||
+                if(world.lake_quest_state == 2 ||
                    // dies 2 weeks after game start
                    g.map->player->nextMove > 1000 * 24 * 14) {
-                    g.world.lake_quest_state = 2;
+                    world.lake_quest_state = 2;
                     return 4;
                 }
-                else if(g.world.lake_quest_state == 0) return 0;
-                else if(g.world.lake_quest_state == 1) return 3; // accepted
+                else if(world.lake_quest_state == 0) return 0;
+                else if(world.lake_quest_state == 1) return 3; // accepted
                 else return -1;
             };
 
@@ -6598,7 +6506,7 @@ static void init_interactions(void) {
                         g.ui_Interact->current_interact->data = i;
                         page()->addChoice("Give water", 5);
                     }
-                    if(g.world.lake_quest_state == 0) {
+                    if(world.lake_quest_state == 0) {
                         page()->addChoice("Accept", -1);
                     }
                     page()->addChoice("Leave", -1);
@@ -6606,7 +6514,7 @@ static void init_interactions(void) {
             page()->post = [](const char *choice)
                 {
                     if(strcmp(choice, "Accept") == 0)
-                        g.world.lake_quest_state = 1;
+                        world.lake_quest_state = 1;
                 };
         }
 
@@ -6632,7 +6540,7 @@ static void init_interactions(void) {
                     i->parent->RemoveItem(i);
                     delete i;
                 }
-                g.world.lake_quest_state = 3;
+                world.lake_quest_state = 3;
             };
 
             page()->addChoice("Leave", -1);
@@ -6670,7 +6578,7 @@ static void init_interactions(void) {
 
         story()->setup = []()
             {
-                if(g.world.visited_strange_building == true)
+                if(world.visited_strange_building == true)
                     return -1;
                 else
                     return 0;
@@ -6695,7 +6603,7 @@ static void init_interactions(void) {
             page()->pre = []()
                 {
                     // mark as seen
-                    g.world.visited_strange_building = true;
+                    world.visited_strange_building = true;
                 };
         }
     }
@@ -9341,25 +9249,6 @@ static void new_game(void) {
     init_UIs();
 }
 
-void World::save(ostream &os) {
-    os << player_faction_kills.size() << ' ';
-    for(auto&& k : player_faction_kills) os << k << ' ';
-    os << '\n';
-    os << visited_strange_building;
-    os << '\n';
-    os << lake_quest_state;
-    os << '\n';
-}
-
-void World::load(istream &is) {
-    int pfk_size;
-    is >> pfk_size;
-    player_faction_kills.resize(pfk_size);
-    for(auto&& k : player_faction_kills) is >> k;
-    is >> visited_strange_building;
-    is >> lake_quest_state;
-}
-
 void Disease::save(ostream &os) {
     os << duration << ' ' << vulnerability << ' ';
 }
@@ -9726,7 +9615,7 @@ static bool save_game(const char *filename) {
         out << "project_x " << COMPILED_VERSION << '\n';
         g.map->save(out);
         g.log->save(out);
-        g.world.save(out);
+        world.save(out);
         save_map_stories(out);
     } catch (exception &e) {
         out.close();
@@ -9770,7 +9659,7 @@ static bool load_game(const char *filename) {
         init_tileinfo();
         g.map->load(in);
         g.log->load(in);
-        g.world.load(in);
+        world.load(in);
         load_map_stories(in);
     } catch (exception &e) {
         in.close();

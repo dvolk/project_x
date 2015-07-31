@@ -1,4 +1,4 @@
-SANITIZE=-fsanitize=address -fsanitize=leak -fsanitize=undefined
+#SANITIZE=-fsanitize=address -fsanitize=leak -fsanitize=undefined
 override CXXFLAGS+=-g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned-char -Wno-unused-parameter
 #override CXX=clang++-3.5
 INCLUDES=
@@ -10,7 +10,7 @@ LIBS=-lstdc++ `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_colo
 # LIBS=-lallegro-5.0.10-mt -lallegro_primitives-5.0.10-mt -lallegro_color-5.0.10-mt -lallegro_image-5.0.10-mt -lallegro_font-5.0.10-mt
 
 OBJS= \
-	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/fontmanager.o src/textbutton.o src/main.o
+	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/fontmanager.o src/button.o src/textbutton.o src/world.o src/main.o
 
 default: all
 
