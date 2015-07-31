@@ -8,7 +8,7 @@
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 
-ALLEGRO_FONT *g_font;
+extern ALLEGRO_FONT *g_font;
 
 void font_load(const char *filepath, int height) {
     g_font = al_load_font(filepath, height, 0);

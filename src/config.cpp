@@ -23,6 +23,8 @@ void Config::save(const char *filename) {
     al_set_config_value(cfg, NULL, "resolution-scaling", buf);
     snprintf(buf, sizeof(buf), "%d", debugVisibility);
     al_set_config_value(cfg, NULL, "debug-visibility", buf);
+    snprintf(buf, sizeof(buf), "%d", playerInvulnerable);
+    al_set_config_value(cfg, NULL, "player-invulnerable", buf);
     snprintf(buf, sizeof(buf), "%d", displayX);
     al_set_config_value(cfg, NULL, "display-x", buf);
     snprintf(buf, sizeof(buf), "%d", displayY);
@@ -79,6 +81,9 @@ void Config::load(const char *filename) {
 
     s = al_get_config_value(cfg, 0, "debug-visibility");
     debugVisibility = atoi(with_default(s, "0"));
+
+    s = al_get_config_value(cfg, 0, "player-invulnerable");
+    playerInvulnerable = atoi(with_default(s, "0"));
 
     s = al_get_config_value(cfg, 0, "display-x");
     displayX = atoi(with_default(s, "1280"));

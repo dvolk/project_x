@@ -3,7 +3,7 @@
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_color.h>
 
-Colors colors;
+extern Colors colors;
 
 void init_colors(void) {
     colors.grey = al_color_name("grey");

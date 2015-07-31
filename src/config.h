@@ -8,6 +8,7 @@ struct Config {
     bool fullscreen;
     bool resolutionScaling;
     bool debugVisibility;
+    bool playerInvulnerable;
     int16_t displayX;
     int16_t displayY;
     char *font_filename;

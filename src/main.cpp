@@ -25,6 +25,7 @@
 #include "./config.h"
 #include "./colors.h"
 #include "./fontmanager.h"
+#include "./textbutton.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -65,12 +66,13 @@ struct NotificationUI;
 struct World;
 struct OptionsUI;
 
-extern Colors colors;
-extern ALLEGRO_FONT *g_font;
+Colors colors;
+ALLEGRO_FONT *g_font;
+Config config;
 
 // misc data that is stored with the save game file
-struct World {
-    vector<int> player_faction_kills;
+struct World { 
+   vector<int> player_faction_kills;
     bool visited_strange_building;
     // 1 - quest accepted
     // 2 - questgiver is dead
@@ -85,8 +87,6 @@ struct World {
 // global state
 struct Game {
     bool running;
-
-    Config config;
 
     // display dimensions
     int display_x;
@@ -330,7 +330,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
 
     // center text
     float offset_x = round((item_size_x - text_len) / 2);
-    float offset_y = round((item_size_y - g.config.font_height) / 2) - 1;
+    float offset_y = round((item_size_y - config.font_height) / 2) - 1;
 
     ALLEGRO_BITMAP *b = al_create_bitmap(item_size_x, item_size_y);
     if(b == NULL) {
@@ -2807,7 +2807,7 @@ void WeaponSwitcher::draw(void) {
         } else {
             sprintf(buf, "Ammo: empty");
         }
-        al_draw_text(g_font, colors.white, pos.x1 + 8, pos.y1 + 2 * g.config.font_height, 0, buf);
+        al_draw_text(g_font, colors.white, pos.x1 + 8, pos.y1 + 2 * config.font_height, 0, buf);
     }
 }
 
@@ -2964,7 +2964,7 @@ void GridSystem::mouseDown(void) {
 
 void GridSystem::mouseUp(void) {
     if(held != NULL) {
-        if(g.config.alt_grid_movement == true) {
+        if(config.alt_grid_movement == true) {
             if(just_picked_up_item == true) {
                 just_picked_up_item = false;
             } else {
@@ -3742,7 +3742,7 @@ void GridSortButton::reset(void) {
 }
 
 void GridSortButton::mouseDown(void) {
-    if(g.config.sorting == false) {
+    if(config.sorting == false) {
         notify("Sorting is disabled.");
         return;
     }
@@ -3891,7 +3891,7 @@ void TileMap::drawTile(int i, int x, int y) {
        view_x + x < 0 ||
        view_x + x >= size_x ||
        (tiles[t].visible == false &&
-        g.config.debugVisibility == false))
+        config.debugVisibility == false))
         return;
 
     // can the player currently see the tile?
@@ -3984,13 +3984,13 @@ void TileMap::draw(void) {
         }
     }
 
-    if(g.config.debugVisibility == true) {
+    if(config.debugVisibility == true) {
         player->draw();
         for(auto& character : characters)
             character->draw();
     }
 
-    if(g.config.debugVisibility == true) {
+    if(config.debugVisibility == true) {
         al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, colors.red, 1);
     }
 
@@ -4064,8 +4064,8 @@ void GridSystem::drawItemTooltip(void) {
                 float off_y = 24.0;
                 float box_height =
                     off_y
-                    + (display_weight == true ? g.config.font_height : 0)
-                    + (display_condition == true ? g.config.font_height : 0) + 8;
+                    + (display_weight == true ? config.font_height : 0)
+                    + (display_condition == true ? config.font_height : 0) + 8;
 
                 al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
                                          g.mouse_x + 200, g.mouse_y + box_height, colors.black);
@@ -4113,7 +4113,7 @@ void GridSystem::draw(void) {
 void GridSystem::gsMouseDownEvent() {
     if(g.mouse_button == 1) {
         if(held != NULL) {
-            if(g.config.alt_grid_movement == true) {
+            if(config.alt_grid_movement == true) {
                 just_picked_up_item = false;
             }
         }
@@ -4122,7 +4122,7 @@ void GridSystem::gsMouseDownEvent() {
     }
     else if(g.mouse_button == 2) {
         if(held != NULL) {
-            if(g.config.alt_grid_movement == true) {
+            if(config.alt_grid_movement == true) {
                 returnHeldToSender();
             }
         } else {
@@ -4403,7 +4403,7 @@ bool GridSystem::placeItemAtMouse() {
     }
 
  blocked:
-    if(g.config.alt_grid_movement == true) {
+    if(config.alt_grid_movement == true) {
         return false;
     }
     else {
@@ -4708,6 +4708,7 @@ static void player_hurt_messages(void) {
     // cout << endl << g.map->player->health << endl;
 }
 
+// player wins if they kill 10 enemies
 void isGameOver(void) {
     int total = 0;
     for(auto&& k : g.world.player_faction_kills) {
@@ -4752,8 +4753,10 @@ static void end_turn() {
         g.AddMessage("Time changed to " + string(time_string_after));
     }
 
-    if(g.map->player->health < 0.01) {
-        g.map->removeCharacter(g.map->player);
+    if(config.playerInvulnerable == false) {
+        if(g.map->player->health < 0.01) {
+            g.map->removeCharacter(g.map->player);
+        }
     }
     player_hurt_messages();
 
@@ -5695,15 +5698,15 @@ void EncounterUI::draw(void) {
     al_draw_text(g_font, colors.black, off_x + 120, 110, 0, buf);
 
     if(encounter.seesOpponent(0) == true) {
-        al_draw_text(g_font, colors.black, off_x + 120, 110 + g.config.font_height, 0,
+        al_draw_text(g_font, colors.black, off_x + 120, 110 + config.font_height, 0,
                      "Visible: yes");
     } else {
-        al_draw_text(g_font, colors.black, off_x + 120, 110 + g.config.font_height, 0,
+        al_draw_text(g_font, colors.black, off_x + 120, 110 + config.font_height, 0,
                      "Visible: no");
     }
 
     sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(0));
-    al_draw_text(g_font, colors.black, off_x + 120, 110 + 2 * g.config.font_height, 0, buf);
+    al_draw_text(g_font, colors.black, off_x + 120, 110 + 2 * config.font_height, 0, buf);
     // sprintf(buf, "Health: %f", encounter.getHealth(0));
     // al_draw_text(g_font, colors.black, off_x + 120, 140, 0, buf);
 
@@ -5718,14 +5721,14 @@ void EncounterUI::draw(void) {
     if(wound_severity >= 0.001)
         al_draw_text(g_font, colors.red, off_x + 120, 160, 0, "Wounded");
     if(wound_bleeding >= 0.001)
-        al_draw_text(g_font, colors.red, off_x + 120, 160 + g.config.font_height, 0, "Bleeding");
+        al_draw_text(g_font, colors.red, off_x + 120, 160 + config.font_height, 0, "Bleeding");
 
     // center pane
     al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
     sprintf(buf, "Terrain: %s", encounter.getTerrainName());
     al_draw_text(g_font, colors.black, off_x + 430, 160, 0, buf);
     sprintf(buf, "Range: %d", encounter.getRange());
-    al_draw_text(g_font, colors.black, off_x + 430, 160 + g.config.font_height, 0, buf);
+    al_draw_text(g_font, colors.black, off_x + 430, 160 + config.font_height, 0, buf);
 
     // right pane
     if(encounter.seesOpponent(1) == true) {
@@ -5733,11 +5736,11 @@ void EncounterUI::draw(void) {
         sprintf(buf, "Name: %s", encounter.getName(1));
         al_draw_text(g_font, colors.black, off_x + 700, 110, 0, buf);
         sprintf(buf, "Faction: %s", encounter.getFaction(1));
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + g.config.font_height, 0, buf);
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + 2 * g.config.font_height, 0,
+        al_draw_text(g_font, colors.black, off_x + 700, 110 + config.font_height, 0, buf);
+        al_draw_text(g_font, colors.black, off_x + 700, 110 + 2 * config.font_height, 0,
                      "visible: yes");
         sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + 3 * g.config.font_height, 0, buf);
+        al_draw_text(g_font, colors.black, off_x + 700, 110 + 3 * config.font_height, 0, buf);
         // sprintf(buf, "Health: %f", encounter.getHealth(1));
         // al_draw_text(g_font, colors.black, off_x + 700, 150, 0, buf);
 
@@ -5751,13 +5754,13 @@ void EncounterUI::draw(void) {
         if(wound_severity >= 0.001)
             al_draw_text(g_font, colors.red, off_x + 700, 170, 0, "Wounded");
         if(wound_bleeding >= 0.001)
-            al_draw_text(g_font, colors.red, off_x + 700, 170 + g.config.font_height, 0, "Bleeding");
+            al_draw_text(g_font, colors.red, off_x + 700, 170 + config.font_height, 0, "Bleeding");
 
     } else {
         al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
         al_draw_text(g_font, colors.black, off_x + 700, 110, 0,
                      "Name: unknown");
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + g.config.font_height, 0,
+        al_draw_text(g_font, colors.black, off_x + 700, 110 + config.font_height, 0,
                      "Visible: no");
     }
 
@@ -6240,7 +6243,7 @@ void InteractPage::draw_description(void) {
     al_set_target_bitmap(left);
     al_clear_to_color(colors.grey2);
 
-    float y = (InteractUI::top_size - g.config.font_height * description.size()) / 3;
+    float y = (InteractUI::top_size - config.font_height * description.size()) / 3;
     for(auto&& line : description) {
         al_draw_text(g_font, colors.black, 5, y, 0, line);
         y += 14;
@@ -7618,59 +7621,17 @@ void FadeTransitionUI::updateFrame(void) {
 }
 
 static void fade_to_UI(UI *from, UI *to) {
-    if(g.config.ui_fading == false)
+    if(config.ui_fading == false)
         return;
     g.ui_FadeTransition->start(from, to);
     g.ui = g.ui_FadeTransition;
 }
 
 static void fade_to_UI(void) {
-    if(g.config.ui_fading == false)
+    if(config.ui_fading == false)
         return;
     g.ui_FadeTransition->start(NULL, g.ui);
     g.ui = g.ui_FadeTransition;
-}
-
-/*
-  Button with text in it
- */
-struct TextButton : public Widget {
-    float text_offset_x;
-    float text_offset_y;
-    const char *name;
-
-    TextButton(const char *name, float x, float y, float sx, float sy);
-
-    void draw(void) override;
-    void hoverOver(void) override;
-};
-
-TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
-    this->name = name;
-    pos.x1 = x;
-    pos.y1 = y;
-    pos.x2 = sx;
-    pos.y2 = sy;
-    text_offset_x = round((pos.x2 - al_get_text_width(g_font, name)) / 2);
-    text_offset_y = round((pos.y2 - g.config.font_height) / 2);
-}
-
-void TextButton::draw(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, colors.darkgrey);
-    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      colors.black, 1);
-    al_draw_text(g_font, colors.white,
-                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
-}
-
-void TextButton::hoverOver(void) {
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2,
-                             pos.y1 + pos.y2, colors.grey2);
-    al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2,
-                      colors.black, 1);
-    al_draw_text(g_font, colors.white,
-                 pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
 }
 
 struct ResolutionData {
@@ -7758,6 +7719,7 @@ struct OptionsUI : public UI {
     LabelledCheckBox *uiFadingCB;
     LabelledCheckBox *altGridMovementCB;
     LabelledCheckBox *clipRectangleCB;
+    LabelledCheckBox *playerInvulnerableCB;
 
     void reset_settings(void);
     void apply_settings(void);
@@ -7770,8 +7732,8 @@ void OptionsUI::reset_settings(void) {
     for(auto&& cb : checkboxes) cb->reset();
     for(auto&& cb : resolution_checkboxes)
         // reset all but the resolution we're in!
-        if(cb->res_data.x != g.config.displayX ||
-           cb->res_data.y != g.config.displayY)
+        if(cb->res_data.x != config.displayX ||
+           cb->res_data.y != config.displayY)
             cb->state = false;
         else
             cb->state = true;
@@ -7781,8 +7743,8 @@ void OptionsUI::apply_settings(void) {
     for(auto&& cb : checkboxes) cb->apply();
     for(auto&& cb : resolution_checkboxes) {
         if(cb->state == true) {
-            g.config.displayX = cb->res_data.x;
-            g.config.displayY = cb->res_data.y;
+            config.displayX = cb->res_data.x;
+            config.displayY = cb->res_data.y;
             printf("selected resolution: %d %d\n", cb->res_data.x, cb->res_data.y);
         }
     }
@@ -7802,7 +7764,7 @@ OptionsUI::OptionsUI() {
                                  (g.display_y - 720) / 2 + 630, 85, 45);
 
     button_apply->onMouseDown = [] { g.ui_Options->apply_settings();
-                                     g.config.save("game.conf");
+                                     config.save("game.conf");
                                      runMainMenu();
     };
 
@@ -7812,36 +7774,41 @@ OptionsUI::OptionsUI() {
 
     fullscreenCB
         = new LabelledCheckBox(start_x, start_y,
-                               "Fullscreen", &g.config.fullscreen);
+                               "Fullscreen", &config.fullscreen);
     vsyncCB
         = new LabelledCheckBox(start_x, start_y + 1 * step_y,
-                               "V-Sync", &g.config.vsync);
+                               "V-Sync", &config.vsync);
     resolutionScalingCB
         = new LabelledCheckBox(start_x, start_y + 2 * step_y,
-                               "Resolution scaling", &g.config.resolutionScaling);
-    debugVisibilityCB
-        = new LabelledCheckBox(start_x, start_y + 3 * step_y,
-                               "Debug Visibility", &g.config.debugVisibility);
+                               "Resolution scaling", &config.resolutionScaling);
     sortingCB
-        = new LabelledCheckBox(start_x, start_y + 4 * step_y,
-                               "Inventory Sorting", &g.config.sorting);
+        = new LabelledCheckBox(start_x, start_y + 3 * step_y,
+                               "Inventory Sorting", &config.sorting);
     startNagCB
-        = new LabelledCheckBox(start_x, start_y + 5 * step_y,
-                               "Start Notifications", &g.config.start_nag);
+        = new LabelledCheckBox(start_x, start_y + 4 * step_y,
+                               "Start Notifications", &config.start_nag);
     uiFadingCB
-        = new LabelledCheckBox(start_x, start_y + 6 * step_y,
-                               "UI Fading", &g.config.ui_fading);
+        = new LabelledCheckBox(start_x, start_y + 5 * step_y,
+                               "UI Fading", &config.ui_fading);
     altGridMovementCB
-        = new LabelledCheckBox(start_x, start_y + 7 * step_y,
-                               "Alternative Grid Movement", &g.config.alt_grid_movement);
+        = new LabelledCheckBox(start_x, start_y + 6 * step_y,
+                               "Alternative Grid Movement", &config.alt_grid_movement);
     clipRectangleCB
-        = new LabelledCheckBox(start_x, start_y + 8 * step_y,
-                               "Clip Rectangle", &g.config.setClipRectangle);
+        = new LabelledCheckBox(start_x, start_y + 7 * step_y,
+                               "Clip Rectangle", &config.setClipRectangle);
+
+    debugVisibilityCB
+        = new LabelledCheckBox(start_x, start_y + 10 * step_y,
+                               "Reveal Map", &config.debugVisibility);
+    playerInvulnerableCB
+        = new LabelledCheckBox(start_x, start_y + 11 * step_y,
+                               "Player Invulnerable", &config.debugVisibility);
 
     checkboxes.push_back(fullscreenCB);
     checkboxes.push_back(vsyncCB);
     checkboxes.push_back(resolutionScalingCB);
     checkboxes.push_back(debugVisibilityCB);
+    checkboxes.push_back(playerInvulnerableCB);
     checkboxes.push_back(sortingCB);
     checkboxes.push_back(startNagCB);
     checkboxes.push_back(uiFadingCB);
@@ -7875,8 +7842,8 @@ OptionsUI::OptionsUI() {
                 LabelledCheckBox *cb = new LabelledCheckBox(start_x, start_y + 25 * step_y, strdup(buf), NULL);
                 cb->res_data.x = mode.width;
                 cb->res_data.y = mode.height;
-                if(cb->res_data.x == g.config.displayX &&
-                   cb->res_data.y == g.config.displayY)
+                if(cb->res_data.x == config.displayX &&
+                   cb->res_data.y == config.displayY)
                     cb->state = true;
 
                 cb->callback = []{
@@ -7980,7 +7947,7 @@ void NotificationUI::go() {
     // center text
     this->text = messages.front();
     pos.x1 = round((g.display_x - 100 - al_get_text_width(g_font, text)) / 2);
-    pos.y1 = round((g.display_y - g.config.font_height - 100) / 2) + 10;
+    pos.y1 = round((g.display_y - config.font_height - 100) / 2) + 10;
     pos.x2 = al_get_text_width(g_font, text) + 100;
     pos.y2 = 100;
     bottom_text_offset_x = round((pos.x2 - al_get_text_width(g_font, "Click to continue")) / 2);
@@ -8206,7 +8173,7 @@ void MainMenuUI::addEntry(const char *name) {
     e->pos.y2 = sy - 5; // 5px spacing
     e->text_offset_x = round((e->pos.x2 - al_get_text_width(g_font, name)) / 2); // center the text
     // rounded, otherwise al_draw_text produces artifacts
-    e->text_offset_y = round((e->pos.y2 - g.config.font_height) / 2);
+    e->text_offset_y = round((e->pos.y2 - config.font_height) / 2);
     e->fade_level = 24;
     entries.push_back(e);
     widgets.push_back(e);
@@ -8217,8 +8184,8 @@ void MainMenuUI::addEntry(const char *name) {
 */
 void MainMenuUI::createTitle(void) {
     const int font_height = 72;
-    ALLEGRO_FONT *f = al_load_font(g.config.font_filename, font_height, 0);
-    ALLEGRO_FONT *shadow_font = al_load_font(g.config.font_filename, font_height + 4, 0);
+    ALLEGRO_FONT *f = al_load_font(config.font_filename, font_height, 0);
+    ALLEGRO_FONT *shadow_font = al_load_font(config.font_filename, font_height + 4, 0);
 
     assert(f);
     assert(shadow_font);
@@ -9091,7 +9058,7 @@ static void allegro_init(void) {
     else
         info("Initialized core allegro library.");
 
-    g.config.load("game.conf");
+    config.load("game.conf");
 
     ret = al_init_primitives_addon();
     if(ret == false)
@@ -9134,20 +9101,20 @@ static void allegro_init(void) {
     if(g.load_filechooser == NULL)
         errorQuit("Failed to initialize load game filechooser");
 
-    g.display_x = g.config.displayX;
-    g.display_y = g.config.displayY;
+    g.display_x = config.displayX;
+    g.display_y = config.displayY;
 
     // try fullscreen windowed mode
-    if(g.config.fullscreen == true)
+    if(config.fullscreen == true)
         al_set_new_display_flags(ALLEGRO_FULLSCREEN_WINDOW);
     else
         al_set_new_display_flags(ALLEGRO_WINDOWED);
 
-    if(g.config.vsync == true)
+    if(config.vsync == true)
         al_set_new_display_option(ALLEGRO_VSYNC, 1, ALLEGRO_SUGGEST);
 
     al_set_new_display_option(ALLEGRO_SAMPLE_BUFFERS, 1, ALLEGRO_SUGGEST);
-    al_set_new_display_option(ALLEGRO_SAMPLES, g.config.aa_samples, ALLEGRO_SUGGEST);
+    al_set_new_display_option(ALLEGRO_SAMPLES, config.aa_samples, ALLEGRO_SUGGEST);
 
     g.display = al_create_display(g.display_x, g.display_y);
 
@@ -9158,7 +9125,7 @@ static void allegro_init(void) {
         int sx = al_get_display_width(g.display);
         int sy = al_get_display_height(g.display);
 
-        if(g.config.resolutionScaling == true) {
+        if(config.resolutionScaling == true) {
             float scale_x = sx / (float)g.display_x;
             float scale_y = sy / (float)g.display_y;
             g.scale = min(scale_x, scale_y);
@@ -9169,8 +9136,8 @@ static void allegro_init(void) {
             al_translate_transform(&g.trans, g.tx, g.ty);
             al_scale_transform(&g.trans, g.scale, g.scale);
 
-            if(g.config.fullscreen == true &&
-               g.config.setClipRectangle == true)
+            if(config.fullscreen == true &&
+               config.setClipRectangle == true)
                 al_set_clipping_rectangle(g.tx * g.scale + 1, g.ty * g.scale + 1,
                                           g.display_x * g.scale,
                                           g.display_y * g.scale);
@@ -9212,11 +9179,11 @@ static void allegro_init(void) {
     else
         info("Initialized mouse.");
 
-    if(g.config.custom_cursor != NULL) {
-        ALLEGRO_BITMAP *cursor_bitmap = al_load_bitmap(g.config.custom_cursor);
+    if(config.custom_cursor != NULL) {
+        ALLEGRO_BITMAP *cursor_bitmap = al_load_bitmap(config.custom_cursor);
 
         if(cursor_bitmap == NULL)
-            errorQuit("Couldn't load cursor bitmap: " + string(g.config.custom_cursor));
+            errorQuit("Couldn't load cursor bitmap: " + string(config.custom_cursor));
 
         ALLEGRO_MOUSE_CURSOR *cursor = al_create_mouse_cursor(cursor_bitmap, 0, 0);
 
@@ -9235,7 +9202,7 @@ static void allegro_init(void) {
 }
 
 static void load_fonts(void) {
-    font_load(g.config.font_filename, g.config.font_height);
+    font_load(config.font_filename, config.font_height);
 }
 
 static void init_rng(int seed) {
@@ -9846,7 +9813,7 @@ int main(int argc, char **argv) {
     else
         info("Created event queue.");
 
-    ALLEGRO_TIMER *timer = al_create_timer(1.0 / g.config.frame_rate);
+    ALLEGRO_TIMER *timer = al_create_timer(1.0 / config.frame_rate);
     if(timer == NULL)
         errorQuit("Error: failed to create timer.");
     else
@@ -9903,7 +9870,7 @@ int main(int argc, char **argv) {
 
     if(argc <= 1) {
         switchToMainMenu();
-        if(g.config.start_nag == true)
+        if(config.start_nag == true)
             notify("This is pre-alpha software. Please report bugs and give feedback!");
         fade_to_UI();
     } else {
