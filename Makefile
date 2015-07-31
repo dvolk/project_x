@@ -10,7 +10,7 @@ LIBS=-lstdc++ `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_colo
 # LIBS=-lallegro-5.0.10-mt -lallegro_primitives-5.0.10-mt -lallegro_color-5.0.10-mt -lallegro_image-5.0.10-mt -lallegro_font-5.0.10-mt
 
 OBJS= \
-	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/main.o
+	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/fontmanager.o src/main.o
 
 default: all
 
