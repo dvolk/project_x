@@ -28,6 +28,8 @@
 #include "./button.h"
 #include "./textbutton.h"
 #include "./barindicator.h"
+#include "./labelledcheckbox.h"
+#include "./wound.h"
 #include "./world.h"
 
 const int COMPILED_VERSION = 11; // save game version
@@ -37,7 +39,6 @@ using namespace std;
 struct MessageLog;
 struct Grid;
 struct UI;
-struct Widget;
 struct GridSystem;
 struct TileMap;
 struct Character;
@@ -1090,20 +1091,6 @@ enum ActivityKind {
     ACTIVITY_SCAVENGE
 };
 
-struct Wound {
-    int age;
-    float severity;
-    float bleeding;
-
-    Wound();
-
-    void save(ostream &os);
-    void load(istream &is);
-
-    void modify_severity(float amount);
-    void modify_bleeding(float amount);
-};
-
 enum WoundKind {
     WOUND_UPPER_TORSO = 0,
     WOUND_LOWER_TORSO,
@@ -1117,28 +1104,6 @@ enum WoundKind {
     WOUND_RIGHT_LOWER_ARM,
     WOUND_MAX
 };
-
-Wound::Wound() {
-    severity = 0;
-    bleeding = 0;
-    age = 0;
-}
-
-void Wound::modify_severity(float amount) {
-    severity = max((float)0.0, severity + amount);
-
-    // start bleeding at wound severity 0.005
-    bleeding = max(0.0, severity - 0.005);
-
-    if(severity < 0.001) {
-        severity = 0;
-        age = 0;
-    }
-}
-
-void Wound::modify_bleeding(float amount) {
-    bleeding = max((float)0.0, bleeding + amount);
-}
 
 enum Faction {
     FACTION_NONE = 0,
@@ -7509,76 +7474,6 @@ static void fade_to_UI(void) {
     g.ui_FadeTransition->start(NULL, g.ui);
     g.ui = g.ui_FadeTransition;
 }
-
-struct ResolutionData {
-    int x, y;
-};
-
-/*
-  Checkbox with text to the right of it
-*/
-struct LabelledCheckBox : public Widget {
-    const char *name;
-    bool *cfg_state;
-    bool state;
-
-    ResolutionData res_data; // TODO: mmm
-
-    LabelledCheckBox(float x, float y, const char *name, bool *cfg_state);
-
-    void draw(void) override;
-    void mouseDown(void) override;
-
-    void (*callback)(void);
-
-    void apply(void);
-    void reset(void);
-};
-
-void LabelledCheckBox::apply(void) {
-    *cfg_state = state;
-}
-
-void LabelledCheckBox::reset(void) {
-    state = *cfg_state;
-}
-
-LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *cfg_state) {
-    this->name = name;
-    if(cfg_state == NULL) {
-        state = false;
-    } else {
-        this->cfg_state = cfg_state;
-        this->state = *cfg_state;
-    }
-    this->callback = nullptr;
-
-    pos.x1 = x;
-    pos.y1 = y;
-    pos.x2 = 16;
-    pos.y2 = 16;
-}
-
-void LabelledCheckBox::draw(void) {
-    if(state == true)
-        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, colors.black);
-    else
-        al_draw_rectangle(pos.x1, pos.y1, pos.x1 + 16, pos.y1 + 16, colors.black, 1);
-
-    // TODO or draw cross?
-    // al_draw_line(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, colors.black, 1);
-    // al_draw_line(pos.x1, pos.y1 + pos.y2, pos.x1 + pos.x2, pos.y1, colors.black, 1);
-
-    al_draw_text(g_font, colors.black, pos.x1 + 20, pos.y1, 0, name);
-}
-
-void LabelledCheckBox::mouseDown(void) {
-    if(callback != nullptr)
-        callback();
-
-    state = !state;
-}
-
 struct OptionsUI : public UI {
     TextButton *button_cancel;
     TextButton *button_apply;
@@ -7629,7 +7524,7 @@ void OptionsUI::apply_settings(void) {
 static void runMainMenu(void);
 
 OptionsUI::OptionsUI() {
-    button_cancel = new TextButton("Cancel", round((g.display_x - 185) / 2), // TODO fix x coord
+    button_cancel = new TextButton("Cancel", round((g.display_x - 215) / 2), // TODO fix x coord
                                  (g.display_y - 720) / 2 + 630, 85, 45);
 
     button_cancel->onMouseDown = [] { g.ui_Options->reset_settings();
@@ -7644,7 +7539,7 @@ OptionsUI::OptionsUI() {
                                      runMainMenu();
     };
 
-    float start_x = (g.display_x - 375) / 2;
+    float start_x = (g.display_x - 405) / 2;
     float start_y = 100;
     float step_y = 25;
 
@@ -8165,7 +8060,7 @@ static void button_Help_press(void) {
 }
 
 static void button_Options_press(void) {
-    colors.bg = colors.grey3;
+    colors.bg = colors.grey2;
     g.ui = g.ui_Options;
 }
 
@@ -9323,13 +9218,6 @@ void Grid::load(istream &is) {
         item->load(is);
         item->parent = this;
     }
-}
-
-void Wound::save(ostream &os) {
-    os << age << ' ' << severity << ' ' << bleeding << ' ';
-}
-void Wound::load(istream &is) {
-    is >> age >> severity >> bleeding;
 }
 
 void Character::save(ostream &os) {
