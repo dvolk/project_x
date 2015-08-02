@@ -76,7 +76,7 @@ void Config::load(const char *filename) {
     vsync = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "fullscreen");
-    fullscreen = atoi(with_default(s, "1"));
+    fullscreen = atoi(with_default(s, "0"));
 
     s = al_get_config_value(cfg, 0, "resolution-scaling");
     resolutionScaling = atoi(with_default(s, "1"));
