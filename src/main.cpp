@@ -31,6 +31,7 @@
 #include "./textbutton.h"
 #include "./barindicator.h"
 #include "./labelledcheckbox.h"
+#include "./slider.h"
 #include "./wound.h"
 #include "./world.h"
 #include "./musicplayer.h"
@@ -7493,6 +7494,9 @@ struct OptionsUI : public UI {
     LabelledCheckBox *uiFadingCB;
     LabelledCheckBox *altGridMovementCB;
     LabelledCheckBox *playMusicCB;
+    LabelledCheckBox *showFPSCB;
+
+    Slider *musicVolumeSlider;
 
     LabelledCheckBox *clipRectangleCB;
     LabelledCheckBox *playerInvulnerableCB;
@@ -7513,6 +7517,8 @@ void OptionsUI::reset_settings(void) {
             cb->state = false;
         else
             cb->state = true;
+    musicVolumeSlider->state = config.musicVolume;
+    music_player_set_volume(config.musicVolume);
 }
 
 void OptionsUI::apply_settings(void) {
@@ -7524,6 +7530,8 @@ void OptionsUI::apply_settings(void) {
             printf("selected resolution: %d %d\n", cb->res_data.x, cb->res_data.y);
         }
     }
+    config.musicVolume = musicVolumeSlider->state;
+    music_player_set_volume(config.musicVolume);
 }
 
 static void runMainMenu(void);
@@ -7581,15 +7589,25 @@ OptionsUI::OptionsUI() {
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Clip Rectangle", &config.setClipRectangle);
     i++;
+    showFPSCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Show FPS in terminal", &config.showFPS);
+
+    i++; i++;
     playMusicCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Music", &config.playMusic);
 
-    i++; i++;
+    musicVolumeSlider = new Slider(start_x + 80, start_y + i * step_y,
+                                   NULL, &config.musicVolume);
+    musicVolumeSlider->callback = music_player_set_volume;
+
+    i++;
 
     /*
       debug options
     */
+    i++;
     debugVisibilityCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Reveal Map", &config.debugVisibility);
@@ -7609,9 +7627,10 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(altGridMovementCB);
     checkboxes.push_back(clipRectangleCB);
     checkboxes.push_back(playMusicCB);
+    checkboxes.push_back(showFPSCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
-
+    widgets.push_back(musicVolumeSlider);
 
     /*
       dynamically add resolution checkboxes
@@ -9569,6 +9588,8 @@ static bool load_game(const char *filename) {
     return true;
 }
 
+float get_mouse_x(void) { return g.mouse_x; }
+
 static void logo(void) {
     cout << " ____            _           _    __  __\n";
     cout << "|  _ \\ _ __ ___ (_) ___  ___| |_  \\ \\/ /\n";
@@ -9745,7 +9766,8 @@ int main(int argc, char **argv) {
         g.dt = frame_end - frame_start;
         frame_time += g.dt;
         if(frame_time >= 10.0) {
-            // printf("FPS: %f\n", frame_counter / 10.0);
+            if(config.showFPS == true)
+                printf("FPS: %f\n", frame_counter / 10.0);
             frame_time = 0;
             frame_counter = 0;
         }

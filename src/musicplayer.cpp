@@ -15,6 +15,14 @@
 extern bool running;
 extern Config config;
 
+ALLEGRO_AUDIO_STREAM *stream;
+
+void music_player_set_volume(float vol) {
+    char buf[100];
+    snprintf(buf, sizeof(buf), "music_player: changing volume to %f", vol);
+    info(buf);
+    al_set_audio_stream_gain(stream, vol);
+}
 void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
     info("music_player(): started");
 
@@ -30,14 +38,14 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
         };
 
     int current_track = 0;
-    
+
     while(running == true) {
         if(config.playMusic == false) {
             al_rest(0.1);
             continue;
         }
 
-        ALLEGRO_AUDIO_STREAM *stream = al_load_audio_stream(tracks.at(current_track), 3, 1024);
+        stream = al_load_audio_stream(tracks.at(current_track), 3, 1024);
         if(stream == NULL) {
             info("music_player(): couldn't load " + std::string(tracks.at(current_track)));
             return NULL;
@@ -55,9 +63,14 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
             info("music_player(): al_attach_audio_stream_to_mixer failed");
             return NULL;
         }
+        ok = al_set_audio_stream_gain(stream, config.musicVolume);
+        if(ok == false) {
+            info("music_player(): al_set_audio_stream_gain failed");
+            return NULL;
+        }
 
         info("music_player(): playing " + std::string(tracks.at(current_track)));
-        
+
         while(running == true &&
               config.playMusic == true &&
               al_get_audio_stream_playing(stream) == true)

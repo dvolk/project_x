@@ -21,6 +21,8 @@ struct Config {
     bool setClipRectangle;
     char *custom_cursor;
     bool playMusic;
+    bool showFPS;
+    float musicVolume;
 
     void save(const char *filename);
     void load(const char *filename);

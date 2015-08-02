@@ -47,6 +47,11 @@ void Config::save(const char *filename) {
     al_set_config_value(cfg, NULL, "set-clip-rectangle", buf);
     snprintf(buf, sizeof(buf), "%d", playMusic);
     al_set_config_value(cfg, NULL, "playMusic", buf);
+    snprintf(buf, sizeof(buf), "%d", showFPS);
+    al_set_config_value(cfg, NULL, "showFPS", buf);
+    snprintf(buf, sizeof(buf), "%d", int(musicVolume * 100));
+    al_set_config_value(cfg, NULL, "music-volume", buf);
+
     if(custom_cursor == NULL) {
         al_set_config_value(cfg, NULL, "custom-cursor", "0");
     }
@@ -119,6 +124,12 @@ void Config::load(const char *filename) {
 
     s = al_get_config_value(cfg, 0, "playMusic");
     playMusic = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "showFPS");
+    showFPS = atoi(with_default(s, "0"));
+
+    s = al_get_config_value(cfg, 0, "music-volume");
+    musicVolume = float(atoi(with_default(s, "50"))) / 100.0;
 
     s = al_get_config_value(cfg, 0, "custom-cursor");
     if(s != NULL && strcmp(s, "0") != 0)
