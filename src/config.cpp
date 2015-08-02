@@ -118,7 +118,7 @@ void Config::load(const char *filename) {
     setClipRectangle = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "playMusic");
-    setClipRectangle = atoi(with_default(s, "1"));
+    playMusic = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "custom-cursor");
     if(s != NULL && strcmp(s, "0") != 0)
