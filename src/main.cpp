@@ -9006,11 +9006,11 @@ static void allegro_init(void) {
     else
         info("Initialized mouse.");
 
-    if(config.custom_cursor != NULL) {
-        ALLEGRO_BITMAP *cursor_bitmap = al_load_bitmap(config.custom_cursor);
+    if(config.custom_cursor == true) {
+        ALLEGRO_BITMAP *cursor_bitmap = al_load_bitmap("media/cursor.png");
 
         if(cursor_bitmap == NULL)
-            errorQuit("Couldn't load cursor bitmap: " + string(config.custom_cursor));
+            errorQuit("Couldn't load cursor bitmap: media/cursor.png");
 
         ALLEGRO_MOUSE_CURSOR *cursor = al_create_mouse_cursor(cursor_bitmap, 0, 0);
 
@@ -9024,8 +9024,6 @@ static void allegro_init(void) {
 
         al_destroy_bitmap(cursor_bitmap);
     }
-
-
 }
 
 static void load_fonts(void) {

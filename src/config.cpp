@@ -46,20 +46,16 @@ void Config::save(const char *filename) {
     snprintf(buf, sizeof(buf), "%d", setClipRectangle);
     al_set_config_value(cfg, NULL, "set-clip-rectangle", buf);
     snprintf(buf, sizeof(buf), "%d", playMusic);
-    al_set_config_value(cfg, NULL, "playMusic", buf);
+    al_set_config_value(cfg, NULL, "play-music", buf);
     snprintf(buf, sizeof(buf), "%d", showFPS);
-    al_set_config_value(cfg, NULL, "showFPS", buf);
-    snprintf(buf, sizeof(buf), "%d", int(musicVolume * 100));
+    al_set_config_value(cfg, NULL, "show-fps", buf);
+    snprintf(buf, sizeof(buf), "%d", int(musicVolume * 100.0));
     al_set_config_value(cfg, NULL, "music-volume", buf);
+    snprintf(buf, sizeof(buf), "%d", custom_cursor);
+    al_set_config_value(cfg, NULL, "custom-cursor", buf);
 
-    if(custom_cursor == NULL) {
-        al_set_config_value(cfg, NULL, "custom-cursor", "0");
-    }
-    else {
-        snprintf(buf, sizeof(buf), "%s", custom_cursor);
-        al_set_config_value(cfg, NULL, "custom-cursor", buf);
-    }
     al_save_config_file(filename, cfg);
+    al_destroy_config(cfg);
 }
 
 void Config::load(const char *filename) {
@@ -122,20 +118,17 @@ void Config::load(const char *filename) {
     s = al_get_config_value(cfg, 0, "set-clip-rectangle");
     setClipRectangle = atoi(with_default(s, "1"));
 
-    s = al_get_config_value(cfg, 0, "playMusic");
+    s = al_get_config_value(cfg, 0, "play-music");
     playMusic = atoi(with_default(s, "1"));
 
-    s = al_get_config_value(cfg, 0, "showFPS");
+    s = al_get_config_value(cfg, 0, "show-fps");
     showFPS = atoi(with_default(s, "0"));
 
     s = al_get_config_value(cfg, 0, "music-volume");
     musicVolume = float(atoi(with_default(s, "50"))) / 100.0;
 
     s = al_get_config_value(cfg, 0, "custom-cursor");
-    if(s != NULL && strcmp(s, "0") != 0)
-        custom_cursor = strdup(s);
-    else
-        custom_cursor = NULL;
+    custom_cursor = atoi(with_default(s, "1"));
 
     al_destroy_config(cfg);
 }

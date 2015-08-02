@@ -59,16 +59,19 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
         ok = al_set_audio_stream_playmode(stream, ALLEGRO_PLAYMODE_ONCE);
         if(ok == false) {
             info("music_player(): al_set_audio_stream_playmode failed");
+            stream = NULL;
             return NULL;
         }
         ok = al_attach_audio_stream_to_mixer(stream, al_get_default_mixer());
         if(ok == false) {
             info("music_player(): al_attach_audio_stream_to_mixer failed");
+            stream = NULL;
             return NULL;
         }
         ok = al_set_audio_stream_gain(stream, config.musicVolume);
         if(ok == false) {
             info("music_player(): al_set_audio_stream_gain failed");
+            stream = NULL;
             return NULL;
         }
 
@@ -91,5 +94,6 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
     }
 
     info("music_player(): exiting");
+    stream = NULL;
     return NULL;
 }

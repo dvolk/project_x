@@ -19,7 +19,7 @@ struct Config {
     bool ui_fading;
     bool alt_grid_movement;
     bool setClipRectangle;
-    char *custom_cursor;
+    bool custom_cursor;
     bool playMusic;
     bool showFPS;
     float musicVolume;
