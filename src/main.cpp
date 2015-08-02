@@ -9724,6 +9724,7 @@ int main(int argc, char **argv) {
             redraw = true;
         }
         else if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
+            running = false;
             break;
         }
 
@@ -9749,6 +9750,8 @@ int main(int argc, char **argv) {
             frame_counter = 0;
         }
     }
+
+    info("Exiting");
 
     if(music_thread != NULL) {
         al_join_thread(music_thread, NULL);
@@ -9796,7 +9799,7 @@ int main(int argc, char **argv) {
     g.location_info.clear();
     g.text_items.clear();
 
-    info("Exiting");
+    info("Bye");
 
     return 0;
 }
