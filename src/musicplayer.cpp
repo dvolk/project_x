@@ -15,9 +15,12 @@
 extern bool running;
 extern Config config;
 
-ALLEGRO_AUDIO_STREAM *stream;
+ALLEGRO_AUDIO_STREAM *stream = NULL;
 
 void music_player_set_volume(float vol) {
+    if(stream == NULL)
+        return;
+
     char buf[100];
     snprintf(buf, sizeof(buf), "music_player: changing volume to %f", vol);
     info(buf);
@@ -79,6 +82,7 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
             }
 
         al_destroy_audio_stream(stream);
+        stream = NULL;
 
         if(current_track >= (int)tracks.size() - 1)
             current_track = 0;
