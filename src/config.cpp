@@ -45,6 +45,8 @@ void Config::save(const char *filename) {
     al_set_config_value(cfg, NULL, "alt-grid-movement", buf);
     snprintf(buf, sizeof(buf), "%d", setClipRectangle);
     al_set_config_value(cfg, NULL, "set-clip-rectangle", buf);
+    snprintf(buf, sizeof(buf), "%d", playMusic);
+    al_set_config_value(cfg, NULL, "playMusic", buf);
     if(custom_cursor == NULL) {
         al_set_config_value(cfg, NULL, "custom-cursor", "0");
     }
@@ -113,6 +115,9 @@ void Config::load(const char *filename) {
     alt_grid_movement = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "set-clip-rectangle");
+    setClipRectangle = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "playMusic");
     setClipRectangle = atoi(with_default(s, "1"));
 
     s = al_get_config_value(cfg, 0, "custom-cursor");

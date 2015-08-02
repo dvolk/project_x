@@ -4,13 +4,13 @@ override CXXFLAGS+=-g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned
 INCLUDES=
 
 ### Linux
-LIBS=-lstdc++ `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_color-5.0 allegro_image-5.0 allegro_font-5.0 allegro_ttf-5.0 allegro_dialog-5.0`
+LIBS=-lstdc++ `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_color-5.0 allegro_image-5.0 allegro_font-5.0 allegro_ttf-5.0 allegro_dialog-5.0 allegro_audio-5.0 allegro_acodec-5.0`
 
 ### Windows
 # LIBS=-lallegro-5.0.10-mt -lallegro_primitives-5.0.10-mt -lallegro_color-5.0.10-mt -lallegro_image-5.0.10-mt -lallegro_font-5.0.10-mt
 
 OBJS= \
-	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/fontmanager.o src/button.o src/textbutton.o src/barindicator.o src/labelledcheckbox.o src/wound.o src/world.o src/main.o
+	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/fontmanager.o src/button.o src/textbutton.o src/barindicator.o src/labelledcheckbox.o src/wound.o src/world.o src/musicplayer.o src/main.o
 
 default: all
 

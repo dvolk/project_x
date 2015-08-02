@@ -4,6 +4,8 @@
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
+#include <allegro5/allegro_audio.h>
+#include <allegro5/allegro_acodec.h>
 #include <allegro5/allegro_native_dialog.h>
 
 #include <cstdint>
@@ -31,6 +33,7 @@
 #include "./labelledcheckbox.h"
 #include "./wound.h"
 #include "./world.h"
+#include "./musicplayer.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -67,15 +70,15 @@ struct FadeTransitionUI;
 struct NotificationUI;
 struct OptionsUI;
 
+bool running;
 Colors colors;
 ALLEGRO_FONT *g_font;
+ALLEGRO_THREAD *music_thread;
 Config config;
 World world;
 
 // global state
 struct Game {
-    bool running;
-
     // display dimensions
     int display_x;
     int display_y;
@@ -7489,6 +7492,8 @@ struct OptionsUI : public UI {
     LabelledCheckBox *startNagCB;
     LabelledCheckBox *uiFadingCB;
     LabelledCheckBox *altGridMovementCB;
+    LabelledCheckBox *playMusicCB;
+
     LabelledCheckBox *clipRectangleCB;
     LabelledCheckBox *playerInvulnerableCB;
 
@@ -7524,14 +7529,14 @@ void OptionsUI::apply_settings(void) {
 static void runMainMenu(void);
 
 OptionsUI::OptionsUI() {
-    button_cancel = new TextButton("Cancel", round((g.display_x - 215) / 2), // TODO fix x coord
+    button_cancel = new TextButton("Cancel", round((g.display_x - 215) / 2),
                                  (g.display_y - 720) / 2 + 630, 85, 45);
 
     button_cancel->onMouseDown = [] { g.ui_Options->reset_settings();
                                       runMainMenu();
     };
 
-    button_apply = new TextButton("Apply", round((g.display_x + 85) / 2), // TODO fix x coord
+    button_apply = new TextButton("Apply", round((g.display_x + 41) / 2),
                                  (g.display_y - 720) / 2 + 630, 85, 45);
 
     button_apply->onMouseDown = [] { g.ui_Options->apply_settings();
@@ -7539,40 +7544,58 @@ OptionsUI::OptionsUI() {
                                      runMainMenu();
     };
 
-    float start_x = (g.display_x - 405) / 2;
+    float start_x = (g.display_x - 485) / 2;
     float start_y = 100;
     float step_y = 25;
+    int i = 0;
 
     fullscreenCB
         = new LabelledCheckBox(start_x, start_y,
                                "Fullscreen", &config.fullscreen);
+    i++;
     vsyncCB
-        = new LabelledCheckBox(start_x, start_y + 1 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "V-Sync", &config.vsync);
+    i++;
     resolutionScalingCB
-        = new LabelledCheckBox(start_x, start_y + 2 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Resolution scaling", &config.resolutionScaling);
+    i++;
     sortingCB
-        = new LabelledCheckBox(start_x, start_y + 3 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Inventory Sorting", &config.sorting);
+    i++;
     startNagCB
-        = new LabelledCheckBox(start_x, start_y + 4 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Start Notifications", &config.start_nag);
+    i++;
     uiFadingCB
-        = new LabelledCheckBox(start_x, start_y + 5 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "UI Fading", &config.ui_fading);
+    i++;
     altGridMovementCB
-        = new LabelledCheckBox(start_x, start_y + 6 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Alternative Grid Movement", &config.alt_grid_movement);
+    i++;
     clipRectangleCB
-        = new LabelledCheckBox(start_x, start_y + 7 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Clip Rectangle", &config.setClipRectangle);
+    i++;
+    playMusicCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Music", &config.playMusic);
 
+    i++; i++;
+
+    /*
+      debug options
+    */
     debugVisibilityCB
-        = new LabelledCheckBox(start_x, start_y + 10 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Reveal Map", &config.debugVisibility);
+    i++;
     playerInvulnerableCB
-        = new LabelledCheckBox(start_x, start_y + 11 * step_y,
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Player Invulnerable", &config.debugVisibility);
 
     checkboxes.push_back(fullscreenCB);
@@ -7585,6 +7608,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(uiFadingCB);
     checkboxes.push_back(altGridMovementCB);
     checkboxes.push_back(clipRectangleCB);
+    checkboxes.push_back(playMusicCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
 
@@ -7889,7 +7913,7 @@ static void save_game_wrapper(void) {
 
 void MainMenuUI::handlePress(const char *name) {
     if(strcmp(name, "Quit") == 0) {
-        g.running = false;
+        running = false;
     } else if(strcmp(name, "New") == 0) {
         new_game();
         button_MainMap_press();
@@ -8831,6 +8855,19 @@ static void allegro_init(void) {
 
     config.load("game.conf");
 
+    if(al_install_audio() == true) {
+        info("Initialized allegro addon: audio.");
+        if(al_init_acodec_addon() == true) {
+            info("Initialized allegro addon: acodec.");
+            if (al_reserve_samples(1) == true) {
+                music_thread = al_create_thread(music_player, NULL);
+                if(music_thread != NULL) {
+                    al_start_thread(music_thread);
+                }
+            }
+        }
+    }
+
     ret = al_init_primitives_addon();
     if(ret == false)
         errorQuit("Failed to initialize allegro addon: primitives.");
@@ -9632,10 +9669,10 @@ int main(int argc, char **argv) {
     double frame_time = 0;
     int16_t frame_counter = 0;
 
-    g.running = true;
+    running = true;
 
     // main loop
-    while(g.running) {
+    while(running) {
         frame_start = al_current_time();
 
         al_get_mouse_state(&g.mouse_state);
@@ -9711,6 +9748,11 @@ int main(int argc, char **argv) {
             frame_time = 0;
             frame_counter = 0;
         }
+    }
+
+    if(music_thread != NULL) {
+        al_join_thread(music_thread, NULL);
+        al_destroy_thread(music_thread);
     }
 
     unload_game();

@@ -20,6 +20,7 @@ struct Config {
     bool alt_grid_movement;
     bool setClipRectangle;
     char *custom_cursor;
+    bool playMusic;
 
     void save(const char *filename);
     void load(const char *filename);
