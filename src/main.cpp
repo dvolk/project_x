@@ -7639,18 +7639,21 @@ OptionsUI::OptionsUI() {
     start_x = (g.display_x + 275) / 2;
     start_y = 100;
     step_y = 0;
-    int old_x = 0;
-    int old_y = 0;
 
     for (int i = 0 ; i < al_get_num_display_modes() ; ++i) {
         ALLEGRO_DISPLAY_MODE mode;
         if (al_get_display_mode(i , &mode) == &mode) {
-            // only add resolutions that are higher than 720p
-            // filter out different refresh rates for the same resolution
-            if((old_x != mode.width || old_y != mode.height) && mode.width >= 1280 && mode.height >= 720) {
+            // filter out different refresh rates/depths for the same resolution
+            bool skip = false;
+            for(auto&& cb : resolution_checkboxes) {
+                if(mode.width == cb->res_data.x && mode.height == cb->res_data.y)
+                    skip = true;
+            }
+            if(skip == true)
+                continue;
 
-                old_x = mode.width;
-                old_y = mode.height;
+            // only add resolutions that are higher than 720p
+            if(mode.width >= 1280 && mode.height >= 720) {
                 snprintf(buf, sizeof(buf), "%dx%d", mode.width, mode.height);
 
                 LabelledCheckBox *cb = new LabelledCheckBox(start_x, start_y + 25 * step_y, strdup(buf), NULL);

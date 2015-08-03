@@ -35,9 +35,9 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
     }
 
     std::array<const char *, 3> tracks =
-        { "media/Harp.ogg",
-          "media/Sadness_0.ogg",
-          "media/Sadness_0.ogg",
+        { "media/music/Harp.ogg",
+          "media/music/Sadness_0.ogg",
+          "media/music/Sadness_0.ogg",
         };
 
     int current_track = 0;
