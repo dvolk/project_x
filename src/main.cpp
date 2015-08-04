@@ -5146,7 +5146,7 @@ void Encounter::runAIEncounter(int n) {
     g.ai_encounterInterrupt = -1;
 }
 
-static void button_MainMap_press(void);
+static void switch_to_MainMap(void);
 
 void Encounter::endEncounter(void) {
     running = false;
@@ -5162,7 +5162,7 @@ void Encounter::endEncounter(void) {
         runPlayerEncounter();
     } else {
         cout << "All encounters ended" << endl;
-        button_MainMap_press();
+        switch_to_MainMap();
         g.map->player->update_visibility();
     }
 }
@@ -5407,8 +5407,6 @@ EncounterUI::EncounterUI() {
     button_confirm->down = NULL;
     button_confirm->onMouseDown = runEncounterStepCB;
 }
-
-static void button_MainMap_press(void);
 
 void EncounterUI::setup(void) {
     colors.bg = colors.grey;
@@ -5681,7 +5679,7 @@ void ScavengeUI::runScavengeStep(void) {
             if(items_to_locations.empty() == true) {
                 // if we haven't selected anything because there's
                 // nothing to select, exit
-                button_MainMap_press();
+                switch_to_MainMap();
             }
             // must select a location
             return;
@@ -5702,7 +5700,7 @@ void ScavengeUI::runScavengeStep(void) {
 
         if(runRandomScavengingEvents() == false)
             // if we didn't get an event, manually return to the main map
-            button_MainMap_press();
+            switch_to_MainMap();
 
         return;
     } else {
@@ -6144,7 +6142,7 @@ static void runInteractStepCB(void) {
         runInteractStep(g.ui_Interact->current_interact->pages.at(new_page));
         p->switch_from();
     } else if(new_page == -1) {
-        button_MainMap_press();
+        switch_to_MainMap();
     } else if(new_page == -2) {
         delete g.map;
         g.map = NULL;
@@ -7610,7 +7608,7 @@ static void load_game_wrapper(void) {
             bool success = load_game(al_get_native_file_dialog_path(g.load_filechooser, 0));
             if(success == true) {
                 g.AddMessage("Game loaded.");
-                button_MainMap_press();
+                switch_to_MainMap();
             } else {
                 notify("Couldn't load game.");
             }
@@ -7647,12 +7645,12 @@ void MainMenuUI::handlePress(const char *name) {
         running = false;
     } else if(strcmp(name, "New") == 0) {
         new_game();
-        button_MainMap_press();
+        switch_to_MainMap();
         runInteract("intro");
         fade_to_UI(g.ui_MainMenu, g.ui_Interact);
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
-            button_MainMap_press();
+            switch_to_MainMap();
         } else {
             load_game_wrapper();
         }
@@ -7860,6 +7858,16 @@ void runMainMenu(void) {
     } else {
         info("You can only go to the main menu from the map or minimap");
     }
+}
+
+static void switch_to_MainMap(void) {
+    if(g.ui != g.ui_MainMap) {
+        if(g.ui == g.ui_Crafting)
+            g.ui_Crafting->craftGrids->exit();
+        g.ui = g.ui_MainMap;
+        colors.bg = colors.black;
+    }
+    main_buttons_update();
 }
 
 static void button_MainMap_press(void) {

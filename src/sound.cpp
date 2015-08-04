@@ -28,6 +28,7 @@ void load_ui_sounds(void) {
         assert(t); // TODO error handling
         ui_sounds.push_back(t);
     }
+    set_ui_volume(config.uiSoundVolume);
 }
     
 void play_ui_sound(enum SOUNDS s) {
