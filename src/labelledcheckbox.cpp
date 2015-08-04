@@ -2,6 +2,7 @@
 
 #include "./colors.h"
 #include "./fontmanager.h"
+#include "./sound.h"
 
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_color.h>
@@ -34,6 +35,8 @@ LabelledCheckBox::LabelledCheckBox(float x, float y, const char *name, bool *cfg
     pos.y1 = y;
     pos.x2 = 16;
     pos.y2 = 16;
+
+    mouseDownSound = SOUND_CLICK2;
 }
 
 void LabelledCheckBox::draw(void) {
@@ -50,6 +53,10 @@ void LabelledCheckBox::draw(void) {
 }
 
 void LabelledCheckBox::mouseDown(void) {
+    if(mouseDownSound != SOUND_NONE) {
+        play_ui_sound(mouseDownSound);
+    }
+
     if(callback != nullptr)
         callback();
 

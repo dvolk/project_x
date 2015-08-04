@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./widget.h"
+#include "./sound.h"
 
 #include <allegro5/allegro.h>
 
@@ -11,6 +12,8 @@ struct Button : public Widget {
     const char *name;
     int name_len;
 
+    enum UI_SOUND mouseDownSound;
+
     Button(void);
     Button(const char *_name);
     ~Button();
@@ -20,7 +23,6 @@ struct Button : public Widget {
     void keyDown(void);
     void hoverOver(void);
 
-    void press(void);
     void draw(void);
     void update(void);
 };

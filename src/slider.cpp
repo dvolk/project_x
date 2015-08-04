@@ -2,6 +2,7 @@
 
 #include "./colors.h"
 #include "./fontmanager.h"
+#include "./sound.h"
 
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_color.h>
@@ -37,6 +38,8 @@ Slider::Slider(float x, float y, const char *name, float *cfg_state) {
     pos.y1 = y;
     pos.x2 = size_x;
     pos.y2 = 16;
+
+    mouseDownSound = SOUND_CLICK2;
 }
 
 void Slider::draw(void) {
@@ -50,6 +53,9 @@ void Slider::draw(void) {
 extern float get_mouse_x(void);
 
 void Slider::mouseDown(void) {
+    if(mouseDownSound != SOUND_NONE)
+        play_ui_sound(mouseDownSound);
+
     state = (get_mouse_x() - pos.x1) / size_x;
     if(state < 0.1)
         state = 0.0;

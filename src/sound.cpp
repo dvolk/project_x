@@ -19,9 +19,10 @@ void set_ui_volume(float vol) {
 }
 
 void load_ui_sounds(void) {
-    std::vector<const char *> sound_filenames;
-
-    sound_filenames.push_back("media/sounds/click3.wav");
+    std::vector<const char *> sound_filenames =
+        { "media/sounds/click3.wav",
+          "media/sounds/click5.wav"
+        };
 
     for(auto&& fn : sound_filenames) { // TODO echo progress
         ALLEGRO_SAMPLE *t = al_load_sample(fn);
@@ -31,7 +32,7 @@ void load_ui_sounds(void) {
     set_ui_volume(config.uiSoundVolume);
 }
     
-void play_ui_sound(enum SOUNDS s) {
+void play_ui_sound(enum UI_SOUND s) {
     if(config.playUISounds)
         al_play_sample(ui_sounds[s], ui_volume, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, NULL);
 }

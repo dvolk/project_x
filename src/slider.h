@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./widget.h"
+#include "./sound.h"
 
 /*
   Checkbox with text to the right of it
@@ -12,6 +13,8 @@ struct Slider : public Widget {
 
     const float size_x = 100;
 
+    UI_SOUND mouseDownSound;
+    
     Slider(float x, float y, const char *name, float *cfg_state);
 
     void draw(void) override;

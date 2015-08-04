@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./widget.h"
+#include "./sound.h"
 
 struct ResolutionData {
     int x, y;
@@ -15,6 +16,8 @@ struct LabelledCheckBox : public Widget {
     bool state;
 
     ResolutionData res_data; // TODO: mmm
+
+    enum UI_SOUND mouseDownSound;
 
     LabelledCheckBox(float x, float y, const char *name, bool *cfg_state);
 

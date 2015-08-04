@@ -2,6 +2,7 @@
 
 #include "./fontmanager.h"
 #include "./colors.h"
+#include "./sound.h"
 
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
@@ -24,6 +25,7 @@ Button::Button(const char *_name) {
     pressed = false;
     up = NULL;
     down = NULL;
+    mouseDownSound = SOUND_CLICK2;
 }
 
 void Button::mouseUp(void) {
@@ -41,11 +43,10 @@ void Button::hoverOver(void) {
     }
 }
 
-void Button::mouseDown(void) { press(); }
-
-void Button::press(void) {
-    //    pressed = !pressed;
-    //    g.AddMessage("pressed button");
+void Button::mouseDown(void) {
+    if(mouseDownSound != SOUND_NONE) {
+        play_ui_sound(mouseDownSound);
+    }
 }
 
 Button::~Button(void) {

@@ -7592,6 +7592,7 @@ void MenuEntry::hoverOver(void) {
 }
 
 void MenuEntry::mouseDown(void) {
+    play_ui_sound(SOUND_CLICK2);
     g.ui_MainMenu->handlePress(name);
 }
 
@@ -7872,7 +7873,6 @@ static void switch_to_MainMap(void) {
 
 static void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MainMap;
@@ -7883,7 +7883,6 @@ static void button_MainMap_press(void) {
 
 static void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Items->gridsystem->reset();
@@ -7895,7 +7894,6 @@ static void button_Items_press(void) {
 
 static void button_Vehicle_press(void) {
     if(g.ui != g.ui_Vehicle) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Vehicle->gridsystem->reset();
@@ -7907,7 +7905,6 @@ static void button_Vehicle_press(void) {
 
 static void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MiniMap;
@@ -7919,7 +7916,6 @@ static void button_MiniMap_press(void) {
 
 static void button_Skills_press(void) {
     if(g.ui != g.ui_Skills) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Skills->skillsGrid->reset();
@@ -7931,7 +7927,6 @@ static void button_Skills_press(void) {
 
 static void button_Condition_press(void) {
     if(g.ui != g.ui_Condition) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Condition->gridsystem->reset();
@@ -7943,7 +7938,6 @@ static void button_Condition_press(void) {
 
 static void button_Camp_press(void) {
     if(g.ui != g.ui_Camp) {
-        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Camp->gridsystem->reset();
@@ -7968,7 +7962,6 @@ static void button_Scavenge_press(void) {
 
 static void button_Crafting_press(void) {
     if(g.ui != g.ui_Crafting) {
-        play_ui_sound(SOUND_CLICK);
         g.ui_Crafting->craftGrids->reset();
         g.ui = g.ui_Crafting;
         colors.bg = colors.grey;
@@ -8143,6 +8136,7 @@ static void init_buttons(void) {
     g.button_MainMap->up = g.bitmaps[0];
     g.button_MainMap->down = g.bitmaps[1];
     g.button_MainMap->onMouseDown = button_MainMap_press;
+    g.button_MainMap->mouseDownSound = SOUND_CLICK;
 
     g.button_MiniMap->pos.x1 = 0;
     g.button_MiniMap->pos.y1 = off_y + 2 * step;
@@ -8151,6 +8145,7 @@ static void init_buttons(void) {
     g.button_MiniMap->up = g.bitmaps[2];
     g.button_MiniMap->down = g.bitmaps[3];
     g.button_MiniMap->onMouseDown = button_MiniMap_press;
+    g.button_MiniMap->mouseDownSound = SOUND_CLICK;
 
     g.button_Skills->pos.x1 = 0;
     g.button_Skills->pos.y1 = off_y + 3 * step;
@@ -8159,6 +8154,7 @@ static void init_buttons(void) {
     g.button_Skills->up = g.bitmaps[4];
     g.button_Skills->down = g.bitmaps[5];
     g.button_Skills->onMouseDown = button_Skills_press;
+    g.button_Skills->mouseDownSound = SOUND_CLICK;
 
     g.button_Crafting->pos.x1 = 0;
     g.button_Crafting->pos.y1 = off_y + 4 * step;
@@ -8167,6 +8163,7 @@ static void init_buttons(void) {
     g.button_Crafting->up = g.bitmaps[6];
     g.button_Crafting->down = g.bitmaps[7];
     g.button_Crafting->onMouseDown = button_Crafting_press;
+    g.button_Crafting->mouseDownSound = SOUND_CLICK;
 
     g.button_Items->pos.x1 = 0;
     g.button_Items->pos.y1 = off_y + 5 * step;
@@ -8175,6 +8172,7 @@ static void init_buttons(void) {
     g.button_Items->up = g.bitmaps[8];
     g.button_Items->down = g.bitmaps[9];
     g.button_Items->onMouseDown = button_Items_press;
+    g.button_Items->mouseDownSound = SOUND_CLICK;
 
     g.button_Condition->pos.x1 = 0;
     g.button_Condition->pos.y1 = off_y + 6 * step;
@@ -8183,6 +8181,7 @@ static void init_buttons(void) {
     g.button_Condition->up = g.bitmaps[10];
     g.button_Condition->down = g.bitmaps[11];
     g.button_Condition->onMouseDown = button_Condition_press;
+    g.button_Condition->mouseDownSound = SOUND_CLICK;
 
     g.button_Camp->pos.x1 = 0;
     g.button_Camp->pos.y1 = off_y + 7 * step;
@@ -8191,6 +8190,7 @@ static void init_buttons(void) {
     g.button_Camp->up = g.bitmaps[12];
     g.button_Camp->down = g.bitmaps[13];
     g.button_Camp->onMouseDown = button_Camp_press;
+    g.button_Camp->mouseDownSound = SOUND_CLICK;
 
     g.button_Vehicle->pos.x1 = 0;
     g.button_Vehicle->pos.y1 = off_y + 8 * step;
@@ -8199,6 +8199,7 @@ static void init_buttons(void) {
     g.button_Vehicle->up = g.bitmaps[14];
     g.button_Vehicle->down = g.bitmaps[15];
     g.button_Vehicle->onMouseDown = button_Vehicle_press;
+    g.button_Vehicle->mouseDownSound = SOUND_CLICK;
 
     // right
     g.button_endturn->pos.x2 = 100;
@@ -9330,6 +9331,10 @@ static void logo(void) {
 #endif
 }
 
+// TODO use these
+static bool is_game_over(void) { return g.map == NULL; }
+static bool is_game_loaded(void) { return g.minimap != NULL; }
+
 int main(int argc, char **argv) {
     logo();
 
@@ -9407,8 +9412,7 @@ int main(int argc, char **argv) {
         fade_to_UI();
     } else {
         new_game();
-        g.ui = g.ui_MainMap;
-        colors.bg = colors.black;
+        switch_to_MainMap();
     }
 
     bool redraw = true;
@@ -9460,9 +9464,8 @@ int main(int argc, char **argv) {
             g.key = ev.keyboard.keycode;
             if(g.key == ALLEGRO_KEY_ESCAPE) {
                 if(g.ui == g.ui_MainMenu) {
-                    if(g.map != NULL) {
-                        g.ui = g.ui_MainMap;
-                        colors.bg = colors.black;
+                    if(is_game_over() == false) {
+                        switch_to_MainMap();
                     }
                 } else {
                     runMainMenu();

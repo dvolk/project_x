@@ -3,6 +3,7 @@
 #include "./colors.h"
 #include "./config.h"
 #include "./fontmanager.h"
+#include "./sound.h"
 
 #include <algorithm>
 
@@ -24,6 +25,7 @@ TextButton::TextButton(const char *name, float x, float y, float sx, float sy) {
     pos.y2 = sy;
     text_offset_x = round((pos.x2 - al_get_text_width(g_font, name)) / 2);
     text_offset_y = round((pos.y2 - config.font_height) / 2);
+    mouseDownSound = SOUND_CLICK2;
 }
 
 void TextButton::draw(void) {
@@ -42,4 +44,10 @@ void TextButton::hoverOver(void) {
                       colors.black, 1);
     al_draw_text(g_font, colors.white,
                  pos.x1 + text_offset_x, pos.y1 + text_offset_y, 0, name);
+}
+
+void TextButton::mouseDown(void) {
+    if(mouseDownSound != SOUND_NONE) {
+        play_ui_sound(mouseDownSound);
+    }
 }
