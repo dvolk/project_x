@@ -16,6 +16,23 @@ extern bool running;
 extern Config config;
 
 ALLEGRO_AUDIO_STREAM *stream = NULL;
+ALLEGRO_THREAD *music_thread = NULL;
+
+void init_music_player(void) {
+    music_thread = al_create_thread(music_player, NULL);
+    if(music_thread != NULL) {
+        al_start_thread(music_thread);
+    } else {
+        info("init_music_player: couldn't start thread");
+    }
+}
+
+void exit_music_player(void) {
+    if(music_thread != NULL) {
+        al_join_thread(music_thread, NULL);
+        al_destroy_thread(music_thread);
+    }
+}
 
 void music_player_set_volume(float vol) {
     if(stream == NULL)

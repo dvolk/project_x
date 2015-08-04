@@ -76,7 +76,6 @@ struct OptionsUI;
 bool running;
 Colors colors;
 ALLEGRO_FONT *g_font;
-ALLEGRO_THREAD *music_thread;
 Config config;
 World world;
 
@@ -8610,10 +8609,7 @@ static void allegro_init(void) {
         if(al_init_acodec_addon() == true) {
             info("Initialized allegro addon: acodec.");
             if (al_reserve_samples(1) == true) {
-                music_thread = al_create_thread(music_player, NULL);
-                if(music_thread != NULL) {
-                    al_start_thread(music_thread);
-                }
+                init_music_player();
             }
         }
     }
@@ -9333,7 +9329,7 @@ static void logo(void) {
 
 // TODO use these
 static bool is_game_over(void) { return g.map == NULL; }
-static bool is_game_loaded(void) { return g.minimap != NULL; }
+//static bool is_game_loaded(void) { return g.minimap != NULL; }
 
 int main(int argc, char **argv) {
     logo();
@@ -9511,10 +9507,7 @@ int main(int argc, char **argv) {
 
     info("Exiting");
 
-    if(music_thread != NULL) {
-        al_join_thread(music_thread, NULL);
-        al_destroy_thread(music_thread);
-    }
+    exit_music_player();
 
     unload_game();
     unload_bitmaps();
