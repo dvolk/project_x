@@ -2,6 +2,7 @@
 
 #include "./config.h"
 #include "./musicplayer.h"
+#include "./sound.h"
 
 #include <allegro5/allegro.h>
 #include <stdio.h>
@@ -20,6 +21,9 @@ void OptionsUI::reset_settings(void) {
             cb->state = true;
     musicVolumeSlider->state = config.musicVolume;
     music_player_set_volume(config.musicVolume);
+
+    uiSoundVolumeSlider->state = config.uiSoundVolume;
+    set_ui_volume(config.uiSoundVolume);
 }
 
 void OptionsUI::apply_settings(void) {
@@ -33,6 +37,9 @@ void OptionsUI::apply_settings(void) {
     }
     config.musicVolume = musicVolumeSlider->state;
     music_player_set_volume(config.musicVolume);
+
+    config.uiSoundVolume = uiSoundVolumeSlider->state;
+    set_ui_volume(config.uiSoundVolume);
 }
 
 void runMainMenu(void);
@@ -96,6 +103,9 @@ OptionsUI::OptionsUI() {
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Show FPS in terminal", &config.showFPS);
 
+    /*
+      sound options
+    */
     i++; i++;
     playMusicCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
@@ -106,11 +116,19 @@ OptionsUI::OptionsUI() {
     musicVolumeSlider->callback = music_player_set_volume;
 
     i++;
+    playUISoundsCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "UI sounds", &config.playUISounds);
+
+    uiSoundVolumeSlider = new Slider(start_x + 115, start_y + i * step_y,
+                                     NULL, &config.uiSoundVolume);
+    uiSoundVolumeSlider->callback = set_ui_volume;
+
+    i++; i++;
 
     /*
       debug options
     */
-    i++;
     debugVisibilityCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Reveal Map", &config.debugVisibility);
@@ -130,10 +148,12 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(altGridMovementCB);
     checkboxes.push_back(clipRectangleCB);
     checkboxes.push_back(playMusicCB);
+    checkboxes.push_back(playUISoundsCB);
     checkboxes.push_back(showFPSCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
     widgets.push_back(musicVolumeSlider);
+    widgets.push_back(uiSoundVolumeSlider);
 
     /*
       dynamically add resolution checkboxes

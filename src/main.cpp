@@ -37,6 +37,7 @@
 #include "./musicplayer.h"
 #include "./ui.h"
 #include "./optionsui.h"
+#include "./sound.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -7863,6 +7864,7 @@ void runMainMenu(void) {
 
 static void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MainMap;
@@ -7873,6 +7875,7 @@ static void button_MainMap_press(void) {
 
 static void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Items->gridsystem->reset();
@@ -7884,6 +7887,7 @@ static void button_Items_press(void) {
 
 static void button_Vehicle_press(void) {
     if(g.ui != g.ui_Vehicle) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Vehicle->gridsystem->reset();
@@ -7895,6 +7899,7 @@ static void button_Vehicle_press(void) {
 
 static void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui = g.ui_MiniMap;
@@ -7906,6 +7911,7 @@ static void button_MiniMap_press(void) {
 
 static void button_Skills_press(void) {
     if(g.ui != g.ui_Skills) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Skills->skillsGrid->reset();
@@ -7917,6 +7923,7 @@ static void button_Skills_press(void) {
 
 static void button_Condition_press(void) {
     if(g.ui != g.ui_Condition) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Condition->gridsystem->reset();
@@ -7928,6 +7935,7 @@ static void button_Condition_press(void) {
 
 static void button_Camp_press(void) {
     if(g.ui != g.ui_Camp) {
+        play_ui_sound(SOUND_CLICK);
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
         g.ui_Camp->gridsystem->reset();
@@ -7952,6 +7960,7 @@ static void button_Scavenge_press(void) {
 
 static void button_Crafting_press(void) {
     if(g.ui != g.ui_Crafting) {
+        play_ui_sound(SOUND_CLICK);
         g.ui_Crafting->craftGrids->reset();
         g.ui = g.ui_Crafting;
         colors.bg = colors.grey;
@@ -9346,6 +9355,7 @@ int main(int argc, char **argv) {
 
         load_fonts();
         load_bitmaps();
+        load_ui_sounds();
         init_rng( seed );
         init_colors();
         // init_iteminfo();
@@ -9389,7 +9399,8 @@ int main(int argc, char **argv) {
         fade_to_UI();
     } else {
         new_game();
-        button_MainMap_press();
+        g.ui = g.ui_MainMap;
+        colors.bg = colors.black;
     }
 
     bool redraw = true;
@@ -9441,8 +9452,10 @@ int main(int argc, char **argv) {
             g.key = ev.keyboard.keycode;
             if(g.key == ALLEGRO_KEY_ESCAPE) {
                 if(g.ui == g.ui_MainMenu) {
-                    if(g.map != NULL)
-                        button_MainMap_press();
+                    if(g.map != NULL) {
+                        g.ui = g.ui_MainMap;
+                        colors.bg = colors.black;
+                    }
                 } else {
                     runMainMenu();
                 }

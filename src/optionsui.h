@@ -23,9 +23,11 @@ struct OptionsUI : public UI {
     LabelledCheckBox *uiFadingCB;
     LabelledCheckBox *altGridMovementCB;
     LabelledCheckBox *playMusicCB;
+    LabelledCheckBox *playUISoundsCB;
     LabelledCheckBox *showFPSCB;
 
     Slider *musicVolumeSlider;
+    Slider *uiSoundVolumeSlider;
 
     LabelledCheckBox *clipRectangleCB;
     LabelledCheckBox *playerInvulnerableCB;

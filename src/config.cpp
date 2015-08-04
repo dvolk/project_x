@@ -53,6 +53,10 @@ void Config::save(const char *filename) {
     al_set_config_value(cfg, NULL, "music-volume", buf);
     snprintf(buf, sizeof(buf), "%d", custom_cursor);
     al_set_config_value(cfg, NULL, "custom-cursor", buf);
+    snprintf(buf, sizeof(buf), "%d", playUISounds);
+    al_set_config_value(cfg, NULL, "play-ui-sounds", buf);
+    snprintf(buf, sizeof(buf), "%d", int(uiSoundVolume * 100.0));
+    al_set_config_value(cfg, NULL, "ui-sound-volume", buf);
 
     al_save_config_file(filename, cfg);
     al_destroy_config(cfg);
@@ -129,6 +133,12 @@ void Config::load(const char *filename) {
 
     s = al_get_config_value(cfg, 0, "custom-cursor");
     custom_cursor = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "play-ui-sounds");
+    playUISounds = atoi(with_default(s, "1"));
+
+    s = al_get_config_value(cfg, 0, "ui-sound-volume");
+    uiSoundVolume = float(atoi(with_default(s, "50"))) / 100.0;
 
     al_destroy_config(cfg);
 }

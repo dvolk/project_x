@@ -23,6 +23,8 @@ struct Config {
     bool playMusic;
     bool showFPS;
     float musicVolume;
+    bool playUISounds;
+    float uiSoundVolume;
 
     void save(const char *filename);
     void load(const char *filename);
