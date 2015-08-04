@@ -35,6 +35,8 @@
 #include "./wound.h"
 #include "./world.h"
 #include "./musicplayer.h"
+#include "./ui.h"
+#include "./optionsui.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -42,7 +44,6 @@ using namespace std;
 
 struct MessageLog;
 struct Grid;
-struct UI;
 struct GridSystem;
 struct TileMap;
 struct Character;
@@ -77,6 +78,11 @@ ALLEGRO_FONT *g_font;
 ALLEGRO_THREAD *music_thread;
 Config config;
 World world;
+
+OptionsUI *ui_Options;
+
+int mouse_x;
+int mouse_y;
 
 // global state
 struct Game {
@@ -195,7 +201,6 @@ struct Game {
     HelpUI *ui_Help;
     FadeTransitionUI *ui_FadeTransition;
     NotificationUI *ui_Notification;
-    OptionsUI *ui_Options;
 
     unordered_map<const char *, Interact *> stories;
     //              ^^
@@ -213,8 +218,6 @@ struct Game {
 
     // current mouse state
     // TODO: remove this
-    int mouse_x;
-    int mouse_y;
     int mouse_button;
     // if holding an item, this is its offset from the mouse pointer
     int hold_off_x;
@@ -1845,11 +1848,11 @@ void TileMap::update(void) {
     if (g.mouse_state.buttons & 4) {
         // scroll map proportional to distance from position before
         // we pressed MMB
-        view_px -= (g.old_mx - g.mouse_x) * g.dt * 4;
-        view_py -= (g.old_my - g.mouse_y) * g.dt * 4;
+        view_px -= (g.old_mx - mouse_x) * g.dt * 4;
+        view_py -= (g.old_my - mouse_y) * g.dt * 4;
     } else {
-        g.old_mx = g.mouse_x;
-        g.old_my = g.mouse_y;
+        g.old_mx = mouse_x;
+        g.old_my = mouse_y;
     }
     resetViewXY();
 }
@@ -2879,7 +2882,7 @@ void GridSystem::MouseAutoMoveItemToGround() {
     Grid *from = NULL;
 
     for(auto& grid : grids) {
-        item = grid->grab_item(g.mouse_x, g.mouse_y);
+        item = grid->grab_item(mouse_x, mouse_y);
         if(item != NULL) {
             from = grid;
             goto got_it;
@@ -2906,7 +2909,7 @@ void GridSystem::MouseAutoMoveItemToTarget() {
     Grid *from = NULL;
 
     for(auto& grid : grids) {
-        item = grid->grab_item(g.mouse_x, g.mouse_y);
+        item = grid->grab_item(mouse_x, mouse_y);
         if(item != NULL) {
             from = grid;
             goto got_it;
@@ -3154,9 +3157,9 @@ void MiniMap::draw(void) {
 }
 
 void TileMap::mouseToTileXY(int &x, int &y) {
-    x = view_x + floor((g.mouse_x - pos.x1 + res_px) / 80);
+    x = view_x + floor((mouse_x - pos.x1 + res_px) / 80);
     int off_y = x % 2 == 0 ? 0 : 20;
-    y = view_y + floor((g.mouse_y - 40 - off_y - pos.y1 + res_py) / 40);
+    y = view_y + floor((mouse_y - 40 - off_y - pos.y1 + res_py) / 40);
 }
 
 int TileMap::mouseToTileN(void) {
@@ -3183,7 +3186,7 @@ void TileMap::mouseDown(void) {
     int clicked_nearby = -1;
 
     printf("clicked on n=%d m=(%d, %d) p=((%f, %f) (%f, %f))\n",
-           clicked_n, g.mouse_x, g.mouse_y,
+           clicked_n, mouse_x, mouse_y,
            pos.x1, pos.y1, pos.x2, pos.y2);
 
     if(clicked_n == -1)
@@ -3485,25 +3488,6 @@ void TileMap::keyDown(void) {
     // g.AddMessage(buf);
 }
 
-struct UI {
-    vector<Widget *> widgets;
-
-    virtual ~UI() {
-        // info("~UI()");
-    }
-
-    void mouseDownEvent(void);
-    void mouseUpEvent(void);
-    void keyDownEvent(void);
-    void hoverOverEvent(void);
-
-    void update(void);
-    virtual void draw(void);
-
-    void addIndicatorWidgets(void);
-    void addLogAndButtons(void);
-};
-
 void UI::addIndicatorWidgets(void) {
     widgets.push_back(g.health_indicator);
     widgets.push_back(g.pain_indicator);
@@ -3528,72 +3512,6 @@ void UI::addLogAndButtons(void) {
     widgets.push_back(g.button_scavenge);
     widgets.push_back(g.button_endturn);
     widgets.push_back(g.button_sleep);
-}
-
-void UI::update(void) {
-    for(auto& widget : widgets) {
-        widget->update();
-    }
-}
-
-void UI::mouseDownEvent(void) {
-    for(auto& widget : widgets) {
-        if(widget->pos.x1 <= g.mouse_x &&
-           widget->pos.y1 <= g.mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
-            widget->mouseDown();
-            if(widget->onMouseDown != NULL)
-                widget->onMouseDown();
-        }
-    }
-}
-
-void UI::mouseUpEvent(void) {
-    for(auto& widget : widgets) {
-        if(widget->pos.x1 <= g.mouse_x &&
-           widget->pos.y1 <= g.mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
-            widget->mouseUp();
-            if(widget->onMouseUp != NULL)
-                widget->onMouseUp();
-            return;
-        }
-    }
-}
-
-void UI::keyDownEvent(void) {
-    for(auto& widget : widgets) {
-        if(widget->pos.x1 <= g.mouse_x &&
-           widget->pos.y1 <= g.mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
-            widget->keyDown();
-            if(widget->onKeyDown != NULL)
-                widget->onKeyDown();
-            return;
-        }
-    }
-}
-
-void UI::hoverOverEvent(void) {
-    for(auto& widget : widgets) {
-        if(widget->pos.x1 <= g.mouse_x &&
-           widget->pos.y1 <= g.mouse_y &&
-           widget->pos.x1 + widget->pos.x2 >= g.mouse_x &&
-           widget->pos.y1 + widget->pos.y2 >= g.mouse_y) {
-            widget->hoverOver();
-            return;
-        }
-    }
-}
-
-void UI::draw(void) {
-    for(auto& widget : widgets) {
-        if(widget->visible)
-            widget->draw();
-    }
 }
 
 GridSortButton::GridSortButton(Grid *parent) {
@@ -3895,10 +3813,10 @@ void GridSystem::drawItemTooltip(void) {
             sy = item->pos.y2;
             // item->getHpDims(sx, sy);
 
-            if(item->parent->pos.x1 + item->pos.x1 * Grid::grid_px_x <= g.mouse_x &&
-               item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= g.mouse_y &&
-               item->parent->pos.x1 + (item->pos.x1 + sx) * Grid::grid_px_x >= g.mouse_x &&
-               item->parent->pos.y1 + (item->pos.y1 + sy) * Grid::grid_px_y >= g.mouse_y) {
+            if(item->parent->pos.x1 + item->pos.x1 * Grid::grid_px_x <= mouse_x &&
+               item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= mouse_y &&
+               item->parent->pos.x1 + (item->pos.x1 + sx) * Grid::grid_px_x >= mouse_x &&
+               item->parent->pos.y1 + (item->pos.y1 + sy) * Grid::grid_px_y >= mouse_y) {
 
                 // if(g.item_info[item->info_index].is_text_item == true)
                 //     return;
@@ -3912,20 +3830,20 @@ void GridSystem::drawItemTooltip(void) {
                     + (display_weight == true ? config.font_height : 0)
                     + (display_condition == true ? config.font_height : 0) + 8;
 
-                al_draw_filled_rectangle(g.mouse_x + 16, g.mouse_y,
-                                         g.mouse_x + 200, g.mouse_y + box_height, colors.black);
+                al_draw_filled_rectangle(mouse_x + 16, mouse_y,
+                                         mouse_x + 200, mouse_y + box_height, colors.black);
 
-                al_draw_text(g_font, colors.grey3, g.mouse_x + 24, g.mouse_y + 8,
+                al_draw_text(g_font, colors.grey3, mouse_x + 24, mouse_y + 8,
                              0, g.item_info[item->info_index].name);
 
                 if(display_condition == true) {
-                    al_draw_textf(g_font, colors.grey3, g.mouse_x + 24, g.mouse_y + off_y,
+                    al_draw_textf(g_font, colors.grey3, mouse_x + 24, mouse_y + off_y,
                                   0, "condition: %.1f%%", item->condition * 100);
                     off_y += 14;
                 }
 
                 if(display_weight == true) {
-                    al_draw_textf(g_font, colors.grey3, g.mouse_x + 24, g.mouse_y + off_y,
+                    al_draw_textf(g_font, colors.grey3, mouse_x + 24, mouse_y + off_y,
                                   0, "%d g", weight * item->cur_stack);
                     off_y += 14;
                 }
@@ -3935,7 +3853,7 @@ void GridSystem::drawItemTooltip(void) {
                    (item->parent->info == NULL ||
                     item->parent->info->noGrid == false))
                     // ^^ unless it's on a hardpoint
-                    item->storage->drawAt(g.mouse_x + 16, g.mouse_y + box_height);
+                    item->storage->drawAt(mouse_x + 16, mouse_y + box_height);
 
                 return;
             }
@@ -3989,7 +3907,7 @@ void GridSystem::gsMouseDownEvent() {
                 }
             }
             if(skip == false)
-                grid->unstack_item(g.mouse_x, g.mouse_y);
+                grid->unstack_item(mouse_x, mouse_y);
         }
     }
 
@@ -3997,8 +3915,8 @@ void GridSystem::gsMouseDownEvent() {
     for(auto& grid : grids) {
         if(grid->gsb == NULL)
             continue;
-        if(g.mouse_x > grid->gsb->pos.x1 && g.mouse_y > grid->gsb->pos.y1 &&
-           g.mouse_x < grid->gsb->pos.x2 && g.mouse_y < grid->gsb->pos.y2) {
+        if(mouse_x > grid->gsb->pos.x1 && mouse_y > grid->gsb->pos.y1 &&
+           mouse_x < grid->gsb->pos.x2 && mouse_y < grid->gsb->pos.y2) {
             if(grid->gsb_displayed == true) {
                 grid->gsb->mouseDown();
                 break;
@@ -4019,7 +3937,7 @@ void GridSystem::GrabItem() {
             }
         }
         if(skip == false) {
-            i = grid->grab_item(g.mouse_x, g.mouse_y);
+            i = grid->grab_item(mouse_x, mouse_y);
             if(i != NULL)
                 goto got_it;
         }
@@ -4035,9 +3953,9 @@ void GridSystem::GrabItem() {
     i->setHpDims();
     cout << was_rotated << endl;
     g.hold_off_x =
-        g.mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
+        mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
     g.hold_off_y =
-        g.mouse_y - (i->parent->pos.y1 + i->pos.y1 * Grid::grid_px_y);
+        mouse_y - (i->parent->pos.y1 + i->pos.y1 * Grid::grid_px_y);
 
     if(held->storage != NULL) {
         // if this item was on a hardpoint, we need to remove
@@ -4103,21 +4021,21 @@ bool GridSystem::placeItemAtMouse() {
         bool in_bounds = false;
         if(grid->info == NULL || grid->info->noGrid == false) {
             // grid
-            drop_x = ((g.mouse_x - g.hold_off_x) - grid->pos.x1) / Grid::grid_px_x;
-            drop_y = ((g.mouse_y - g.hold_off_y) - grid->pos.y1) / Grid::grid_px_y;
+            drop_x = ((mouse_x - g.hold_off_x) - grid->pos.x1) / Grid::grid_px_x;
+            drop_y = ((mouse_y - g.hold_off_y) - grid->pos.y1) / Grid::grid_px_y;
             in_bounds =
-                g.mouse_x - g.hold_off_x >= grid->pos.x1 &&
-                g.mouse_y - g.hold_off_y >= grid->pos.y1 &&
-                g.mouse_x - g.hold_off_x + Grid::grid_px_x * held->pos.x2 <= grid->pos.x2 + 17 &&
-                g.mouse_y - g.hold_off_y + Grid::grid_px_y * held->pos.y2 <= grid->pos.y2 + 17;
+                mouse_x - g.hold_off_x >= grid->pos.x1 &&
+                mouse_y - g.hold_off_y >= grid->pos.y1 &&
+                mouse_x - g.hold_off_x + Grid::grid_px_x * held->pos.x2 <= grid->pos.x2 + 17 &&
+                mouse_y - g.hold_off_y + Grid::grid_px_y * held->pos.y2 <= grid->pos.y2 + 17;
         }
         else {
             // hardpoint
             in_bounds =
-                g.mouse_x >= grid->pos.x1 &&
-                g.mouse_y >= grid->pos.y1 &&
-                g.mouse_x <= grid->pos.x2 + 17 &&
-                g.mouse_y <= grid->pos.y2 + 17;
+                mouse_x >= grid->pos.x1 &&
+                mouse_y >= grid->pos.y1 &&
+                mouse_x <= grid->pos.x2 + 17 &&
+                mouse_y <= grid->pos.y2 + 17;
         }
 
         if(in_bounds == true) {
@@ -4385,12 +4303,12 @@ void Item::drawHeld(void) {
     ALLEGRO_BITMAP *sprite = get_sprite();
 
     // we're held by the mouse
-    float x1 = g.mouse_x - g.hold_off_x;
-    float y1 = g.mouse_y - g.hold_off_y;
+    float x1 = mouse_x - g.hold_off_x;
+    float y1 = mouse_y - g.hold_off_y;
 
     if(sprite == NULL) {
-        float x2 = g.mouse_x - g.hold_off_x + pos.x2 * 16;
-        float y2 = g.mouse_y - g.hold_off_y + pos.y2 * 16;
+        float x2 = mouse_x - g.hold_off_x + pos.x2 * 16;
+        float y2 = mouse_y - g.hold_off_y + pos.y2 * 16;
         al_draw_filled_rectangle(x1, y1, x2, y2, colors.grey3);
         al_draw_rectangle(x1, y1, x2, y2, colors.black, 1);
     }
@@ -5622,7 +5540,7 @@ EncounterUI::~EncounterUI() {
 }
 
 void MessageLog::mouseDown(void) {
-    if(g.mouse_x > g.weapon_switcher->pos.x1) {
+    if(mouse_x > g.weapon_switcher->pos.x1) {
         g.map->player->switchWeaponHand();
 
         // ...
@@ -7478,216 +7396,6 @@ static void fade_to_UI(void) {
     g.ui_FadeTransition->start(NULL, g.ui);
     g.ui = g.ui_FadeTransition;
 }
-struct OptionsUI : public UI {
-    TextButton *button_cancel;
-    TextButton *button_apply;
-
-    vector<LabelledCheckBox *> checkboxes;
-    vector<LabelledCheckBox *> resolution_checkboxes;
-
-    LabelledCheckBox *fullscreenCB;
-    LabelledCheckBox *vsyncCB;
-    LabelledCheckBox *resolutionScalingCB;
-    LabelledCheckBox *debugVisibilityCB;
-    LabelledCheckBox *sortingCB;
-    LabelledCheckBox *startNagCB;
-    LabelledCheckBox *uiFadingCB;
-    LabelledCheckBox *altGridMovementCB;
-    LabelledCheckBox *playMusicCB;
-    LabelledCheckBox *showFPSCB;
-
-    Slider *musicVolumeSlider;
-
-    LabelledCheckBox *clipRectangleCB;
-    LabelledCheckBox *playerInvulnerableCB;
-
-    void reset_settings(void);
-    void apply_settings(void);
-
-    OptionsUI();
-    ~OptionsUI();
-};
-
-void OptionsUI::reset_settings(void) {
-    for(auto&& cb : checkboxes) cb->reset();
-    for(auto&& cb : resolution_checkboxes)
-        // reset all but the resolution we're in!
-        if(cb->res_data.x != config.displayX ||
-           cb->res_data.y != config.displayY)
-            cb->state = false;
-        else
-            cb->state = true;
-    musicVolumeSlider->state = config.musicVolume;
-    music_player_set_volume(config.musicVolume);
-}
-
-void OptionsUI::apply_settings(void) {
-    for(auto&& cb : checkboxes) cb->apply();
-    for(auto&& cb : resolution_checkboxes) {
-        if(cb->state == true) {
-            config.displayX = cb->res_data.x;
-            config.displayY = cb->res_data.y;
-            printf("selected resolution: %d %d\n", cb->res_data.x, cb->res_data.y);
-        }
-    }
-    config.musicVolume = musicVolumeSlider->state;
-    music_player_set_volume(config.musicVolume);
-}
-
-static void runMainMenu(void);
-
-OptionsUI::OptionsUI() {
-    button_cancel = new TextButton("Cancel", round((g.display_x - 215) / 2),
-                                 (g.display_y - 720) / 2 + 630, 85, 45);
-
-    button_cancel->onMouseDown = [] { g.ui_Options->reset_settings();
-                                      runMainMenu();
-    };
-
-    button_apply = new TextButton("Apply", round((g.display_x + 41) / 2),
-                                 (g.display_y - 720) / 2 + 630, 85, 45);
-
-    button_apply->onMouseDown = [] { g.ui_Options->apply_settings();
-                                     config.save("game.conf");
-                                     runMainMenu();
-    };
-
-    float start_x = (g.display_x - 485) / 2;
-    float start_y = 100;
-    float step_y = 25;
-    int i = 0;
-
-    fullscreenCB
-        = new LabelledCheckBox(start_x, start_y,
-                               "Fullscreen", &config.fullscreen);
-    i++;
-    vsyncCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "V-Sync", &config.vsync);
-    i++;
-    resolutionScalingCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Resolution scaling", &config.resolutionScaling);
-    i++;
-    sortingCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Inventory Sorting", &config.sorting);
-    i++;
-    startNagCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Start Notifications", &config.start_nag);
-    i++;
-    uiFadingCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "UI Fading", &config.ui_fading);
-    i++;
-    altGridMovementCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Alternative Grid Movement", &config.alt_grid_movement);
-    i++;
-    clipRectangleCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Clip Rectangle", &config.setClipRectangle);
-    i++;
-    showFPSCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Show FPS in terminal", &config.showFPS);
-
-    i++; i++;
-    playMusicCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Music", &config.playMusic);
-
-    musicVolumeSlider = new Slider(start_x + 80, start_y + i * step_y,
-                                   NULL, &config.musicVolume);
-    musicVolumeSlider->callback = music_player_set_volume;
-
-    i++;
-
-    /*
-      debug options
-    */
-    i++;
-    debugVisibilityCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Reveal Map", &config.debugVisibility);
-    i++;
-    playerInvulnerableCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Player Invulnerable", &config.debugVisibility);
-
-    checkboxes.push_back(fullscreenCB);
-    checkboxes.push_back(vsyncCB);
-    checkboxes.push_back(resolutionScalingCB);
-    checkboxes.push_back(debugVisibilityCB);
-    checkboxes.push_back(playerInvulnerableCB);
-    checkboxes.push_back(sortingCB);
-    checkboxes.push_back(startNagCB);
-    checkboxes.push_back(uiFadingCB);
-    checkboxes.push_back(altGridMovementCB);
-    checkboxes.push_back(clipRectangleCB);
-    checkboxes.push_back(playMusicCB);
-    checkboxes.push_back(showFPSCB);
-
-    for(auto&& cb : checkboxes) widgets.push_back(cb);
-    widgets.push_back(musicVolumeSlider);
-
-    /*
-      dynamically add resolution checkboxes
-    */
-    char buf[32];
-    start_x = (g.display_x + 275) / 2;
-    start_y = 100;
-    step_y = 0;
-
-    for (int i = 0 ; i < al_get_num_display_modes() ; ++i) {
-        ALLEGRO_DISPLAY_MODE mode;
-        if (al_get_display_mode(i , &mode) == &mode) {
-            // filter out different refresh rates/depths for the same resolution
-            bool skip = false;
-            for(auto&& cb : resolution_checkboxes) {
-                if(mode.width == cb->res_data.x && mode.height == cb->res_data.y)
-                    skip = true;
-            }
-            if(skip == true)
-                continue;
-
-            // only add resolutions that are higher than 720p
-            if(mode.width >= 1280 && mode.height >= 720) {
-                snprintf(buf, sizeof(buf), "%dx%d", mode.width, mode.height);
-
-                LabelledCheckBox *cb = new LabelledCheckBox(start_x, start_y + 25 * step_y, strdup(buf), NULL);
-                cb->res_data.x = mode.width;
-                cb->res_data.y = mode.height;
-                if(cb->res_data.x == config.displayX &&
-                   cb->res_data.y == config.displayY)
-                    cb->state = true;
-
-                cb->callback = []{
-                    for(auto&& cb : g.ui_Options->resolution_checkboxes)
-                        cb->state = false;
-                };
-
-                resolution_checkboxes.push_back(cb);
-                step_y++;
-            }
-        }
-    }
-
-    for(auto&& cb : resolution_checkboxes) widgets.push_back(cb);
-
-    widgets.push_back(button_cancel);
-    widgets.push_back(button_apply);
-}
-
-OptionsUI::~OptionsUI() {
-    for(auto&& cb : resolution_checkboxes) {
-        free((char*)cb->name);
-    }
-    for(auto&& widget : widgets) {
-        delete widget;
-    }
-}
 
 /*
   Blocking notifications
@@ -8067,6 +7775,8 @@ void HelpUI::draw(void) {
     UI::draw();
 }
 
+void runMainMenu(void);
+
 static void press_Help_back(void) {
     delete g.ui_Help;
     runMainMenu();
@@ -8107,7 +7817,7 @@ static void button_Help_press(void) {
 
 static void button_Options_press(void) {
     colors.bg = colors.grey2;
-    g.ui = g.ui_Options;
+    g.ui = ui_Options;
 }
 
 static void main_buttons_update(void) {
@@ -8139,12 +7849,12 @@ static void switchToMainMenu(void) {
 
 // these could probably be a single function
 // update: let's just face it. It's not happening
-static void runMainMenu(void) {
+void runMainMenu(void) {
     if(g.ui == NULL ||
        g.ui == g.ui_MainMap ||
        g.ui == g.ui_MiniMap ||
        g.ui == g.ui_Help ||
-       g.ui == g.ui_Options) {
+       g.ui == ui_Options) {
         switchToMainMenu();
     } else {
         info("You can only go to the main menu from the map or minimap");
@@ -9589,7 +9299,7 @@ static bool load_game(const char *filename) {
     return true;
 }
 
-float get_mouse_x(void) { return g.mouse_x; }
+float get_mouse_x(void) { return mouse_x; }
 
 static void logo(void) {
     cout << " ____            _           _    __  __\n";
@@ -9659,7 +9369,7 @@ int main(int argc, char **argv) {
         g.ui_MainMenu = new MainMenuUI;
         g.ui_FadeTransition = new FadeTransitionUI;
         g.ui_Notification = new NotificationUI;
-        g.ui_Options = new OptionsUI;
+        ui_Options = new OptionsUI;
 
         g.map = NULL; // game is over
         g.minimap = NULL; // game is fully unloaded
@@ -9700,8 +9410,9 @@ int main(int argc, char **argv) {
         al_get_mouse_state(&g.mouse_state);
         al_get_keyboard_state(&g.keyboard_state);
 
-        g.mouse_x = g.mouse_state.x / g.scale - g.tx;
-        g.mouse_y = g.mouse_state.y / g.scale - g.ty;
+        mouse_x = g.mouse_state.x / g.scale - g.tx;
+        mouse_y = g.mouse_state.y / g.scale - g.ty;
+
         draw_hover = false;
         // 1 - RMB
         // 2 - LMB
@@ -9791,7 +9502,7 @@ int main(int argc, char **argv) {
     delete g.ui_MainMenu;
     delete g.ui_FadeTransition;
     delete g.ui_Notification;
-    delete g.ui_Options;
+    delete ui_Options;
     delete g.ui_Interact;
     delete g.rng;
     delete g.time_display;
