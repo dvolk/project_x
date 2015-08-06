@@ -62,9 +62,9 @@ OptionsUI::OptionsUI() {
                                      runMainMenu();
     };
 
-    float start_x = (config.displayX - 485) / 2;
-    float start_y = 100;
-    float step_y = 25;
+    const float start_x = round((config.displayX - 485) / 2);
+    const float start_y = 100;
+    const float step_y = 25;
     int i = 0;
 
     fullscreenCB
@@ -77,11 +77,19 @@ OptionsUI::OptionsUI() {
     i++;
     resolutionScalingCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Resolution scaling", &config.resolutionScaling);
+                               "Resolution Scaling", &config.resolutionScaling);
+    i++;
+    clipRectangleCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "16:9 Letterbox", &config.setClipRectangle);
     i++;
     sortingCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Inventory Sorting", &config.sorting);
+    i++;
+    escMenuQuitsCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Esc In Menu Exits Game", &config.esc_menu_quits);
     i++;
     startNagCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
@@ -89,15 +97,11 @@ OptionsUI::OptionsUI() {
     i++;
     uiFadingCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "UI Fading", &config.ui_fading);
+                               "UI Fade Transitions", &config.ui_fading);
     i++;
     altGridMovementCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Alternative Grid Movement", &config.alt_grid_movement);
-    i++;
-    clipRectangleCB
-        = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Clip Rectangle", &config.setClipRectangle);
     i++;
     showFPSCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
@@ -135,7 +139,7 @@ OptionsUI::OptionsUI() {
     i++;
     playerInvulnerableCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
-                               "Player Invulnerable", &config.debugVisibility);
+                               "Player Invulnerable", &config.playerInvulnerable);
 
     checkboxes.push_back(fullscreenCB);
     checkboxes.push_back(vsyncCB);
@@ -149,6 +153,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(clipRectangleCB);
     checkboxes.push_back(playMusicCB);
     checkboxes.push_back(playUISoundsCB);
+    checkboxes.push_back(escMenuQuitsCB);
     checkboxes.push_back(showFPSCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
@@ -159,41 +164,44 @@ OptionsUI::OptionsUI() {
       dynamically add resolution checkboxes
     */
     char buf[32];
-    start_x = (config.displayX + 275) / 2;
-    start_y = 100;
-    step_y = 0;
+    const float res_start_x = round((config.displayX + 275) / 2);
+    const float res_start_y = 100;
+    const float res_step_y = 25;
+    int j = 0;
 
     for (int i = 0 ; i < al_get_num_display_modes() ; ++i) {
         ALLEGRO_DISPLAY_MODE mode;
         if (al_get_display_mode(i , &mode) == &mode) {
+            // only add resolutions that are higher than 720p
+            if(mode.width < 1280 || mode.height <= 720)
+                continue;
+
             // filter out different refresh rates/depths for the same resolution
             bool skip = false;
             for(auto&& cb : resolution_checkboxes) {
                 if(mode.width == cb->res_data.x && mode.height == cb->res_data.y)
                     skip = true;
             }
+
             if(skip == true)
                 continue;
 
-            // only add resolutions that are higher than 720p
-            if(mode.width >= 1280 && mode.height >= 720) {
-                snprintf(buf, sizeof(buf), "%dx%d", mode.width, mode.height);
+            snprintf(buf, sizeof(buf), "%dx%d", mode.width, mode.height);
 
-                LabelledCheckBox *cb = new LabelledCheckBox(start_x, start_y + 25 * step_y, strdup(buf), NULL);
-                cb->res_data.x = mode.width;
-                cb->res_data.y = mode.height;
-                if(cb->res_data.x == config.displayX &&
-                   cb->res_data.y == config.displayY)
-                    cb->state = true;
+            LabelledCheckBox *cb = new LabelledCheckBox(res_start_x, res_start_y + j * res_step_y, strdup(buf), NULL);
+            cb->res_data.x = mode.width;
+            cb->res_data.y = mode.height;
+            if(cb->res_data.x == config.displayX &&
+               cb->res_data.y == config.displayY)
+                cb->state = true;
 
-                cb->callback = []{
-                    for(auto&& cb : ui_Options->resolution_checkboxes)
-                        cb->state = false;
-                };
+            cb->callback = []{
+                for(auto&& cb : ui_Options->resolution_checkboxes)
+                    cb->state = false;
+            };
 
-                resolution_checkboxes.push_back(cb);
-                step_y++;
-            }
+            resolution_checkboxes.push_back(cb);
+            j++;
         }
     }
 

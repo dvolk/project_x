@@ -2800,6 +2800,8 @@ struct GridSystem : public Widget {
     void AutoMoveItem(Item *item, Grid *from, Grid *to);
     void MouseAutoMoveItemToGround();
     void MouseAutoMoveItemToTarget();
+
+    void returnHeld(void);
 };
 
 GridSystem::GridSystem(void) {
@@ -5090,6 +5092,8 @@ void Encounter::setup(Character *c1, Character *c2) {
 
 static void runPlayerEncounter(void) {
     g.ui_Encounter->setup();
+    // show the message log if it's hidden
+    g.log->visible = true;
     g.ui_Encounter->encounter.do_encounter_messages();
     g.ui = g.ui_Encounter;
 }
@@ -7860,7 +7864,31 @@ void runMainMenu(void) {
     }
 }
 
+static bool is_game_over(void) { return g.map == NULL; }
+static bool is_game_loaded(void) { return g.minimap != NULL; }
+
+/*
+  return any items that were held
+
+  TODO rewrite
+*/
+void returnHeld(void) {
+    if(is_game_loaded() == false)
+        // these UIs only exist when a game is loaded
+        return;
+
+    if(g.ui_Items->gridsystem->held != NULL) g.ui_Items->gridsystem->returnHeldToSender();
+    if(g.ui_Skills->skillsGrid->held != NULL) g.ui_Skills->skillsGrid->returnHeldToSender();
+    if(g.ui_Crafting->craftGrids->held != NULL) g.ui_Crafting->craftGrids->returnHeldToSender();
+    if(g.ui_Condition->gridsystem->held != NULL) g.ui_Condition->gridsystem->returnHeldToSender();
+    if(g.ui_Vehicle->gridsystem->held != NULL) g.ui_Vehicle->gridsystem->returnHeldToSender();
+    if(g.ui_Encounter->encounterGrids->held != NULL) g.ui_Encounter->encounterGrids->returnHeldToSender();
+    if(g.ui_Camp->gridsystem->held != NULL) g.ui_Camp->gridsystem->returnHeldToSender();
+    if(g.ui_Interact->gridsystem->held != NULL) g.ui_Interact->gridsystem->returnHeldToSender();
+}
+
 static void switch_to_MainMap(void) {
+    returnHeld();
     if(g.ui != g.ui_MainMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7871,6 +7899,7 @@ static void switch_to_MainMap(void) {
 }
 
 static void button_MainMap_press(void) {
+    returnHeld();
     if(g.ui != g.ui_MainMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7881,6 +7910,7 @@ static void button_MainMap_press(void) {
 }
 
 static void button_Items_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Items) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7892,6 +7922,7 @@ static void button_Items_press(void) {
 }
 
 static void button_Vehicle_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Vehicle) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7903,6 +7934,7 @@ static void button_Vehicle_press(void) {
 }
 
 static void button_MiniMap_press(void) {
+    returnHeld();
     if(g.ui != g.ui_MiniMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7914,6 +7946,7 @@ static void button_MiniMap_press(void) {
 }
 
 static void button_Skills_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Skills) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7925,6 +7958,7 @@ static void button_Skills_press(void) {
 }
 
 static void button_Condition_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Condition) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7936,6 +7970,7 @@ static void button_Condition_press(void) {
 }
 
 static void button_Camp_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Camp) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7947,6 +7982,7 @@ static void button_Camp_press(void) {
 }
 
 static void button_Scavenge_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Scavenge) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
@@ -7960,6 +7996,7 @@ static void button_Scavenge_press(void) {
 }
 
 static void button_Crafting_press(void) {
+    returnHeld();
     if(g.ui != g.ui_Crafting) {
         g.ui_Crafting->craftGrids->reset();
         g.ui = g.ui_Crafting;
@@ -9327,9 +9364,38 @@ static void logo(void) {
 #endif
 }
 
-// TODO use these
-static bool is_game_over(void) { return g.map == NULL; }
-//static bool is_game_loaded(void) { return g.minimap != NULL; }
+void pressEscape() {
+    returnHeld();
+
+    // can't get out of encounter or stories with escape
+    if(g.ui == g.ui_Encounter ||
+       g.ui == g.ui_Interact) {
+        return;
+    }
+    if(g.ui == ui_Options) {
+        ui_Options->reset_settings();
+        runMainMenu();
+        return;
+    }
+    if(g.ui == g.ui_Help) {
+        press_Help_back();
+        return;
+    }
+    if(g.ui == g.ui_MainMap) {
+        runMainMenu();
+        return;
+    }
+    if(g.ui == g.ui_MainMenu && config.esc_menu_quits == true) {
+        // TODO prompt yes/no if game is running?
+        running = false;
+        return;
+    }
+    if(is_game_over() == false) {
+        assert(is_game_loaded() == true);
+        switch_to_MainMap();
+        return;
+    }
+}
 
 int main(int argc, char **argv) {
     logo();
@@ -9459,13 +9525,7 @@ int main(int argc, char **argv) {
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
             g.key = ev.keyboard.keycode;
             if(g.key == ALLEGRO_KEY_ESCAPE) {
-                if(g.ui == g.ui_MainMenu) {
-                    if(is_game_over() == false) {
-                        switch_to_MainMap();
-                    }
-                } else {
-                    runMainMenu();
-                }
+                pressEscape();
             } else {
                 g.ui->keyDownEvent();
             }

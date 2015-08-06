@@ -25,6 +25,7 @@ struct OptionsUI : public UI {
     LabelledCheckBox *playMusicCB;
     LabelledCheckBox *playUISoundsCB;
     LabelledCheckBox *showFPSCB;
+    LabelledCheckBox *escMenuQuitsCB;
 
     Slider *musicVolumeSlider;
     Slider *uiSoundVolumeSlider;
