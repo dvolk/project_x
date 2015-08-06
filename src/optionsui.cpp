@@ -173,7 +173,7 @@ OptionsUI::OptionsUI() {
         ALLEGRO_DISPLAY_MODE mode;
         if (al_get_display_mode(i , &mode) == &mode) {
             // only add resolutions that are higher than 720p
-            if(mode.width < 1280 || mode.height <= 720)
+            if(mode.width < 1280 || mode.height < 720)
                 continue;
 
             // filter out different refresh rates/depths for the same resolution

@@ -2060,7 +2060,9 @@ Character *TileMap::addRandomCharacterNearPlayer(void) {
     int y1 = max(0, g.map->player->y - r);
     int x2 = min(size_x /* ?? */ - 1, g.map->player->x + r);
     int y2 = min(size_y /* ?? */ - 1, g.map->player->y + r);
-    c->n = random_uninhabited_position_in_rect(x1, y1, x2, y2);
+
+    c->setPos(random_uninhabited_position_in_rect(x1, y1, x2, y2));
+
     return c;
 }
 
@@ -3753,9 +3755,7 @@ void TileMap::draw(void) {
         player->draw();
         for(auto& character : characters)
             character->draw();
-    }
 
-    if(config.debugVisibility == true) {
         al_draw_rectangle(pos.x1, pos.y1, pos.x1 + pos.x2, pos.y1 + pos.y2, colors.red, 1);
     }
 
