@@ -1457,7 +1457,7 @@ static bool isCraftingSkill(int n) {
 }
 
 Character::Character(void) {
-    this->n = 0;
+    setPos(0);
     this->sprite = g.bitmaps[21];
 
     const int off_x = 555;
@@ -4815,7 +4815,7 @@ CraftingUI::CraftingUI() {
     button_prev_recipe->pos.y1 = 260;
     button_prev_recipe->pos.x2 = 75;
     button_prev_recipe->pos.y2 = 45;
-    button_prev_recipe->up = g.bitmaps[33];
+    button_prev_recipe->up = g.bitmaps[107];
     button_prev_recipe->down = NULL;
     button_prev_recipe->onMouseDown = craftingPrevRecipe;
 
@@ -4833,7 +4833,7 @@ CraftingUI::CraftingUI() {
     button_next_recipe->pos.y1 = 260;
     button_next_recipe->pos.x2 = 75;
     button_next_recipe->pos.y2 = 45;
-    button_next_recipe->up = g.bitmaps[33];
+    button_next_recipe->up = g.bitmaps[108];
     button_next_recipe->down = NULL;
     button_next_recipe->onMouseDown = craftingNextRecipe;
 
@@ -8127,6 +8127,8 @@ static void load_bitmaps(void) {
     /* 104 */ filenames.push_back("media/items/wood_log.png");
     /* 105 */ filenames.push_back("media/items/fire.png");
     /* 106 */ filenames.push_back("media/items/cooking_pot.png");
+    /* 107 */ filenames.push_back("media/buttons/button_prev.png");
+    /* 108 */ filenames.push_back("media/buttons/button_next.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
