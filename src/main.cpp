@@ -7722,7 +7722,10 @@ void MainMenuUI::createTitle(void) {
 
     const int title_text_len = al_get_text_width(f, title_text);
     const int title_shadow_len = al_get_text_width(shadow_font, title_text);
-    const int title_version_len = al_get_text_width(g_font, VERSION) + al_get_text_width(g_font, "()");
+
+    char version_string_buf[64];
+    snprintf(version_string_buf, sizeof(version_string_buf), "(%s)", VERSION);
+    const int title_version_len = al_get_text_width(g_font, version_string_buf);
 
     title_offset = round((g.display_x - title_shadow_len) / 2);
 
@@ -7735,7 +7738,7 @@ void MainMenuUI::createTitle(void) {
 
     al_draw_text(shadow_font, colors.black, 0, 0, 0, title_text);
     al_draw_text(f, colors.white, shadow_offset, 0, 0, title_text);
-    al_draw_textf(g_font, colors.black, version_offset, font_height + 4 + 20, 0, "(%s)", VERSION);
+    al_draw_text(g_font, colors.black, version_offset, font_height + 4 + 20, 0, version_string_buf);
 
     al_set_target_backbuffer(g.display);
     al_destroy_font(f);
