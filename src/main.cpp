@@ -5732,7 +5732,7 @@ void ScavengeUI::reset(void) {
 
 ScavengeGridSystem::ScavengeGridSystem() {
     options = new Grid (105, 380, 20, 10, NULL);
-    selected = new Grid (480, 380, 20, 10, NULL);
+    selected = new Grid (470, 380, 20, 10, NULL);
 
     grids.push_back(options);
     grids.push_back(selected);
@@ -5894,7 +5894,7 @@ ScavengeUI::ScavengeUI() {
     gridsystem = new ScavengeGridSystem;
 
     button_confirm = new Button ("Commit selection");
-    button_confirm->pos.x1 = 855;
+    button_confirm->pos.x1 = 835;
     button_confirm->pos.y1 = 380;
     button_confirm->pos.x2 = 75;
     button_confirm->pos.y2 = 45;
