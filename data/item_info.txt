@@ -27,6 +27,10 @@ name 4 none
 	weapon_damage 0.001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite -1
 	sprite_on_hp -1
 name 8 backpack
@@ -57,6 +61,10 @@ name 8 backpack
 	weapon_damage 0.001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 24
 	sprite_on_hp -1
 name 13 first aid kit
@@ -87,6 +95,10 @@ name 13 first aid kit
 	weapon_damage 0.001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 22
 	sprite_on_hp -1
 name 7 crowbar
@@ -117,6 +129,10 @@ name 7 crowbar
 	weapon_damage 0.15
 	weapon_range 3
 	is_text_item 0
+	is_scavenge_tool 1
+	scavenge_loot_mult 10
+	scavenge_safety_mult 1
+	scavenge_sneak_mult 1
 	sprite 20
 	sprite_on_hp -1
 name 16 shopping trolley
@@ -147,6 +163,10 @@ name 16 shopping trolley
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 26
 	sprite_on_hp -1
 name 11 pill bottle
@@ -177,6 +197,10 @@ name 11 pill bottle
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 27
 	sprite_on_hp -1
 name 4 Flee
@@ -207,6 +231,10 @@ name 4 Flee
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 31
 	sprite_on_hp -1
 name 13 Single attack
@@ -237,6 +265,10 @@ name 13 Single attack
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 32
 	sprite_on_hp -1
 name 6 bullet
@@ -267,6 +299,10 @@ name 6 bullet
 	weapon_damage 0.001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 34
 	sprite_on_hp -1
 name 5 arrow
@@ -297,6 +333,10 @@ name 5 arrow
 	weapon_damage 0.005
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 35
 	sprite_on_hp -1
 name 5 Quick
@@ -327,6 +367,10 @@ name 5 Quick
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 36
 	sprite_on_hp -1
 name 11 Lockpicking
@@ -357,6 +401,10 @@ name 11 Lockpicking
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 37
 	sprite_on_hp -1
 name 6 Myopia
@@ -387,6 +435,10 @@ name 6 Myopia
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 38
 	sprite_on_hp -1
 name 10 Metabolism
@@ -417,6 +469,10 @@ name 10 Metabolism
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 39
 	sprite_on_hp -1
 name 7 whiskey
@@ -447,6 +503,10 @@ name 7 whiskey
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 40
 	sprite_on_hp -1
 name 9 clean rag
@@ -477,6 +537,10 @@ name 9 clean rag
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 41
 	sprite_on_hp -1
 name 7 Factory
@@ -507,6 +571,10 @@ name 7 Factory
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 42
 	sprite_on_hp -1
 name 18 Shack in the woods
@@ -537,6 +605,10 @@ name 18 Shack in the woods
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 43
 	sprite_on_hp -1
 name 12 water bottle
@@ -567,6 +639,10 @@ name 12 water bottle
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 49
 	sprite_on_hp -1
 name 10 red hoodie
@@ -597,6 +673,10 @@ name 10 red hoodie
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 51
 	sprite_on_hp 50
 name 10 blue jeans
@@ -627,6 +707,10 @@ name 10 blue jeans
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 53
 	sprite_on_hp 52
 name 8 ski mask
@@ -657,6 +741,10 @@ name 8 ski mask
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 55
 	sprite_on_hp 54
 name 11 right glove
@@ -687,6 +775,10 @@ name 11 right glove
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 56
 	sprite_on_hp -1
 name 10 left glove
@@ -717,6 +809,10 @@ name 10 left glove
 	weapon_damage 0
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 57
 	sprite_on_hp -1
 name 10 right shoe
@@ -747,6 +843,10 @@ name 10 right shoe
 	weapon_damage 0.005
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 85
 	sprite_on_hp 58
 name 9 left shoe
@@ -777,6 +877,10 @@ name 9 left shoe
 	weapon_damage 0.005
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 86
 	sprite_on_hp 59
 name 7 Retreat
@@ -807,6 +911,10 @@ name 7 Retreat
 	weapon_damage 0.005
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 80
 	sprite_on_hp -1
 name 7 Advance
@@ -837,6 +945,10 @@ name 7 Advance
 	weapon_damage 0.005
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 81
 	sprite_on_hp -1
 name 4 fist
@@ -867,6 +979,10 @@ name 4 fist
 	weapon_damage 0.1
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 82
 	sprite_on_hp -1
 name 18 makeshift wood bow
@@ -897,6 +1013,10 @@ name 18 makeshift wood bow
 	weapon_damage 0.2
 	weapon_range 8
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 84
 	sprite_on_hp -1
 name 11 moldy bread
@@ -927,6 +1047,10 @@ name 11 moldy bread
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 96
 	sprite_on_hp -1
 name 5 water
@@ -957,6 +1081,10 @@ name 5 water
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 97
 	sprite_on_hp -1
 name 11 clear water
@@ -987,6 +1115,10 @@ name 11 clear water
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 97
 	sprite_on_hp -1
 name 12 wild berries
@@ -1017,6 +1149,10 @@ name 12 wild berries
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 100
 	sprite_on_hp -1
 name 7 matches
@@ -1047,6 +1183,10 @@ name 7 matches
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 1
+	scavenge_loot_mult 1
+	scavenge_safety_mult 2
+	scavenge_sneak_mult 0.5
 	sprite 101
 	sprite_on_hp -1
 name 4 rope
@@ -1077,6 +1217,10 @@ name 4 rope
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 1
+	scavenge_loot_mult 1
+	scavenge_safety_mult 4
+	scavenge_sneak_mult 1
 	sprite 102
 	sprite_on_hp -1
 name 12 gasoline can
@@ -1107,6 +1251,10 @@ name 12 gasoline can
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 103
 	sprite_on_hp -1
 name 4 wood
@@ -1137,6 +1285,10 @@ name 4 wood
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 104
 	sprite_on_hp -1
 name 4 fire
@@ -1167,6 +1319,10 @@ name 4 fire
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 105
 	sprite_on_hp -1
 name 11 cooking pot
@@ -1197,5 +1353,9 @@ name 11 cooking pot
 	weapon_damage 0.0001
 	weapon_range 1
 	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
 	sprite 106
 	sprite_on_hp -1

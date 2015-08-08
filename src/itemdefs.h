@@ -65,6 +65,10 @@ struct ItemInfo {
     int weapon_range;
     // item with runtime text
     bool is_text_item;
+    bool is_scavenge_tool;
+    float scavenge_loot_mult;
+    float scavenge_safety_mult;
+    float scavenge_sneak_mult;
 
     // sprite when item is on a normal grid
     ALLEGRO_BITMAP *sprite;
@@ -106,6 +110,10 @@ void ItemInfo::save(ostream &os) {
     os << "\tweapon_damage " << weapon_damage << endl;
     os << "\tweapon_range " << weapon_range << endl;
     os << "\tis_text_item " << is_text_item << endl;
+    os << "\tis_scavenge_tool " << is_scavenge_tool << endl;
+    os << "\tscavenge_loot_mult " << scavenge_loot_mult << endl;
+    os << "\tscavenge_safety_mult " << scavenge_safety_mult << endl;
+    os << "\tscavenge_sneak_mult " << scavenge_sneak_mult << endl;
     os << "\tsprite " << find_bitmap_index(sprite) << endl;
     os << "\tsprite_on_hp " << find_bitmap_index(sprite_on_hp) << endl;
 }
@@ -149,6 +157,10 @@ void ItemInfo::load(istream &is) {
     is.ignore(256, ' ');    is >> weapon_damage;
     is.ignore(256, ' ');    is >> weapon_range;
     is.ignore(256, ' ');    is >> is_text_item;
+    is.ignore(256, ' ');    is >> is_scavenge_tool;
+    is.ignore(256, ' ');    is >> scavenge_loot_mult;
+    is.ignore(256, ' ');    is >> scavenge_safety_mult;
+    is.ignore(256, ' ');    is >> scavenge_sneak_mult;
 
     is.ignore(256, ' ');
     int sprite_i;
@@ -222,6 +234,10 @@ void init_iteminfo(void) {
     tmp.weapon_damage = 0.001;
     tmp.weapon_range = 1;
     tmp.is_text_item = false;
+    tmp.is_scavenge_tool = false;
+    tmp.scavenge_loot_mult = 0;
+    tmp.scavenge_safety_mult = 0;
+    tmp.scavenge_sneak_mult = 0;
     g.item_info.push_back(tmp);
 
     // 01
@@ -283,6 +299,10 @@ void init_iteminfo(void) {
     tmp.slot = SLOT_NONE;
     tmp.weapon_damage = 0.15;
     tmp.weapon_range = 3;
+    tmp.is_scavenge_tool = true;
+    tmp.scavenge_loot_mult = 2.0;
+    tmp.scavenge_safety_mult = 1.0;
+    tmp.scavenge_sneak_mult = 1.0;
     g.item_info.push_back(tmp);
 
     // 04
@@ -304,6 +324,10 @@ void init_iteminfo(void) {
     tmp.slot = SLOT_NONE;
     tmp.weapon_damage = 0.0;
     tmp.weapon_range = 1;
+    tmp.is_scavenge_tool = false;
+    tmp.scavenge_loot_mult = 0;
+    tmp.scavenge_safety_mult = 0;
+    tmp.scavenge_sneak_mult = 0;
     g.item_info.push_back(tmp);
 
     // 05
@@ -951,6 +975,10 @@ void init_iteminfo(void) {
     tmp.improves_hydration = 0.0;
     tmp.improves_satiety = 0.0;
     tmp.slot = SLOT_NONE;
+    tmp.is_scavenge_tool = true;
+    tmp.scavenge_loot_mult = 1.0;
+    tmp.scavenge_safety_mult = 2.0;
+    tmp.scavenge_sneak_mult = 0.5;
     g.item_info.push_back(tmp);
 
     // 35
@@ -973,6 +1001,10 @@ void init_iteminfo(void) {
     tmp.improves_hydration = 0.0;
     tmp.improves_satiety = 0.0;
     tmp.slot = WATER_BOTTLE;
+    tmp.is_scavenge_tool = true;
+    tmp.scavenge_loot_mult = 1.0;
+    tmp.scavenge_safety_mult = 2.0;
+    tmp.scavenge_sneak_mult = 1.0;
     g.item_info.push_back(tmp);
 
     // 36
@@ -995,6 +1027,10 @@ void init_iteminfo(void) {
     tmp.improves_hydration = 0.0;
     tmp.improves_satiety = 0.0;
     tmp.slot = SLOT_NONE;
+    tmp.is_scavenge_tool = false;
+    tmp.scavenge_loot_mult = 0;
+    tmp.scavenge_safety_mult = 0;
+    tmp.scavenge_sneak_mult = 0;
     g.item_info.push_back(tmp);
 
     // 37
