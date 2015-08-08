@@ -298,7 +298,25 @@ struct Item {
     int get_weight(void);
     float get_warmth(void);
     void setHpDims(void);
+
+    bool isScavengeItem(void);
+    float getScavengeLootMult(void);
+    float getScavengeSafetyMult(void);
+    float getScavengeSneakMult(void);
 };
+
+bool Item::isScavengeItem(void) {
+    return g.item_info[info_index].is_scavenge_tool;
+}
+float Item::getScavengeLootMult(void) {
+    return g.item_info[info_index].scavenge_loot_mult;
+}
+float Item::getScavengeSafetyMult(void) {
+    return g.item_info[info_index].scavenge_safety_mult;
+}
+float Item::getScavengeSneakMult(void) {
+    return g.item_info[info_index].scavenge_sneak_mult;
+}
 
 bool Item::isTextItem(void) {
     return g.item_info[info_index].is_text_item;
@@ -691,8 +709,9 @@ Grid::~Grid() {
     // info("~Grid()");
     // a grid owns its items
     delete gsb;
-    for(auto &item : items)
+    for(auto &item : items) {
         delete item;
+    }
 }
 
 void Grid::resetPos(void) {
@@ -1685,9 +1704,21 @@ struct Location {
     void load(istream &is);
 
     int getResetTime(void);
+    float getBaseLootVal(void);
+    float getBaseSafetyVal(void);
+    float getBaseSneakVal(void);
     vector<pair<float, int>> getLootTable(void);
 };
 
+float Location::getBaseLootVal(void) {
+    return g.location_info[info_index].base_loot_level;
+}
+float Location::getBaseSafetyVal(void) {
+    return g.location_info[info_index].base_safety_level;
+}
+float Location::getBaseSneakVal(void) {
+    return g.location_info[info_index].base_sneak_level;
+}
 int Location::getResetTime(void) {
     return g.location_info[info_index].reset_time;
 }
@@ -1995,7 +2026,7 @@ int TileMap::random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2)
             ok = true;
     } while(ok == false);
 
-    printf("poss: %d %d %d %d -> %d %d\n", x1, x2, y1, y2, x, y);
+    // printf("poss: %d %d %d %d -> %d %d\n", x1, x2, y1, y2, x, y);
 
     return new_n;
 }
@@ -2515,19 +2546,6 @@ static void runRandomMoveEvents(void) {
     if(roll == 0) {
         g.AddMessage("You disturb a flock of birds and they fly away loudly.");
     }
-}
-
-// return true if there was an event
-static bool runRandomScavengingEvents(void) {
-    uniform_int_distribution<> d100(0, 100);
-    int roll = d100(*g.rng);
-
-    if(roll > 80) {
-        // 1 in 5 chance of falling down and hurting yourself
-        runInteract("fall_down");
-        return true;
-    }
-    return false;
 }
 
 static void runAIEncounter(int n);
@@ -4585,9 +4603,9 @@ struct CraftingUI : public UI {
 };
 
 void CraftingUI::draw(void) {
-    al_draw_text(g_font, colors.white, 200, 8, 0, "ground:");
-    al_draw_text(g_font, colors.white, 700, 8, 0, "ingredients:");
-    al_draw_text(g_font, colors.white, 800, 295, 0, "preview:");
+    al_draw_text(g_font, colors.white, 105, 5, 0, "Ground:");
+    al_draw_text(g_font, colors.white, 500, 5, 0, "Ingredients:");
+    al_draw_text(g_font, colors.white, 660 + 75 + 10, 290, 0, "Preview:");
     UI::draw();
 }
 
@@ -5563,11 +5581,17 @@ struct ScavengeUI : public UI {
     Character *player;
     ScavengeGridSystem *gridsystem;
     Button *button_confirm;
+    BarIndicator *loot_indicator;
+    BarIndicator *safety_indicator;
+    BarIndicator *sneak_indicator;
     int current_stage;
     unordered_map<Item *, Location *> items_to_locations;
     Item *selected_location;
-    vector<Item *> selected_tools;
+    unordered_map<Item *, Item *> tool_clone_map;
+    //            ^^ clone ^^ inventory
     vector<Item *> scavenged_items;
+
+    float loot, safety, sneak;
 
     ScavengeUI();
     ~ScavengeUI();
@@ -5576,27 +5600,114 @@ struct ScavengeUI : public UI {
 
     void setup(void);
     void reset(void);
+    void abort_exit(void);
 
+    /*
+      TODO maybe these should be in a seperate class so the
+      AI could scavenge as well
+     */
     void runScavengeStep(void);
     void scavengeLocation(void);
     void resetLastLooted(void);
     void addLootedItems(void);
+    void calcScavengeValues(void);
+    void initIndicatorWidgets(void);
+    void delete_grid_items(void);
+    void commit_stage2(void);
 };
+
+void ScavengeUI::calcScavengeValues(void) {
+
+    Location *location = NULL;
+
+    /*
+      get location
+     */
+    if(current_stage == 0) {
+        // get the location that's currently selected
+        vector<Item *> *selected = &gridsystem->selected->items;
+        if(selected->size() == 0) {
+            loot = 0;
+            safety = 0;
+            sneak = 0;
+            return;
+        } else {
+            location = items_to_locations.find(selected->front())->second;
+        }
+    }
+    else if(current_stage == 1) {
+        // get the location that was selected in the prev stage
+        location = items_to_locations.find(selected_location)->second;
+        assert(location != NULL);
+    }
+    else {
+        // the gridsystem isn't shown in stage 2
+        return;
+    }
+
+    loot = location->getBaseLootVal();
+    safety = location->getBaseSafetyVal();
+    sneak = location->getBaseSneakVal();
+
+    /*
+      add in tool modifiers
+    */
+    if(current_stage == 1) {
+        for(auto&& tool : gridsystem->selected->items) {
+            assert(tool->isScavengeItem() == true);
+
+            loot *= tool->getScavengeLootMult();
+            safety *= tool->getScavengeSafetyMult();
+            sneak *= tool->getScavengeSneakMult();
+        }
+    }
+    else if(current_stage == 2) {
+        for(auto&& tool_iter : tool_clone_map) {
+            Item *tool = tool_iter.first;
+            assert(tool->isScavengeItem() == true);
+
+            loot *= tool->getScavengeLootMult();
+            safety *= tool->getScavengeSafetyMult();
+            sneak *= tool->getScavengeSneakMult();
+        }
+    }
+
+    /*
+      clamp to 0-1
+    */
+    loot = max((float)0.0, min((float)1.0, loot));
+    safety = max((float)0.0, min((float)1.0, safety));
+    sneak = max((float)0.0, min((float)1.0, sneak));
+
+    printf("calcScavengeValues(): lo:%f sa:%f sn:%f\n", loot, safety, sneak);
+}
 
 void ScavengeUI::draw(void) {
     int off_x = 420;
-    int off_y = 365;
+    int off_y = 265;
 
     al_draw_bitmap(g.map->getBitmap(player->n), off_x, off_y - 120, 0);
+
+    /*
+      stage 0
+    */
     if(current_stage == 0) {
         if(items_to_locations.empty() == true) {
-            al_draw_text(g_font, colors.white, 105, 365, 0, "There don't seem to be any worthwhile spots to scavenge here at the moment.");
+            al_draw_text(g_font, colors.white, 105, 360, 0, "There don't seem to be any worthwhile spots to scavenge here at the moment.");
         } else {
-            al_draw_text(g_font, colors.white, 105, 365, 0, "Choose a location to scavenge:");
+            al_draw_text(g_font, colors.white, 105, 360, 0, "Choose a location to scavenge:");
         }
-    } else if(current_stage == 1) {
-        al_draw_text(g_font, colors.white, 105, 365, 0, "Choose what to use during scavenging:");
-    } else {
+    }
+    /*
+      stage 1
+    */
+    else if(current_stage == 1) {
+        al_draw_text(g_font, colors.white, 105, 360, 0, "Choose what to use during scavenging:");
+    }
+    /*
+      stage 2
+     */
+    else {
         al_draw_text(g_font, colors.white, off_x, off_y - 20, 0, "Scavenging results:");
 
         if(scavenged_items.empty() == true) {
@@ -5605,7 +5716,7 @@ void ScavengeUI::draw(void) {
             al_draw_text(g_font, colors.white, off_x, off_y, 0, "You found some items:");
             int i = 0;
             for(auto& item : scavenged_items) {
-                al_draw_text(g_font, colors.white, off_x + 10, off_y + 20 + 10 * i, 0, item->getName());
+                al_draw_text(g_font, colors.white, off_x + 10, off_y + 20 + 16 * i, 0, item->getName());
                 i++;
             }
         }
@@ -5627,6 +5738,8 @@ ScavengeGridSystem::ScavengeGridSystem() {
     grids.push_back(selected);
 
     auto_target = selected;
+
+    change = [] { g.ui_Scavenge->calcScavengeValues(); };
 
     reset();
 }
@@ -5650,7 +5763,7 @@ void ScavengeUI::scavengeLocation(void) {
     for(auto& loot_entry : loot_table) {
 
         int loot_item_index = loot_entry.second;
-        float loot_probability = loot_entry.first;
+        float loot_probability = loot_entry.first * this->loot;
         float roll = prob(*g.rng);
 
         if(roll < loot_probability) {
@@ -5671,6 +5784,35 @@ void ScavengeUI::addLootedItems(void) {
     }
 }
 
+// return true if there was an event
+static bool runRandomScavengingEvents(void) {
+    uniform_int_distribution<> d100(0, 100);
+    int roll = d100(*g.rng);
+    int prob = g.ui_Scavenge->safety * 100;
+
+    printf("runRandomScavengingEvents(): %d %d\n", roll, prob);
+
+    if(roll > prob) {
+        runInteract("fall_down");
+        return true;
+    }
+    return false;
+}
+
+void ScavengeUI::commit_stage2(void) {
+    printf("commit_stage2()\n");
+    addLootedItems();
+    resetLastLooted();
+    player->activity = ACTIVITY_SCAVENGE;
+    player->spendTime(1000);
+
+    if(runRandomScavengingEvents() == false)
+        // if we didn't get an event, manually return to the main map
+        switch_to_MainMap();
+
+    return;
+}
+
 void ScavengeUI::runScavengeStep(void) {
     cout << "runScavenging() stage: " << current_stage << endl;
 
@@ -5688,29 +5830,64 @@ void ScavengeUI::runScavengeStep(void) {
             return;
         }
         selected_location = selected->front();
+        calcScavengeValues();
     }
     else if(current_stage == 1) {
         // after the second step, we picked the tools used for scavenging
-        selected_tools = *selected;
+        for(auto&& item : *selected) {
+            // find the original item
+            Item *inventory_item = tool_clone_map.find(item)->second;
+            // use it
+            g.map->player->abuseItem(inventory_item, 0.01);
+
+            // debug stuff
+            printf("selected tool: %p %s\n", (void*)item, item->getName());
+            printf("it was cloned from %p\n", (void*)inventory_item);
+        }
         // take location and options, generate items scavenged
         scavengeLocation();
     }
     else if(current_stage == 2) {
-        addLootedItems();
-        resetLastLooted();
-        player->activity = ACTIVITY_SCAVENGE;
-        player->spendTime(1000);
-
-        if(runRandomScavengingEvents() == false)
-            // if we didn't get an event, manually return to the main map
-            switch_to_MainMap();
-
+        current_stage = 0;
+        commit_stage2();
         return;
     } else {
         errorQuit("invalid scavenge step");
     }
     current_stage++;
     setup();
+}
+
+void ScavengeUI::initIndicatorWidgets(void) {
+    loot_indicator = new BarIndicator;
+    loot_indicator->indicator_name = "Loot";
+    loot_indicator->pos.x1 = 420;
+    loot_indicator->pos.y1 = 265 - 30;
+    loot_indicator->pos.x2 = 100;
+    loot_indicator->pos.y2 = 25;
+    loot_indicator->quantity = &this->loot;
+    loot_indicator->up = g.bitmaps[46];
+    loot_indicator->bars = g.bitmaps[47];
+
+    safety_indicator = new BarIndicator;
+    safety_indicator->indicator_name = "Safety";
+    safety_indicator->pos.x1 = 420;
+    safety_indicator->pos.y1 = 265 + 30 - 30;
+    safety_indicator->pos.x2 = 100;
+    safety_indicator->pos.y2 = 25;
+    safety_indicator->quantity = &this->safety;
+    safety_indicator->up = g.bitmaps[46];
+    safety_indicator->bars = g.bitmaps[47];
+
+    sneak_indicator = new BarIndicator;
+    sneak_indicator->indicator_name = "Sneak";
+    sneak_indicator->pos.x1 = 420;
+    sneak_indicator->pos.y1 = 265 + 60 - 30;
+    sneak_indicator->pos.x2 = 100;
+    sneak_indicator->pos.y2 = 25;
+    sneak_indicator->quantity = &this->sneak;
+    sneak_indicator->up = g.bitmaps[46];
+    sneak_indicator->bars = g.bitmaps[47];
 }
 
 ScavengeUI::ScavengeUI() {
@@ -5724,14 +5901,51 @@ ScavengeUI::ScavengeUI() {
     button_confirm->up = g.bitmaps[33];
     button_confirm->down = NULL;
     button_confirm->onMouseDown = runScavenging;
+
+    loot = 0.0;
+    safety = 0.0;
+    sneak = 0.0;
+
+    initIndicatorWidgets();
 }
 
 ScavengeUI::~ScavengeUI() {
     delete gridsystem;
     delete button_confirm;
+    delete loot_indicator;
+    delete safety_indicator;
+    delete sneak_indicator;
 }
 
 static vector<Location *> *locations_at_character(Character *character);
+
+void ScavengeUI::abort_exit(void) {
+    info("ScavengeUI::abort_exit()");
+    if(current_stage == 2) {
+        current_stage = 0; // prevent infinite loop
+        commit_stage2();
+    }
+    if(current_stage == 1)
+        delete_grid_items();
+}
+
+void ScavengeUI::delete_grid_items(void) {
+    /*
+      delete tools copied in the tool selection
+    */
+    for(auto&& item : gridsystem->options->items) {
+        item->storage = NULL;
+        printf("Deleting %p (%s)\n", (void*)item, item->getName());
+        delete item;
+    }
+    gridsystem->options->items.clear();
+    for(auto&& item : gridsystem->selected->items) {
+        item->storage = NULL;
+        printf("Deleting %p (%s)\n", (void*)item, item->getName());
+        delete item;
+    }
+    gridsystem->selected->items.clear();
+}
 
 void ScavengeUI::setup(void) {
     colors.bg = colors.grey;
@@ -5739,12 +5953,25 @@ void ScavengeUI::setup(void) {
     widgets.clear();
     widgets.push_back(button_confirm);
 
+    if(current_stage != 2) {
+        widgets.push_back(loot_indicator);
+        widgets.push_back(safety_indicator);
+        widgets.push_back(sneak_indicator);
+    }
+
+    if(current_stage == 2)
+        delete_grid_items();
+
     gridsystem->selected->items.clear();
     gridsystem->options->items.clear();
 
     if(current_stage == 0) {
+        loot = 0;
+        safety = 0;
+        sneak = 0;
         scavenged_items.clear();
         items_to_locations.clear();
+        tool_clone_map.clear();
         player = g.map->player;
         vector<Location *> *locations = locations_at_character(player);
 
@@ -5765,7 +5992,29 @@ void ScavengeUI::setup(void) {
         /*
           TODO: grab scavenging tools from player's inventory and display them here
         */
-        // gridsystem->options->PlaceItem(new Item ("crowbar")); // TODO: leak
+        for(auto&& grid : g.map->player->inventory_hardpoints)
+            for(auto&& item : grid->items) {
+                if(item->isScavengeItem() == false)
+                    continue;
+                /*
+                  scavenge items modify:
+
+                  loot
+                  safety
+                  sneak
+
+                  TODO: find items in full inventory
+                */
+                Item *clone = new Item(*item);
+                if(gridsystem->options->PlaceItem(clone) != NULL) {
+                    printf("Couldn't place: %s\n", clone->getName());
+                    clone->storage = NULL;
+                    delete clone;
+                } else {
+                    printf("Adding %p -> %p (%s)\n", (void*)item, (void*)clone, item->getName());
+                    tool_clone_map.emplace(clone, item);
+                }
+            }
     } else if(current_stage == 2) {
         // we're done. ScavengeUI::draw is showing what we got
         gridsystem->visible = false;
@@ -6283,6 +6532,7 @@ static void init_interactions(void) {
                 }
                 else if(world.lake_quest_state == 0) return 0;
                 else if(world.lake_quest_state == 1) return 3; // accepted
+                else if(world.lake_quest_state == 4) return 1; // found but not accepted
                 else return -1;
             };
 
@@ -6310,20 +6560,11 @@ static void init_interactions(void) {
 
             page()->addChoice("Leave", -1);
             page()->addChoice("Offer to help", 2);
-        }
-
-        { new InteractPage; // 2
-            page()->right = g.bitmaps[92];
-
-            page()->wrap_and_tell("\"Help?\" says the man, \"Are you insane? There's no help for me now\" He stops looking at you and turns his head toward the sky \"Don't you get it? I'm infected. I'll be dead soon, like everyone who gets the virus.\"");
-            page()->tell("");
-            page()->tell("He rolls his head again and looks at you. \"You too, probably.\"");
-
-            page()->addChoice("I have questions", 3);
-            page()->addChoice("Leave", -1);
 
             page()->pre = []()
                 {
+                    if(world.lake_quest_state == 4)
+                        return;
                     drop_item_at_player("backpack");
                     drop_item_at_player("blue jeans");
                     drop_item_at_player("makeshift wood bow");
@@ -6343,7 +6584,21 @@ static void init_interactions(void) {
                     drop_item_at_player("cooking pot");
                     drop_item_at_player("fire");
                     drop_item_at_player("shopping trolley");
+                    drop_item_at_player("first aid kit");
+                    world.lake_quest_state = 4;
                 };
+
+        }
+
+        { new InteractPage; // 2
+            page()->right = g.bitmaps[92];
+
+            page()->wrap_and_tell("\"Help?\" says the man, \"Are you insane? There's no help for me now\" He stops looking at you and turns his head toward the sky \"Don't you get it? I'm infected. I'll be dead soon, like everyone who gets the virus.\"");
+            page()->tell("");
+            page()->tell("He rolls his head again and looks at you. \"You too, probably.\"");
+
+            page()->addChoice("I have questions", 3);
+            page()->addChoice("Leave", -1);
         }
 
         { new InteractPage; // 3
@@ -6558,8 +6813,8 @@ struct VehicleGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) {
-        al_draw_text(g_font, colors.white, 200, 10, 0, "Ground:");
-        al_draw_text(g_font, colors.white, 500, 135, 0, "Vehicle:");
+        al_draw_text(g_font, colors.white, 105, 5, 0, "Ground:");
+        al_draw_text(g_font, colors.white, 500, 132, 0, "Vehicle:");
         GridSystem::draw();
     }
 
@@ -6587,7 +6842,7 @@ struct CampGridSystem : public GridSystem {
 
     void reset(void);
     void draw(void) override {
-        al_draw_text(g_font, colors.white, 200, 10, 0, "Ground:");
+        al_draw_text(g_font, colors.white, 105, 5, 0, "Ground:");
         al_draw_text(g_font, colors.white, 600, 10, 0, "Current campsite:");
         al_draw_text(g_font, colors.white, 950, 10, 0, "Available campsites:");
         GridSystem::draw();
@@ -6641,7 +6896,7 @@ struct InventoryGridSystem : public GridSystem {
     void reset(void);
     void draw(void) {
         al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
-        al_draw_text(g_font, colors.white, 200, 10, 0, "Ground:");
+        al_draw_text(g_font, colors.white, 105, 5, 0, "Ground:");
         GridSystem::draw();
     }
 
@@ -6667,7 +6922,7 @@ ConditionGridSystem::~ConditionGridSystem() {
 
 void ConditionGridSystem::draw(void) {
     al_draw_bitmap(g.bitmaps[45], 480, 70, 0);
-    al_draw_text(g_font, colors.white, 200, 10, 0, "Ground:");
+    al_draw_text(g_font, colors.white, 105, 5, 0, "Ground:");
     // al_draw_filled_rectangle(700, 50, 1175, 500, colors.grey);
     // al_draw_text(g_font, colors.black, 708, 58, 0, "Current conditions:");
 
@@ -7895,6 +8150,8 @@ static void switch_to_MainMap(void) {
     if(g.ui != g.ui_MainMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui = g.ui_MainMap;
         colors.bg = colors.black;
     }
@@ -7906,6 +8163,8 @@ static void button_MainMap_press(void) {
     if(g.ui != g.ui_MainMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui = g.ui_MainMap;
         colors.bg = colors.black;
     }
@@ -7917,6 +8176,8 @@ static void button_Items_press(void) {
     if(g.ui != g.ui_Items) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui_Items->gridsystem->reset();
         g.ui = g.ui_Items;
         colors.bg = colors.grey;
@@ -7929,6 +8190,8 @@ static void button_Vehicle_press(void) {
     if(g.ui != g.ui_Vehicle) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui_Vehicle->gridsystem->reset();
         g.ui = g.ui_Vehicle;
         colors.bg = colors.grey;
@@ -7941,6 +8204,8 @@ static void button_MiniMap_press(void) {
     if(g.ui != g.ui_MiniMap) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui = g.ui_MiniMap;
         colors.bg = colors.grey;
         g.minimap->recreate();
@@ -7953,6 +8218,8 @@ static void button_Skills_press(void) {
     if(g.ui != g.ui_Skills) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui_Skills->skillsGrid->reset();
         g.ui = g.ui_Skills;
         colors.bg = colors.grey;
@@ -7965,6 +8232,8 @@ static void button_Condition_press(void) {
     if(g.ui != g.ui_Condition) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui_Condition->gridsystem->reset();
         g.ui = g.ui_Condition;
         colors.bg = colors.grey;
@@ -7977,6 +8246,8 @@ static void button_Camp_press(void) {
     if(g.ui != g.ui_Camp) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui_Camp->gridsystem->reset();
         g.ui = g.ui_Camp;
         colors.bg = colors.grey;
@@ -7989,6 +8260,8 @@ static void button_Scavenge_press(void) {
     if(g.ui != g.ui_Scavenge) {
         if(g.ui == g.ui_Crafting)
             g.ui_Crafting->craftGrids->exit();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui_Scavenge->reset();
         g.ui_Scavenge->setup();
         g.ui_Scavenge->gridsystem->reset();
@@ -8002,6 +8275,8 @@ static void button_Crafting_press(void) {
     returnHeld();
     if(g.ui != g.ui_Crafting) {
         g.ui_Crafting->craftGrids->reset();
+        if(g.ui == g.ui_Scavenge)
+            g.ui_Scavenge->abort_exit();
         g.ui = g.ui_Crafting;
         colors.bg = colors.grey;
     }
@@ -8815,7 +9090,7 @@ static void init_rng(int seed) {
 
 #include <getopt.h>
 
-static void init_args(int argc, char **argv, int *seed) {
+static void init_args(int argc, char **argv, int *seed, char **load) {
     int opt= 0;
     *seed = -1;
     g.tilemap_sx = 150;
@@ -8827,12 +9102,13 @@ static void init_args(int argc, char **argv, int *seed) {
         {"map-x",   required_argument, 0,  'x' },
         {"map-y",   required_argument, 0,  'y' },
         {"seed",    required_argument, 0,  's' },
+        {"load",    required_argument, 0,  'l' },
         {"help",    no_argument,       0,  'h' },
         {0,         0,                 0,  0   }
     };
 
     int long_index = 0;
-    while ((opt = getopt_long(argc, argv, "x:y:s:h",
+    while ((opt = getopt_long(argc, argv, "x:y:s:l:h",
                               long_options, &long_index)) != -1) {
         switch (opt) {
         case 'x' :
@@ -8843,6 +9119,9 @@ static void init_args(int argc, char **argv, int *seed) {
             break;
         case 's' :
             *seed = std::stoi(optarg);
+            break;
+        case 'l' :
+            *load = optarg;
             break;
         case 'h':
             printf("Usage: %s [OPTION]\n", argv[0]);
@@ -9285,7 +9564,7 @@ static bool save_game(const char *filename) {
 
     ofstream out(filename, ios::out);
     if(out.fail() == true) {
-        info("Error: Couldn't open test.sav for writing");
+        info("Error: Couldn't open save file for writing");
         cout << strerror(errno) << endl;
         return false;
     }
@@ -9310,7 +9589,7 @@ static bool load_game(const char *filename) {
 
     ifstream in(filename, ios::in);
     if(in.fail() == true) {
-        info("Error: Couldn't open test.sav for reading");
+        info("Error: Couldn't open load file for reading");
         cout << strerror(errno) << endl;
         return false;
     }
@@ -9406,7 +9685,8 @@ int main(int argc, char **argv) {
     logo();
 
     int seed;
-    init_args(argc, argv, &seed);
+    char *load_filename = NULL;
+    init_args(argc, argv, &seed, &load_filename);
 
     allegro_init();
 
@@ -9477,7 +9757,14 @@ int main(int argc, char **argv) {
         if(config.start_nag == true)
             notify("This is pre-alpha software. Please report bugs and give feedback!");
         fade_to_UI();
-    } else {
+    }
+    else if(load_filename != NULL) {
+        bool ok = load_game(load_filename);
+        if(ok == false)
+            errorQuit("Couldn't load game: " + string(load_filename));
+        switch_to_MainMap();
+    }
+    else {
         new_game();
         switch_to_MainMap();
     }
