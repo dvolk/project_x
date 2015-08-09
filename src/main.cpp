@@ -2820,8 +2820,6 @@ struct GridSystem : public Widget {
     void AutoMoveItem(Item *item, Grid *from, Grid *to);
     void MouseAutoMoveItemToGround();
     void MouseAutoMoveItemToTarget();
-
-    void returnHeld(void);
 };
 
 GridSystem::GridSystem(void) {
@@ -4250,9 +4248,9 @@ void Grid::draw(void) {
     if(info != NULL && info->visible == false)
         goto draw_items;
 
-    al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, colors.grey2);
-
     if(info == NULL || info->noGrid == false) {
+        al_draw_filled_rectangle(pos.x1, pos.y1, pos.x2, pos.y2, colors.grey2);
+
         for (int x = pos.x1 + grid_px_x; x < pos.x2; x = x + grid_px_x) {
             al_draw_line(x, pos.y1, x, pos.y2, colors.grey3, 1);
         }
@@ -5396,7 +5394,7 @@ void Encounter::runPlayerEncounterStep(void) {
 EncounterGridSystem::EncounterGridSystem() {
     options = new Grid (97 + 105, 300, 16, 10, NULL);
     //                  ^^ g.ui_Encounter->off_x
-    selected = new Grid (97 + 398, 300, 16, 10, g.encounter_selected);
+    selected = new Grid (97 + 398, 300, 16, 10, NULL);
 
     grids.push_back(options);
     grids.push_back(selected);
@@ -6171,7 +6169,7 @@ InteractGridSystem::InteractGridSystem() {
                         + InteractUI::top_size + 5, 16, 10, NULL);
     selected = new Grid (97 + 398, InteractUI::top_off_y
                          + InteractUI::top_size + 5, 16, 10,
-                         g.encounter_selected);
+                         NULL);
 
     auto_target = selected;
 
@@ -6774,7 +6772,25 @@ struct ItemsUI : public UI {
 
     ItemsUI();
     ~ItemsUI();
+
+    void draw(void) override;
 };
+
+void ItemsUI::draw(void) {
+    const int off_x = 555; // from Character::Character()
+    const int off_y = 85;
+
+    al_draw_bitmap(g.bitmaps[109], off_x - 53, off_y + 28, 0); // r sh
+    al_draw_bitmap(g.bitmaps[110], off_x + 53, off_y + 28, 0); // l sh
+    al_draw_bitmap(g.bitmaps[111], 680, 10, 0); // back
+
+    al_draw_bitmap(g.bitmaps[112], 680, 195, 0); // right hand hold
+    al_draw_bitmap(g.bitmaps[113], 680, 380, 0); // left hand hold
+
+    al_draw_bitmap(g.bitmaps[114], off_x, off_y - 75, 0); // neck
+
+    UI::draw();
+}
 
 struct CampUI : public UI {
     CampGridSystem *gridsystem;
@@ -6792,7 +6808,18 @@ struct ConditionUI : public UI {
 
     ConditionUI();
     ~ConditionUI();
+
+    void draw(void) override;
 };
+
+void ConditionUI::draw(void) {
+    al_draw_bitmap(g.bitmaps[111], 680, 10, 0); // back
+
+    al_draw_bitmap(g.bitmaps[112], 680, 195, 0); // right hand hold
+    al_draw_bitmap(g.bitmaps[113], 680, 380, 0); // left hand hold
+
+    UI::draw();
+}
 
 struct VehicleUI : public UI {
     VehicleGridSystem *gridsystem;
@@ -6820,6 +6847,10 @@ struct VehicleGridSystem : public GridSystem {
     void draw(void) {
         al_draw_text(g_font, colors.white, 105, 5, 0, "Ground:");
         al_draw_text(g_font, colors.white, 500, 132, 0, "Vehicle:");
+
+        // TODO replace
+        al_draw_filled_rectangle(500, 150, 500 + 36, 150 + 36, colors.grey2);
+
         GridSystem::draw();
     }
 
@@ -8400,6 +8431,12 @@ static void load_bitmaps(void) {
     /* 106 */ filenames.push_back("media/items/cooking_pot.png");
     /* 107 */ filenames.push_back("media/buttons/button_prev.png");
     /* 108 */ filenames.push_back("media/buttons/button_next.png");
+    /* 109 */ filenames.push_back("media/backgrounds/grid_icon_right_shoulder.png");
+    /* 110 */ filenames.push_back("media/backgrounds/grid_icon_left_shoulder.png");
+    /* 111 */ filenames.push_back("media/backgrounds/grid_icon_back.png");
+    /* 112 */ filenames.push_back("media/backgrounds/grid_icon_right_hand.png");
+    /* 113 */ filenames.push_back("media/backgrounds/grid_icon_left_hand.png");
+    /* 114 */ filenames.push_back("media/backgrounds/grid_icon_neck.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -9644,7 +9681,7 @@ static void logo(void) {
 }
 
 void pressEscape() {
-    returnHeld();
+    exitUIs();
 
     // can't get out of encounter or stories with escape
     if(g.ui == g.ui_Encounter ||
