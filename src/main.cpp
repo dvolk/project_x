@@ -4566,6 +4566,11 @@ struct CraftingGridSystem : public GridSystem {
 
 // clean up the crafting grids when we're leaving the UI
 void CraftingGridSystem::exit(void) {
+    // clear the results pane
+    for(auto&& result : results->items) {
+        delete result;
+    }
+    results->items.clear();
     // dump ingredients onto the ground
     while(ingredients->items.empty() == false) {
         Item *moving = ingredients->items.front();
@@ -8145,151 +8150,142 @@ void returnHeld(void) {
     if(g.ui_Interact->gridsystem->held != NULL) g.ui_Interact->gridsystem->returnHeldToSender();
 }
 
-static void switch_to_MainMap(void) {
+static void exitUIs(void) {
     returnHeld();
+    if(g.ui == g.ui_Crafting)
+        g.ui_Crafting->craftGrids->exit();
+    if(g.ui == g.ui_Scavenge)
+        g.ui_Scavenge->abort_exit();
+}
+
+static void switch_to_MainMap(void) {
     if(g.ui != g.ui_MainMap) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui = g.ui_MainMap;
         colors.bg = colors.black;
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_MainMap_press(void) {
-    returnHeld();
     if(g.ui != g.ui_MainMap) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui = g.ui_MainMap;
         colors.bg = colors.black;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Items_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Items) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui_Items->gridsystem->reset();
         g.ui = g.ui_Items;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Vehicle_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Vehicle) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui_Vehicle->gridsystem->reset();
         g.ui = g.ui_Vehicle;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_MiniMap_press(void) {
-    returnHeld();
     if(g.ui != g.ui_MiniMap) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui = g.ui_MiniMap;
         colors.bg = colors.grey;
         g.minimap->recreate();
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Skills_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Skills) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui_Skills->skillsGrid->reset();
         g.ui = g.ui_Skills;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Condition_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Condition) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui_Condition->gridsystem->reset();
         g.ui = g.ui_Condition;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Camp_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Camp) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui_Camp->gridsystem->reset();
         g.ui = g.ui_Camp;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Scavenge_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Scavenge) {
-        if(g.ui == g.ui_Crafting)
-            g.ui_Crafting->craftGrids->exit();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
+        exitUIs();
+
         g.ui_Scavenge->reset();
         g.ui_Scavenge->setup();
         g.ui_Scavenge->gridsystem->reset();
         g.ui = g.ui_Scavenge;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_Crafting_press(void) {
-    returnHeld();
     if(g.ui != g.ui_Crafting) {
+        exitUIs();
+
         g.ui_Crafting->craftGrids->reset();
-        if(g.ui == g.ui_Scavenge)
-            g.ui_Scavenge->abort_exit();
         g.ui = g.ui_Crafting;
         colors.bg = colors.grey;
+
+        main_buttons_update();
     }
-    main_buttons_update();
 }
 
 static void button_endturn_press(void) {
     g.map->player->wait();
+    switch_to_MainMap();
     end_turn();
 }
 
 static void button_Sleep_press(void) {
     g.map->player->sleep();
+    switch_to_MainMap();
     end_turn();
 }
 
@@ -9096,8 +9092,6 @@ static void init_args(int argc, char **argv, int *seed, char **load) {
     g.tilemap_sx = 150;
     g.tilemap_sy = 150;
 
-    //Specifying the expected options
-    //The two options l and b expect numbers as argument
     static struct option long_options[] = {
         {"map-x",   required_argument, 0,  'x' },
         {"map-y",   required_argument, 0,  'y' },
@@ -9129,6 +9123,7 @@ static void init_args(int argc, char **argv, int *seed, char **load) {
             printf("  -x, -map-x=NUM      set x map dimension\n");
             printf("  -y, -map-y=NUM      set y map dimension\n");
             printf("  -s, -seed=NUM       set rng seed\n");
+            printf("  -l, -load=filename  load game from file\n");
             printf("\n");
             exit(EXIT_SUCCESS);
             break;
@@ -9859,6 +9854,7 @@ int main(int argc, char **argv) {
 
     info("Exiting");
 
+    exitUIs();
     exit_music_player();
 
     unload_game();
