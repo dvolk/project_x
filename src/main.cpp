@@ -1417,6 +1417,7 @@ Wound * Character::random_wound(void) {
 }
 
 void Character::hurt(float amount) {
+    printf("%s hurt for %f\n", name, amount);
     health -= min(health, amount);
 
     int wounds_num = amount / 0.03;
@@ -4500,6 +4501,8 @@ void isGameOver(void) {
     }
 }
 
+static void fade_to_UI(UI *from, UI *to);
+
 static void end_turn() {
     Character *c;
 
@@ -4521,7 +4524,9 @@ static void end_turn() {
     if(g.encounterInterrupt == true &&
        g.ui != (UI*)g.ui_Encounter /* <-- TODO: still needed? */)
         {
+            UI *prev_ui = g.ui;
             runPlayerEncounter();
+            fade_to_UI(prev_ui, (UI*)g.ui_Encounter);
         }
 
     const char *time_string_before = g.time_display->current_time_string;
@@ -4828,6 +4833,7 @@ static void craftingPrevRecipe(void) {
 }
 
 CraftingUI::CraftingUI() {
+    clear_to = colors.grey;
     craftGrids = new CraftingGridSystem;
     craftGrids->change = updateCraftingOutput;
 
@@ -4896,6 +4902,7 @@ void CraftingGridSystem::reset(void) {
 }
 
 void CraftingUI::setup(void) {
+    clear_to = colors.grey;
     widgets.clear();
     widgets.push_back(button_prev_recipe);
     widgets.push_back(button_confirm);
@@ -4930,8 +4937,42 @@ struct EncounterCharacter {
     bool visible;
     Item *last_move;
 
-    EncounterCharacter(void);
+    void reset(void);
+
+    void wait(void);
 };
+
+void EncounterCharacter::wait(void) {
+    info("EncounterCharacter::wait()");
+}
+
+void EncounterCharacter::reset(void) {
+    visible = false;
+    last_move = NULL;
+}
+
+enum ENCOUNTER_ACTION {
+    ADVANCE,
+    RETREAT,
+    FLEE,
+    ATTACK,
+    WAIT,
+    ENCOUNTER_ACTION_MAX
+};
+
+enum ENCOUNTER_ACTION string_to_action(const char *str) {
+    if(strcmp(str, "Advance") == 0)
+        return ADVANCE;
+    if(strcmp(str, "Retreat") == 0)
+        return RETREAT;
+    if(strcmp(str, "Flee") == 0)
+        return FLEE;
+    if(strcmp(str, "Single attack") == 0)
+        return ATTACK;
+    if(strcmp(str, "Wait") == 0)
+        return WAIT;
+    assert(false);
+}
 
 struct Encounter {
 private:
@@ -4974,21 +5015,54 @@ public:
     void do_encounter_messages(void);
     // info needed by EncounterUI
     float getHealth(int n);
+
     const char *getName(int n);
+    const char *getCover(int n);
     const char *getFaction(int n);
     const char *getEquippedWeaponName(int n);
     const Character *getChar(int n);
     const char *getTerrainName(void);
+    const char *getTerrainDifficulty(void);
+    const char *getBestCover(void);
+    const char *getWeather(void);
+    EncounterCharacter *getEChar(int n);
+
+    Item *getLastMove(int n);
     ALLEGRO_BITMAP *get_character_sprite(int i);
     int getRange(void);
     bool isRunning(void);
+    bool isBurdened(int n);
     bool playerInRange(void);
     bool seesOpponent(int n);
     void updateVisibility(void);
 };
 
+bool Encounter::isBurdened(int n) {
+    return true;
+}
+
+const char *Encounter::getCover(int n) {
+    return "no";
+}
+
+const char *Encounter::getTerrainDifficulty(void) {
+    return "medium";
+}
+
+const char *Encounter::getBestCover(void) {
+    return "low";
+}
+
+const char *Encounter::getWeather(void) {
+    return "cold, raining";
+}
+
 const Character *Encounter::getChar(int n) {
     return n == 0 ? c1 : c2;
+}
+
+EncounterCharacter *Encounter::getEChar(int n) {
+    return n == 0 ? &ec1 : &ec2;
 }
 
 void Encounter::updateVisibility(void) {
@@ -5010,8 +5084,6 @@ struct EncounterGridSystem : public GridSystem {
 };
 
 struct EncounterUI : public UI {
-    const int off_x = 97;
-
     Encounter encounter;
 
     EncounterGridSystem *encounterGrids;
@@ -5024,18 +5096,38 @@ struct EncounterUI : public UI {
     Item *single_attack;
     Item *retreat;
     Item *advance;
+    Item *wait;
+
+    const float l_pane_x = 202;
+    const float l_pane_y = 65;
+    const float c_pane_x = 507;
+    const float c_pane_y = 65;
+    const float r_pane_x = 782;
+    const float r_pane_y = 65;
 
     EncounterUI();
     ~EncounterUI();
 
     void draw(void) override;
 
+    void drawCharacterSheet(int n, float x, float y);
+    void drawCenterPane(float x, float y);
+
     void setup(void);
 };
 
-EncounterCharacter::EncounterCharacter(void) {
-    visible = false;
-    last_move = NULL;
+Item *item_from_action(enum ENCOUNTER_ACTION action) {
+    if(action == ADVANCE)
+        return g.ui_Encounter->advance;
+    if(action == RETREAT)
+        return g.ui_Encounter->retreat;
+    if(action == FLEE)
+        return g.ui_Encounter->flee;
+    if(action == ATTACK)
+        return g.ui_Encounter->single_attack;
+    if(action == WAIT)
+        return g.ui_Encounter->wait;
+    assert(false);
 }
 
 Encounter::Encounter(void) {
@@ -5043,7 +5135,7 @@ Encounter::Encounter(void) {
 }
 
 bool Encounter::seesOpponent(int n) {
-    return n == 1 ? ec2.visible : ec1.visible;
+    return n == 0 ? ec2.visible : ec1.visible;
 }
 
 bool Encounter::isRunning(void) { return running; }
@@ -5105,18 +5197,24 @@ void Encounter::retreat(int steps) {
 }
 
 void Encounter::setup(Character *c1, Character *c2) {
+    info("Encounter::setup()");
     this->c1 = c1;
     this->c2 = c2;
+    ec1.reset();
+    ec2.reset();
     running = true;
     range = 10;
+    info("Encounter::setup() exit");
 }
 
 static void runPlayerEncounter(void) {
+    info("runPlayerEncounter()");
     g.ui_Encounter->setup();
     // show the message log if it's hidden
     g.log->visible = true;
     g.ui_Encounter->encounter.do_encounter_messages();
     g.ui = g.ui_Encounter;
+    info("runPlayerEncounter() exit");
 }
 
 static void runAIEncounter(int n) {
@@ -5126,6 +5224,7 @@ static void runAIEncounter(int n) {
 
 // resolve all AI encounters at pos n
 void Encounter::runAIEncounter(int n) {
+    info("Encounter::runAIEncounter()");
     int num_there;
     // run encounters until only one character remains
     do {
@@ -5168,17 +5267,21 @@ void Encounter::runAIEncounter(int n) {
         num_there = g.map->charsByPos.count(n);
     } while(num_there >= 2);
     g.ai_encounterInterrupt = -1;
+
+    info("Encounter::runAIEncounter() exit");
 }
 
 static void switch_to_MainMap(void);
 
 void Encounter::endEncounter(void) {
+    info("Encounter::endEncounter()");
     running = false;
     g.encounterInterrupt = false;
 
     c2->do_AI(); // this removes the npc if they're dead
     processAI();
 
+    g.map->updateCharsByPos();
     int num_there = g.map->charsByPos.count(g.map->player->n);
 
     if(num_there > 1) {
@@ -5189,6 +5292,7 @@ void Encounter::endEncounter(void) {
         switch_to_MainMap();
         g.map->player->update_visibility();
     }
+    info("Encounter::endEncounter() exit");
 }
 
 void Encounter::do_encounter_messages(void) {
@@ -5202,74 +5306,105 @@ void Encounter::do_encounter_messages(void) {
 
 // only called by the player
 void Encounter::npcEncounterStep(void) {
+    if(isEncounterNPCdead() == true) return;
     npcEncounterStep(0);
 }
 
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) {
+    char buf[100];
+
+    info("Encounter::npcEncounterStep()");
+
     updateVisibility();
 
     Character *_c1 = n == 0 ? c1 : c2;
     Character *_c2 = n == 0 ? c2 : c1;
-    char buf[100];
 
+    enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
+
+    /*
+      "AI"
+    */
     uniform_int_distribution<> will_dist(0, 10);
     bool wantsToFlee = will_dist(*g.rng) == 0;
 
     if(wantsToFlee == true) {
-        uniform_int_distribution<> fled_dist(0, 2);
-        bool successfully_fled = fled_dist(*g.rng) > 0;
+        action = FLEE;
+        goto act;
+    }
+    else if(_c2->health > 0.8 &&
+            range <= _c2->getSelectedWeapon()->get_weapon_range() &&
+            seesOpponent(n) &&
+            _c2->hasAmmoForWeapon()) {
+        action = ATTACK;
+        goto act;
+    }
+    else if(_c2->health <= 0.8) {
+        action = RETREAT;
+        goto act;
+    }
+    else {
+        action = ADVANCE;
+        goto act;
+    }
+    /*
+      "AI" end
+    */
+ act:
 
-        if(successfully_fled == true) {
-            if(involvesPlayer() == true) {
-                sprintf(buf, "%s flees from you!", _c2->name);
-                g.AddMessage("Encounter ends.");
-                endEncounter();
-            }
-            else {
-                sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
-                cout << _c2 << " fled successfully" << endl;
-            }
-            _c2->randomMove();
-        } else {
-            if(involvesPlayer() == true)
-                sprintf(buf, "%s tries to flee but can't!", _c2->name);
-            else
-                sprintf(buf, "%s tries to flee from %s but can't!", _c2->name, _c1->name);
-        }
+    getEChar(n == 0 ? 1 : 0)->last_move = item_from_action(action);
 
-        if(g.map->playerSees(_c1->n))
-            g.AddMessage(buf);
-    } else {
-        if(_c2->health > 0.8) {
-            if(range <= _c2->getSelectedWeapon()->get_weapon_range() && seesOpponent(n) && _c2->hasAmmoForWeapon()) {
-                // we're in range, see the opponent and have enough ammo
-                bool used = _c2->useWeapon();
-                if(used == true) {
-                    _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
-                    if(involvesPlayer() == true)
-                        sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
-                    else
-                        sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
-                } else {
-                    sprintf(buf, "%s fumbled trying to use %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+    switch(action) {
+
+    case FLEE:
+        {
+            uniform_int_distribution<> fled_dist(0, 2);
+            bool successfully_fled = fled_dist(*g.rng) > 0;
+
+            if(successfully_fled == true) {
+                if(involvesPlayer() == true) {
+                    sprintf(buf, "%s flees from you!", _c2->name);
+                    g.AddMessage("Encounter ends.");
                 }
-                if(g.map->playerSees(_c1->n))
-                    g.AddMessage(buf);
-
+                else {
+                    sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
+                    cout << _c2 << " fled successfully" << endl;
+                }
+                _c2->randomMove();
             } else {
                 if(involvesPlayer() == true)
-                    sprintf(buf, "%s advances on your position!", _c2->name);
+                    sprintf(buf, "%s tries to flee but can't!", _c2->name);
                 else
-                    sprintf(buf, "%s advances toward %s!", _c2->name, _c1->name);
-
-                if(g.map->playerSees(_c1->n))
-                    g.AddMessage(buf);
-
-                advance(2);
+                    sprintf(buf, "%s tries to flee from %s but can't!", _c2->name, _c1->name);
             }
-        } else {
+
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
+        }
+        break;
+
+    case ATTACK:
+        {
+            // we're in range, see the opponent and have enough ammo
+            bool used = _c2->useWeapon();
+            if(used == true) {
+                _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
+                if(involvesPlayer() == true)
+                    sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                else
+                    sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
+            } else {
+                sprintf(buf, "%s fumbled trying to use %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+            }
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
+        }
+        break;
+
+    case RETREAT:
+        {
             if(involvesPlayer() == true)
                 sprintf(buf, "%s retreats from you!", _c2->name);
             else
@@ -5280,9 +5415,33 @@ void Encounter::npcEncounterStep(int n) {
 
             retreat(1);
         }
+        break;
+
+    case ADVANCE:
+        {
+            if(involvesPlayer() == true)
+                sprintf(buf, "%s advances on your position!", _c2->name);
+            else
+                sprintf(buf, "%s advances toward %s!", _c2->name, _c1->name);
+
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
+
+            advance(2);
+        }
+        break;
+
+    default:
+        {
+            assert(false);
+        }
+        break;
     }
+
     if(involvesPlayer() == true && _c1->health < 0.01)
         g.map->removeCharacter(g.map->player);
+
+    info("Encounter::npcEncounterStep() exit");
 }
 
 bool Encounter::isEncounterNPCdead(void) {
@@ -5290,6 +5449,7 @@ bool Encounter::isEncounterNPCdead(void) {
 }
 
 bool Encounter::isEncounterNPCdead(int n) {
+    /* who wrote this shit?? */
     Character *c = n == 0 ? c1 : c2;
 
     // check if the npc has already been killed and removed
@@ -5302,7 +5462,7 @@ bool Encounter::isEncounterNPCdead(int n) {
         }
     }
     if(alive == false) {
-        puts("isEncounterNPCdead(): gotcha");
+        printf("isEncounterNPCdead(): gotcha %p\n", (void*)c);
         return true;
     }
 
@@ -5312,8 +5472,7 @@ bool Encounter::isEncounterNPCdead(int n) {
             g.AddMessage("The adversary succumbs to their wounds.");
             g.AddMessage("Encounter ends.");
             // g.map->updateCharsByPos();
-            endEncounter();
-        } else if(g.map->playerSees(c->n)) {
+       } else if(g.map->playerSees(c->n)) {
             char buf[100];
             sprintf(buf, "%s dies!", c->name);
             g.AddMessage(buf);
@@ -5326,6 +5485,7 @@ bool Encounter::isEncounterNPCdead(int n) {
 // runs one step of the encounter after the player pressed the
 // confirm button. Could in theory accept multiple actions
 void Encounter::runPlayerEncounterStep(void) {
+    info("Encounter::runPlayerEncounterStep()");
     vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
 
     if(actions->empty()) {
@@ -5334,67 +5494,94 @@ void Encounter::runPlayerEncounterStep(void) {
     }
 
     char msg[100];
-    string action1 = actions->front()->getName();
+    enum ENCOUNTER_ACTION action1 = ENCOUNTER_ACTION_MAX;
 
-    if(isEncounterNPCdead() == true) return;
+    action1 = string_to_action(actions->front()->getName());
 
-    if(action1 == "Flee") {
-        uniform_int_distribution<> fled_dist(0, 2);
-        bool successfully_fled = fled_dist(*g.rng) > 0;
+    printf("Encounter::runPlayerEncounterStep() npc name %s\n", c2->name);
 
-        if(successfully_fled == true) {
-            if(c2->useWeapon() == true)
-                c1->hurt(c2->getSelectedWeapon()->get_weapon_damage() / 3);
+    getEChar(0)->last_move = item_from_action(action1);
 
-            c1->randomMove();
-            g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
-            g.AddMessage("Encounter ends.");
-            endEncounter();
-            return;
-        } else {
-            snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
-            g.AddMessage(msg);
-            npcEncounterStep();
-            if(isEncounterNPCdead() == true) return;
-            if(npcRelocated() == true) return;
+    switch(action1) {
+
+    case FLEE:
+        {
+            uniform_int_distribution<> fled_dist(0, 2);
+            bool successfully_fled = fled_dist(*g.rng) > 0;
+
+            if(successfully_fled == true) {
+                if(c2->useWeapon() == true)
+                    c1->hurt(c2->getSelectedWeapon()->get_weapon_damage() / 3);
+
+                // TODO case of player died?
+
+                c1->randomMove();
+                g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
+                g.AddMessage("Encounter ends.");
+            } else {
+                snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
+                g.AddMessage(msg);
+            }
         }
-    } else if(action1 == "Single attack") {
-        if(c1->useWeapon() == true) {
-            c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
-            sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
-            g.AddMessage(msg);
-        } else {
-            g.AddMessage("Couldn't use weapon!");
+        break;
+
+    case ADVANCE:
+        {
+            advance(2);
         }
+        break;
 
-        if(isEncounterNPCdead() == true) return;
-        npcEncounterStep();
-        if(isEncounterNPCdead() == true) return;
-        if(npcRelocated() == true) return;
-    } else if(action1 == "Retreat") {
-        retreat(2);
-        npcEncounterStep();
-        if(isEncounterNPCdead() == true) return;
-        if(npcRelocated() == true) return;
-    } else if(action1 == "Advance") {
-        advance(2);
-        npcEncounterStep();
-        if(isEncounterNPCdead() == true) return;
-        if(npcRelocated() == true) return;
-    } else {
+    case ATTACK:
+        {
+            if(c1->useWeapon() == true) {
+                c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
+                sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
+                g.AddMessage(msg);
+            } else {
+                g.AddMessage("Couldn't use weapon!");
+            }
 
+        }
+        break;
+
+    case RETREAT:
+        {
+            retreat(2);
+        }
+        break;
+    case WAIT:
+        {
+            getEChar(0)->wait();
+        }
+        break;
+    default:
+        {
+            assert(false);
+        }
+        break;
     }
 
-    if(isEncounterNPCdead() == true) return;
-    if(npcRelocated() == true) return;
+    if(isEncounterNPCdead() == true || npcRelocated() == true) {
+        info("Encounter::runPlayerEncounterStep() npc died 1");
+        endEncounter();
+        return;
+    }
+
+    npcEncounterStep();
+
+    if(isEncounterNPCdead() == true || npcRelocated() == true) {
+        info("Encounter::runPlayerEncounterStep() npc died 2");
+        endEncounter();
+        return;
+    }
 
     g.ui_Encounter->setup();
+    info("Encounter::runPlayerEncounterStep() exit");
 }
 
 EncounterGridSystem::EncounterGridSystem() {
-    options = new Grid (97 + 105, 300, 16, 10, NULL);
-    //                  ^^ g.ui_Encounter->off_x
-    selected = new Grid (97 + 398, 300, 16, 10, NULL);
+    options = new Grid (202, 340, 16, 10, NULL);
+    selected = new Grid (495, 340, 16, 10, NULL);
 
     grids.push_back(options);
     grids.push_back(selected);
@@ -5411,20 +5598,24 @@ EncounterGridSystem::~EncounterGridSystem() {
 }
 
 static void runEncounterStepCB(void) {
+    info("runEncounterStepCB()");
     g.ui_Encounter->encounter.runPlayerEncounterStep();
+    info("runEncounterStepCB() exit");
 }
 
 EncounterUI::EncounterUI() {
+    clear_to = colors.grey;
     encounterGrids = new EncounterGridSystem;
     flee = new Item ("Flee");
     single_attack = new Item ("Single attack");
     retreat = new Item ("Retreat");
     advance = new Item ("Advance");
+    wait = new Item ("Wait");
     unknown_character_sprite = g.bitmaps[83];
 
     button_confirm = new Button ("Commit selection");
-    button_confirm->pos.x1 = off_x + 691;
-    button_confirm->pos.y1 = 300;
+    button_confirm->pos.x1 = 788;
+    button_confirm->pos.y1 = 340;
     button_confirm->pos.x2 = 75;
     button_confirm->pos.y2 = 45;
     button_confirm->up = g.bitmaps[33];
@@ -5432,8 +5623,18 @@ EncounterUI::EncounterUI() {
     button_confirm->onMouseDown = runEncounterStepCB;
 }
 
+EncounterUI::~EncounterUI() {
+    delete encounterGrids;
+    delete button_confirm;
+    delete retreat;
+    delete advance;
+    delete flee;
+    delete single_attack;
+    delete wait;
+}
+
 void EncounterUI::setup(void) {
-    colors.bg = colors.grey;
+    info("EncounterUI::setup()");
 
     widgets.clear();
     widgets.push_back(button_confirm);
@@ -5449,6 +5650,7 @@ void EncounterUI::setup(void) {
         Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
 
         encounter.setup(c1, c2);
+
         cout << "Running encounter at: " << c1->n << " with AI " << c2->name << endl;
     }
 
@@ -5456,6 +5658,7 @@ void EncounterUI::setup(void) {
     encounterGrids->options->items.clear();
     widgets.push_back(encounterGrids);
 
+    encounterGrids->options->PlaceItem(wait);
     encounterGrids->options->PlaceItem(flee);
     if(encounter.playerInRange() == true) {
         encounterGrids->options->PlaceItem(single_attack);
@@ -5464,102 +5667,124 @@ void EncounterUI::setup(void) {
     encounterGrids->options->PlaceItem(advance);
 
     encounter.updateVisibility();
+    info("EncounterUI::setup() exit");
 }
 
-void EncounterUI::draw(void) {
-    // g.map->draw();
-    // al_draw_filled_rectangle(off_x + 95, 0, off_x + 995, 500, colors.grey);
+Item *Encounter::getLastMove(int n) {
+    return getEChar(n)->last_move;
+}
 
-    al_draw_filled_rectangle(off_x + 105, 25, off_x + 405, 295, colors.grey2);
-    al_draw_filled_rectangle(off_x + 410, 25, off_x + 680, 295, colors.grey2);
-    al_draw_filled_rectangle(off_x + 685, 25, off_x + 985, 295, colors.grey2);
-    al_draw_text(g_font, colors.white, off_x + 105, 7, 0,
-                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
+void EncounterUI::drawCharacterSheet(int n, float x, float y) {
+    char buf[64];
+    const float line_height = config.font_height + 1.0;
+    int i = 0;
 
-    char buf[30];
-
-    // left pane
-    al_draw_bitmap(encounter.get_character_sprite(0), off_x + 120, 40, 0);
-    sprintf(buf, "Name: %s", encounter.getName(0));
-    al_draw_text(g_font, colors.black, off_x + 120, 110, 0, buf);
-
-    if(encounter.seesOpponent(0) == true) {
-        al_draw_text(g_font, colors.black, off_x + 120, 110 + config.font_height, 0,
+    al_draw_bitmap(encounter.get_character_sprite(n), x, y, 0);
+    sprintf(buf, "Name: %s", encounter.getName(n));
+    al_draw_text(g_font, colors.black, x, y + 70, 0, buf);
+    i++;
+    sprintf(buf, "Faction: %s", encounter.getFaction(n));
+    al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0, buf);
+    i++;
+    if(encounter.seesOpponent(n) == true) {
+        al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0,
                      "Visible: yes");
     } else {
-        al_draw_text(g_font, colors.black, off_x + 120, 110 + config.font_height, 0,
+        al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0,
                      "Visible: no");
     }
+    i++;
 
-    sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(0));
-    al_draw_text(g_font, colors.black, off_x + 120, 110 + 2 * config.font_height, 0, buf);
-    // sprintf(buf, "Health: %f", encounter.getHealth(0));
-    // al_draw_text(g_font, colors.black, off_x + 120, 140, 0, buf);
+    sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(n));
+    al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0, buf);
+    i++;
+    sprintf(buf, "Cover: %s", encounter.getCover(n));
+    al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0, buf);
+    i++;
+    sprintf(buf, "Health: %f", encounter.getHealth(n));
+    al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0, buf);
+    i++;
 
     float wound_severity = 0;
     float wound_bleeding = 0;
 
-    for(auto&& w : encounter.getChar(0)->wounds) {
+    for(auto&& w : encounter.getChar(n)->wounds) {
         wound_severity += w.severity;
         wound_bleeding += w.bleeding;
     }
 
-    if(wound_severity >= 0.001)
-        al_draw_text(g_font, colors.red, off_x + 120, 160, 0, "Wounded");
-    if(wound_bleeding >= 0.001)
-        al_draw_text(g_font, colors.red, off_x + 120, 160 + config.font_height, 0, "Bleeding");
+    i++;
+    if(wound_severity >= 0.001) {
+        al_draw_text(g_font, colors.red, x, y + 70 + i * line_height, 0, "Wounded");
+        i++;
+    }
+    if(wound_bleeding >= 0.001) {
+        al_draw_text(g_font, colors.red, x, y + 70 + i * line_height, 0, "Bleeding");
+        i++;
+    }
+    if(encounter.isBurdened(n)) {
+        al_draw_text(g_font, colors.red, x, y + 70 + i * line_height, 0, "Burdened");
+        i++;
+    }
+    al_draw_text(g_font, colors.black, x + 180, y, 0, "Last move:");
 
+    Item *last_move = encounter.getLastMove(n);
+    if(last_move != NULL)
+        al_draw_bitmap(last_move->get_sprite(), x + 180 + 25, y + line_height + 5, 0);
+}
+
+void EncounterUI::drawCenterPane(float x, float y) {
+    char buf[64];
+    const float line_height = config.font_height + 1.0;
     // center pane
-    al_draw_bitmap(cur_tile_sprite, off_x + 490, 40, 0);
+    al_draw_bitmap(cur_tile_sprite, x + 60, y, 0);
+
     sprintf(buf, "Terrain: %s", encounter.getTerrainName());
-    al_draw_text(g_font, colors.black, off_x + 430, 160, 0, buf);
+    al_draw_text(g_font, colors.black, x, y + 110, 0, buf);
+    sprintf(buf, "Terrain type: %s", encounter.getTerrainDifficulty());
+    al_draw_text(g_font, colors.black, x, y + 110 + line_height, 0, buf);
     sprintf(buf, "Range: %d", encounter.getRange());
-    al_draw_text(g_font, colors.black, off_x + 430, 160 + config.font_height, 0, buf);
+    al_draw_text(g_font, colors.black, x, y + 110 + line_height * 2, 0, buf);
+    sprintf(buf, "Best Cover: %s", encounter.getBestCover());
+    al_draw_text(g_font, colors.black, x, y + 110 + line_height * 3, 0, buf);
+    sprintf(buf, "Weather: %s", encounter.getWeather());
+    al_draw_text(g_font, colors.black, x, y + 110 + line_height * 4, 0, buf);
+    sprintf(buf, "Time of day: %s", g.time_display->current_time_string);
+    al_draw_text(g_font, colors.black, x, y + 110 + line_height * 5, 0, buf);
+}
+
+void EncounterUI::draw(void) {
+    // left
+    al_draw_filled_rectangle(l_pane_x, l_pane_y, l_pane_x + 300, l_pane_y + 270, colors.grey2);
+    // center
+    al_draw_filled_rectangle(c_pane_x, c_pane_y, c_pane_x + 270, c_pane_y + 270, colors.grey2);
+    // right
+    al_draw_filled_rectangle(r_pane_x, r_pane_y, r_pane_x + 300, r_pane_y + 270, colors.grey2); // fix x1
+    al_draw_text(g_font, colors.white, l_pane_x, l_pane_y - config.font_height - 5, 0,
+                 "Zwei Männer, einander in höherer Stellung, vermutend, begegnen sich:");
+
+    /*
+      TODO these could be drawn to a bitmap and then
+      only redrawn when something changes
+     */
+    // left pane
+    drawCharacterSheet(0, l_pane_x + 15, l_pane_y + 15);
+
+    // center
+    drawCenterPane(c_pane_x + 20, c_pane_y + 25); // TODO parametrize
 
     // right pane
     if(encounter.seesOpponent(1) == true) {
-        al_draw_bitmap(encounter.get_character_sprite(1), off_x + 700, 40, 0);
-        sprintf(buf, "Name: %s", encounter.getName(1));
-        al_draw_text(g_font, colors.black, off_x + 700, 110, 0, buf);
-        sprintf(buf, "Faction: %s", encounter.getFaction(1));
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + config.font_height, 0, buf);
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + 2 * config.font_height, 0,
-                     "visible: yes");
-        sprintf(buf, "Weapon: %s", encounter.getEquippedWeaponName(1));
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + 3 * config.font_height, 0, buf);
-        // sprintf(buf, "Health: %f", encounter.getHealth(1));
-        // al_draw_text(g_font, colors.black, off_x + 700, 150, 0, buf);
-
-        wound_severity = 0;
-        wound_bleeding = 0;
-        for(auto&& w : encounter.getChar(1)->wounds) {
-            wound_severity += w.severity;
-            wound_bleeding += w.bleeding;
-        }
-
-        if(wound_severity >= 0.001)
-            al_draw_text(g_font, colors.red, off_x + 700, 170, 0, "Wounded");
-        if(wound_bleeding >= 0.001)
-            al_draw_text(g_font, colors.red, off_x + 700, 170 + config.font_height, 0, "Bleeding");
-
+        drawCharacterSheet(1, r_pane_x + 15.0, r_pane_y + 15);
     } else {
-        al_draw_bitmap(unknown_character_sprite, off_x + 700, 40, 0);
-        al_draw_text(g_font, colors.black, off_x + 700, 110, 0,
+        al_draw_bitmap(unknown_character_sprite, r_pane_x + 15, r_pane_y + 15, 0);
+        al_draw_text(g_font, colors.black, r_pane_x + 15, r_pane_y + 95, 0,
                      "Name: unknown");
-        al_draw_text(g_font, colors.black, off_x + 700, 110 + config.font_height, 0,
+        al_draw_text(g_font, colors.black, r_pane_x + 15, r_pane_y + 95 + config.font_height, 0,
                      "Visible: no");
     }
 
     UI::draw();
-}
-
-EncounterUI::~EncounterUI() {
-    delete encounterGrids;
-    delete button_confirm;
-    delete retreat;
-    delete advance;
-    delete flee;
-    delete single_attack;
 }
 
 void MessageLog::mouseDown(void) {
@@ -5894,6 +6119,7 @@ void ScavengeUI::initIndicatorWidgets(void) {
 }
 
 ScavengeUI::ScavengeUI() {
+    clear_to = colors.grey;
     gridsystem = new ScavengeGridSystem;
 
     button_confirm = new Button ("Commit selection");
@@ -5951,7 +6177,7 @@ void ScavengeUI::delete_grid_items(void) {
 }
 
 void ScavengeUI::setup(void) {
-    colors.bg = colors.grey;
+    clear_to = colors.grey;
 
     widgets.clear();
     widgets.push_back(button_confirm);
@@ -6180,6 +6406,7 @@ InteractGridSystem::InteractGridSystem() {
 static void runInteractStepCB(void);
 
 InteractUI::InteractUI(void) {
+    clear_to = colors.grey;
     gridsystem = new InteractGridSystem;
 
     button_confirm = new Button ("Commit selection");
@@ -6207,7 +6434,6 @@ void InteractUI::setup(void) {
     widgets.push_back(current_interact);
 
     addIndicatorWidgets();
-    colors.bg = colors.grey;
 }
 
 InteractPage::InteractPage(void) {
@@ -7156,6 +7382,7 @@ void ConditionGridSystem::keyDown(void) {
 }
 
 VehicleUI::VehicleUI() {
+    clear_to = colors.grey;
     gridsystem = new VehicleGridSystem;
 
     ground_next_page = new Button ("Next page");
@@ -7184,6 +7411,7 @@ VehicleUI::VehicleUI() {
 }
 
 CampUI::CampUI() {
+    clear_to = colors.grey;
     gridsystem = new CampGridSystem;
 
     ground_next_page = new Button ("Next page");
@@ -7231,6 +7459,7 @@ static void InventoryChangeCallback(void) {
 }
 
 ItemsUI::ItemsUI() {
+    clear_to = colors.grey;
     gridsystem  = new InventoryGridSystem;
     gridsystem->change = InventoryChangeCallback;
 
@@ -7260,6 +7489,7 @@ ItemsUI::ItemsUI() {
 }
 
 ConditionUI::ConditionUI() {
+    clear_to = colors.grey;
     gridsystem  = new ConditionGridSystem;
 
     ground_next_page = new Button ("Next page");
@@ -7381,6 +7611,7 @@ void SkillsUI::setup(void) {
 }
 
 SkillsUI::SkillsUI() {
+    clear_to = colors.grey;
     skillsGrid = new SkillsGridSystem;
 
     widgets.push_back(skillsGrid);
@@ -7654,12 +7885,14 @@ void FadeTransitionUI::start(UI *f, UI *t) {
 
 void FadeTransitionUI::draw(void) {
     if(frame <= 0) {
+        al_clear_to_color(from->clear_to);
         from->draw();
         float alpha = 1.0 - ((-frame) / (float)fade_frames);
         al_draw_filled_rectangle(0, 0, g.display_x, g.display_y,
                                  al_map_rgba_f(0, 0, 0, alpha));
     } else
     if(frame > 0) {
+        al_clear_to_color(to->clear_to);
         to->draw();
         float alpha = 1.0 - (frame / (float)fade_frames);
         al_draw_filled_rectangle(0, 0, g.display_x, g.display_y,
@@ -7727,6 +7960,7 @@ struct NotificationUI : public UI {
 };
 
 NotificationUI::NotificationUI() {
+    clear_to = colors.grey;
     bg = NULL;
     widgets.push_back(&mouseDownCaller);
 }
@@ -7756,10 +7990,12 @@ void NotificationUI::go() {
     }
     if(bg != NULL) {
         al_set_target_bitmap(bg);
-        al_clear_to_color(colors.bg);
+        al_clear_to_color(below->clear_to);
         below->draw();
         al_set_target_backbuffer(g.display);
     }
+    if(!bg)
+        printf("??\n");
 
  alreadyThere:
     // center text
@@ -8037,6 +8273,7 @@ void MainMenuUI::createTitle(void) {
 }
 
 MainMenuUI::MainMenuUI() {
+    clear_to = colors.grey;
     background = g.bitmaps[93];
     sx = 100;
     sy = 50;
@@ -8090,6 +8327,7 @@ static ALLEGRO_BITMAP *little_pink_bitmap(void) {
 }
 
 HelpUI::HelpUI() {
+    clear_to = colors.grey;
     button_back = new TextButton("Back", round((g.display_x - 85) / 2),
                                  (g.display_y - 720) / 2 + 630, 85, 45);
     button_back->onMouseDown = press_Help_back;
@@ -8107,13 +8345,11 @@ HelpUI::~HelpUI() {
 }
 
 static void button_Help_press(void) {
-    colors.bg = colors.grey;
     g.ui_Help = new HelpUI;
     g.ui = g.ui_Help;
 }
 
 static void button_Options_press(void) {
-    colors.bg = colors.grey2;
     g.ui = ui_Options;
 }
 
@@ -8140,7 +8376,6 @@ static void main_buttons_update(void) {
 
 static void switchToMainMenu(void) {
     g.ui_MainMenu->resetFadeLevels();
-    colors.bg = colors.black;
     g.ui = g.ui_MainMenu;
 }
 
@@ -8194,7 +8429,6 @@ static void switch_to_MainMap(void) {
         exitUIs();
 
         g.ui = g.ui_MainMap;
-        colors.bg = colors.black;
         main_buttons_update();
     }
 }
@@ -8204,7 +8438,6 @@ static void button_MainMap_press(void) {
         exitUIs();
 
         g.ui = g.ui_MainMap;
-        colors.bg = colors.black;
 
         main_buttons_update();
     }
@@ -8216,7 +8449,6 @@ static void button_Items_press(void) {
 
         g.ui_Items->gridsystem->reset();
         g.ui = g.ui_Items;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8228,7 +8460,6 @@ static void button_Vehicle_press(void) {
 
         g.ui_Vehicle->gridsystem->reset();
         g.ui = g.ui_Vehicle;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8239,7 +8470,6 @@ static void button_MiniMap_press(void) {
         exitUIs();
 
         g.ui = g.ui_MiniMap;
-        colors.bg = colors.grey;
         g.minimap->recreate();
 
         main_buttons_update();
@@ -8252,7 +8482,6 @@ static void button_Skills_press(void) {
 
         g.ui_Skills->skillsGrid->reset();
         g.ui = g.ui_Skills;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8264,7 +8493,6 @@ static void button_Condition_press(void) {
 
         g.ui_Condition->gridsystem->reset();
         g.ui = g.ui_Condition;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8276,7 +8504,6 @@ static void button_Camp_press(void) {
 
         g.ui_Camp->gridsystem->reset();
         g.ui = g.ui_Camp;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8290,7 +8517,6 @@ static void button_Scavenge_press(void) {
         g.ui_Scavenge->setup();
         g.ui_Scavenge->gridsystem->reset();
         g.ui = g.ui_Scavenge;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8302,7 +8528,6 @@ static void button_Crafting_press(void) {
 
         g.ui_Crafting->craftGrids->reset();
         g.ui = g.ui_Crafting;
-        colors.bg = colors.grey;
 
         main_buttons_update();
     }
@@ -8437,6 +8662,7 @@ static void load_bitmaps(void) {
     /* 112 */ filenames.push_back("media/backgrounds/grid_icon_right_hand.png");
     /* 113 */ filenames.push_back("media/backgrounds/grid_icon_left_hand.png");
     /* 114 */ filenames.push_back("media/backgrounds/grid_icon_neck.png");
+    /* 115 */ filenames.push_back("media/items/abstract/wait.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -8784,6 +9010,7 @@ static void init_minimap(void) {
 }
 
 MiniMapUI::MiniMapUI(void) {
+    clear_to = colors.grey;
     widgets.push_back(g.minimap);
 
     addLogAndButtons();
@@ -8929,6 +9156,7 @@ static void init_characters(void) {
 }
 
 MainMapUI::MainMapUI() {
+    clear_to = colors.black;
     widgets.push_back(g.map);
     addLogAndButtons();
     addIndicatorWidgets();
@@ -9715,6 +9943,7 @@ void pressEscape() {
 
 int main(int argc, char **argv) {
     logo();
+    init_logging();
 
     int seed;
     char *load_filename = NULL;
@@ -9750,9 +9979,9 @@ int main(int argc, char **argv) {
         load_ui_sounds();
         init_rng( seed );
         init_colors();
-        // init_iteminfo();
-        // save_ItemInfo();
-        // g.item_info.clear();
+        //init_iteminfo();
+        //save_ItemInfo();
+        //g.item_info.clear();
         load_ItemInfo();
         init_hardpointinfo();
         init_weaponswitcher();
@@ -9867,7 +10096,7 @@ int main(int argc, char **argv) {
 
         if(redraw && al_is_event_queue_empty(event_queue)) {
             redraw = false;
-            al_clear_to_color(colors.bg);
+            al_clear_to_color(g.ui->clear_to);
 
             { // drawing goes here
                 g.ui->draw();
@@ -9936,6 +10165,7 @@ int main(int argc, char **argv) {
     g.text_items.clear();
 
     info("Bye");
+    stop_logging();
 
     return 0;
 }

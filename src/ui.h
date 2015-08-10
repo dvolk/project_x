@@ -4,8 +4,13 @@
 
 #include <vector>
 
+#include <allegro5/allegro.h>
+#include <allegro5/allegro_color.h>
+
 struct UI {
     std::vector<Widget *> widgets;
+
+    ALLEGRO_COLOR clear_to;
 
     virtual ~UI() {
         // info("~UI()");

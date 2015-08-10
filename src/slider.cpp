@@ -27,7 +27,7 @@ Slider::Slider(float x, float y, const char *name, float *cfg_state) {
     this->name = name;
 
     if(cfg_state == NULL) {
-        state = false;
+        state = false; /* TODO ? */
     } else {
         this->cfg_state = cfg_state;
         this->state = *cfg_state;

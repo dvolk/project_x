@@ -1,21 +1,47 @@
 #include <string>
+#include <fstream>
 #include <iostream>
 #include <cstdlib>
+#include <ctime>
 
 using namespace std;
 
-#ifdef _WIN32
-void *__gxx_personality_v0 = NULL;
-void *_Unwind_Resume = NULL;
-#endif
+#include "./config.h"
+
+extern Config config;
+
+fstream logstream;
+
+void init_logging(void) {
+    if(config.log_to_file == false)
+        return;
+
+    const char *filename = "projectx.log";
+
+    logstream.open("projectx.log", fstream::app);
+
+    if(logstream.is_open() == false) {
+        cout << "Couldn't open " << filename << " for write/append" << endl;
+        exit(1);
+    }
+}
+
+void stop_logging(void) {
+    if(logstream.is_open() == true)
+        logstream.close();
+}
 
 void errorQuit(string str) {
     cout << "Error: " << str << endl;
+    if(logstream.is_open() == true)
+        logstream << "Error: " << str << endl;
     exit(1);
 }
 
 void info(string str) {
     cout << "Info: " << str << endl;
+    if(logstream.is_open() == true)
+        logstream << "Info: " << str << endl;
 }
 
 __attribute__ ((const))

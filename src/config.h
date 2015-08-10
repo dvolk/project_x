@@ -26,6 +26,7 @@ struct Config {
     bool playUISounds;
     float uiSoundVolume;
     bool esc_menu_quits;
+    bool log_to_file;
 
     void save(const char *filename);
     void load(const char *filename);

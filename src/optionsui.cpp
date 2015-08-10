@@ -3,12 +3,14 @@
 #include "./config.h"
 #include "./musicplayer.h"
 #include "./sound.h"
+#include "./colors.h"
 
 #include <allegro5/allegro.h>
 #include <stdio.h>
 #include <algorithm>
 
 extern Config config;
+extern Colors colors;
 
 void OptionsUI::reset_settings(void) {
     for(auto&& cb : checkboxes) cb->reset();
@@ -47,6 +49,8 @@ void runMainMenu(void);
 extern OptionsUI *ui_Options;
 
 OptionsUI::OptionsUI() {
+    clear_to = colors.grey2;
+
     button_cancel = new TextButton("Cancel", round((config.displayX - 215) / 2),
                                  (config.displayY - 720) / 2 + 630, 85, 45);
 
@@ -140,6 +144,10 @@ OptionsUI::OptionsUI() {
     playerInvulnerableCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Player Invulnerable", &config.playerInvulnerable);
+    i++;
+    logToFileCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Write Log To File", &config.log_to_file);
 
     checkboxes.push_back(fullscreenCB);
     checkboxes.push_back(vsyncCB);
@@ -155,6 +163,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(playUISoundsCB);
     checkboxes.push_back(escMenuQuitsCB);
     checkboxes.push_back(showFPSCB);
+    checkboxes.push_back(logToFileCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
     widgets.push_back(musicVolumeSlider);
