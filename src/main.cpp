@@ -2731,10 +2731,10 @@ struct TimeDisplay : public Widget {
     int tod;
     int time_zone;
     const char * const time_strings[4] =
-        { "Morning",
-          "Midday",
-          "Afternoon",
-          "Nighttime"
+        { "Dawn",
+          "Day",
+          "Dusk",
+          "Night"
         };
 
     const char *current_time_string;
