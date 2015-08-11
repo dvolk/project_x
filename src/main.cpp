@@ -2729,6 +2729,7 @@ void WeaponSwitcher::draw(void) {
 
 struct TimeDisplay : public Widget {
     int tod;
+    int time_zone;
     const char * const time_strings[4] =
         { "Morning",
           "Midday",
@@ -2762,6 +2763,8 @@ void TimeDisplay::calculate_tod(void) {
     else if(tod > 18000 && tod <= 22000) i = 2;
     else i = 3;
 
+    time_zone = i;
+
     if(i == -1)
         current_time_string = "";
     else
@@ -2769,7 +2772,7 @@ void TimeDisplay::calculate_tod(void) {
 }
 
 void TimeDisplay::draw(void) {
-    al_draw_text(g_font, colors.grey, pos.x1, pos.y1, 0, current_time_string);
+    al_draw_text(g_font, colors.white, pos.x1, pos.y1, 0, current_time_string);
 }
 
 struct GridSystem : public Widget {
@@ -4533,24 +4536,24 @@ static void end_turn() {
 }
 
 void TileMap::updateColors(void) {
-    const char *td = g.time_display->current_time_string;
+    int tz = g.time_display->time_zone;
 
-    if(strcmp(td, "Nighttime") == 0) {
+    if(tz == 3) {
         g.map->seen_tile_tint = colors.seen_tile_night_tint;
         g.map->notseen_tile_tint = colors.notseen_tile_night_tint;
         g.map->mouseover_tile_tint = colors.mouseover_tile_night_tint;
     }
-    else if(strcmp(td, "Midday") == 0) {
+    else if(tz == 1) {
         g.map->seen_tile_tint = colors.seen_tile_day_tint;
         g.map->notseen_tile_tint = colors.notseen_tile_day_tint;
         g.map->mouseover_tile_tint = colors.mouseover_tile_day_tint;
     }
-    else if(strcmp(td, "Morning") == 0) {
+    else if(tz == 0) {
         g.map->seen_tile_tint = colors.seen_tile_dawn_tint;
         g.map->notseen_tile_tint = colors.notseen_tile_dawn_tint;
         g.map->mouseover_tile_tint = colors.mouseover_tile_dawn_tint;
     }
-    else if(strcmp(td, "Afternoon") == 0) {
+    else if(tz == 2) {
         g.map->seen_tile_tint = colors.seen_tile_dusk_tint;
         g.map->notseen_tile_tint = colors.notseen_tile_dusk_tint;
         g.map->mouseover_tile_tint = colors.mouseover_tile_dusk_tint;
