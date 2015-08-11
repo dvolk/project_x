@@ -1806,6 +1806,10 @@ struct TileMap : public Widget {
 
     vector<Label> labels;
 
+    ALLEGRO_COLOR seen_tile_tint;
+    ALLEGRO_COLOR notseen_tile_tint;
+    ALLEGRO_COLOR mouseover_tile_tint;
+
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
 
@@ -1858,6 +1862,8 @@ struct TileMap : public Widget {
     void DeleteGroundIfEmpty(int n);
     void removeTempItems(int n);
     void CollectGroundGrids(int n);
+
+    void updateColors(void);
 };
 
 void TileMap::update(void) {
@@ -2748,13 +2754,13 @@ struct TimeDisplay : public Widget {
 
 void TimeDisplay::calculate_tod(void) {
     tod = g.map->player->nextMove % 24000;
-
+    printf("TOD: %d\n", tod);
     int i = -1;
 
-    if(     tod >     0 && tod <=  9000) i = 0;
-    else if(tod >  9000 && tod <= 12000) i = 1;
-    else if(tod > 12000 && tod <= 18000) i = 2;
-    else if(tod > 18000 && tod <= 24000) i = 3;
+    if(     tod >  6000 && tod <=  9000) i = 0;
+    else if(tod >  9000 && tod <= 18000) i = 1;
+    else if(tod > 18000 && tod <= 22000) i = 2;
+    else i = 3;
 
     if(i == -1)
         current_time_string = "";
@@ -3687,10 +3693,11 @@ void TileMap::drawTile(int i, int x, int y) {
 
     if(currently_seeing == true) {
         // draw the tile at full brightness
-        al_draw_bitmap(tile_info[tiles[t].info_index].sprite,
-                       pos.x1 + off_x,
-                       pos.y1 + off_y,
-                       0);
+        al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
+                              seen_tile_tint,
+                              pos.x1 + off_x,
+                              pos.y1 + off_y,
+                              0);
 
         // draw a small box if there's a ground grid at the tile
         // (currently even if it's empty)
@@ -3703,7 +3710,7 @@ void TileMap::drawTile(int i, int x, int y) {
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                                  colors.active_tile_tint,
+                                  mouseover_tile_tint,
                                   pos.x1 + off_x,
                                   pos.y1 + off_y,
                                   0);
@@ -3739,14 +3746,14 @@ void TileMap::drawTile(int i, int x, int y) {
         */
         // otherwise draw it 50% tinted
         al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                              colors.tile_tint,
+                              notseen_tile_tint,
                               pos.x1 + off_x,
                               pos.y1 + off_y,
                               0);
         if(t == mouse_n) {
             // brighten tile if the mouse is on it
             al_draw_tinted_bitmap(tile_info[tiles[t].info_index].sprite,
-                                  colors.active_tile_tint,
+                                  mouseover_tile_tint,
                                   pos.x1 + off_x,
                                   pos.y1 + off_y,
                                   0);
@@ -3785,39 +3792,6 @@ void TileMap::draw(void) {
         al_draw_line(g.old_mx, g.old_my - 10, g.old_mx, g.old_my + 10, colors.red, 4);
         al_draw_line(g.old_mx - 10, g.old_my, g.old_mx + 10, g.old_my, colors.red, 4);
     }
-}
-
-// redraws the top half of a tile (the part that overlaps with the
-// tile above it). Used for occluding character sprites on the map
-void TileMap::drawTopHalfOfTileAt(int x, int y) {
-    if(y >= g.map->size_y - 1)
-        return;
-
-    int n = size_x * y + x;
-
-    int r_x = x - g.map->view_x;
-    int r_y = y - g.map->view_y;
-
-    int off_x = 80 * r_x - res_px;
-    int off_y = n % 2  == 0 ? 0 : 20;
-    off_y += 40 * r_y - res_py;
-
-    if(mouse_n == n) {
-        al_draw_tinted_bitmap(tile_info[tiles[n].info_index].sprite,
-                                     colors.active_tile_tint,
-                                     pos.x1 + off_x,
-                                     pos.y1 + off_y, 0);
-    } else {
-        al_draw_bitmap_region(tile_info[tiles[n].info_index].sprite,
-                              0, 0, 100, 40,
-                              pos.x1 + off_x,
-                              pos.y1 + off_y, 0);
-
-    }
-    // check if there's a character on that tile
-    // Character *interloper = characterAt(n);
-    // if(interloper != NULL)
-    //     interloper->draw();
 }
 
 void GridSystem::drawItemTooltip(void) {
@@ -4529,21 +4503,8 @@ static void end_turn() {
             fade_to_UI(prev_ui, (UI*)g.ui_Encounter);
         }
 
-    const char *time_string_before = g.time_display->current_time_string;
-
     g.map->player->update();
 
-    g.time_display->calculate_tod();
-    const char *time_string_after = g.time_display->current_time_string;
-    if(strcmp(time_string_before, time_string_after) != 0) {
-        g.AddMessage("Time changed to " + string(time_string_after));
-    }
-
-    if(config.playerInvulnerable == false) {
-        if(g.map->player->health < 0.01) {
-            g.map->removeCharacter(g.map->player);
-        }
-    }
     player_hurt_messages();
 
     g.map->runEcology();
@@ -4551,8 +4512,53 @@ static void end_turn() {
     end_turn_debug_print();
 
     isGameOver();
+
+    const char *time_string_before = g.time_display->current_time_string;
+
+    g.time_display->calculate_tod();
+
+    const char *time_string_after = g.time_display->current_time_string;
+
+    if(strcmp(time_string_before, time_string_after) != 0) {
+        g.AddMessage("Time changed to " + string(time_string_after));
+    }
+
+    g.map->updateColors();
+
+    if(config.playerInvulnerable == false) {
+        if(g.map->player->health < 0.01) {
+            g.map->removeCharacter(g.map->player);
+        }
+    }
 }
 
+void TileMap::updateColors(void) {
+    const char *td = g.time_display->current_time_string;
+
+    if(strcmp(td, "Nighttime") == 0) {
+        g.map->seen_tile_tint = colors.seen_tile_night_tint;
+        g.map->notseen_tile_tint = colors.notseen_tile_night_tint;
+        g.map->mouseover_tile_tint = colors.mouseover_tile_night_tint;
+    }
+    else if(strcmp(td, "Midday") == 0) {
+        g.map->seen_tile_tint = colors.seen_tile_day_tint;
+        g.map->notseen_tile_tint = colors.notseen_tile_day_tint;
+        g.map->mouseover_tile_tint = colors.mouseover_tile_day_tint;
+    }
+    else if(strcmp(td, "Morning") == 0) {
+        g.map->seen_tile_tint = colors.seen_tile_dawn_tint;
+        g.map->notseen_tile_tint = colors.notseen_tile_dawn_tint;
+        g.map->mouseover_tile_tint = colors.mouseover_tile_dawn_tint;
+    }
+    else if(strcmp(td, "Afternoon") == 0) {
+        g.map->seen_tile_tint = colors.seen_tile_dusk_tint;
+        g.map->notseen_tile_tint = colors.notseen_tile_dusk_tint;
+        g.map->mouseover_tile_tint = colors.mouseover_tile_dusk_tint;
+    }
+    else {
+        assert(false);
+    }
+}
 
 struct CraftingGridSystem : public GridSystem {
     Grid *ingredients;
@@ -5290,6 +5296,11 @@ void Encounter::endEncounter(void) {
     } else {
         cout << "All encounters ended" << endl;
         switch_to_MainMap();
+        /*
+          TODO: crash here because the character is deleted when
+          fade_to_UI tries to draw the bitmap
+        */
+        // fade_to_UI(g.ui_Encounter, g.ui_MainMap);
         g.map->player->update_visibility();
     }
     info("Encounter::endEncounter() exit");
@@ -5494,9 +5505,7 @@ void Encounter::runPlayerEncounterStep(void) {
     }
 
     char msg[100];
-    enum ENCOUNTER_ACTION action1 = ENCOUNTER_ACTION_MAX;
-
-    action1 = string_to_action(actions->front()->getName());
+    enum ENCOUNTER_ACTION action1 = string_to_action(actions->front()->getName());
 
     printf("Encounter::runPlayerEncounterStep() npc name %s\n", c2->name);
 
@@ -6552,7 +6561,12 @@ static void runInteract(const char *story_name) {
         start_page = 0;
     }
 
+    UI *prev_ui = g.ui;
+
     g.ui = g.ui_Interact;
+
+    fade_to_UI(prev_ui, (UI*)g.ui_Interact);
+
     g.ui_Interact->current_interact = x;
 
     runInteractStep(x->pages.at(start_page));
@@ -6624,6 +6638,7 @@ static void runInteractStepCB(void) {
         p->switch_from();
     } else if(new_page == -1) {
         switch_to_MainMap();
+        fade_to_UI(g.ui_Interact, g.ui_MainMap);
     } else if(new_page == -2) {
         delete g.map;
         g.map = NULL;
@@ -8176,9 +8191,7 @@ void MainMenuUI::handlePress(const char *name) {
         running = false;
     } else if(strcmp(name, "New") == 0) {
         new_game();
-        switch_to_MainMap();
         runInteract("intro");
-        fade_to_UI(g.ui_MainMenu, g.ui_Interact);
     } else if(strcmp(name, "Continue") == 0) {
         if(g.map != NULL) {
             switch_to_MainMap();
@@ -9458,6 +9471,7 @@ static void init_UIs(void) {
     g.ui_Scavenge  = new ScavengeUI;
 
     g.time_display->calculate_tod();
+    g.map->updateColors();
 }
 
 static void new_game(void) {
