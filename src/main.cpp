@@ -4516,15 +4516,7 @@ static void end_turn() {
 
     isGameOver();
 
-    const char *time_string_before = g.time_display->current_time_string;
-
     g.time_display->calculate_tod();
-
-    const char *time_string_after = g.time_display->current_time_string;
-
-    if(strcmp(time_string_before, time_string_after) != 0) {
-        g.AddMessage("Time changed to " + string(time_string_after));
-    }
 
     g.map->updateColors();
 
