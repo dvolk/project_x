@@ -1,4 +1,4 @@
-40
+42
 name 4 none
 	ItemSlot 0
 	grid_size_x 1
@@ -130,7 +130,7 @@ name 7 crowbar
 	weapon_range 3
 	is_text_item 0
 	is_scavenge_tool 1
-	scavenge_loot_mult 2
+	scavenge_loot_mult 10
 	scavenge_safety_mult 1
 	scavenge_sneak_mult 1
 	sprite 20
@@ -1219,7 +1219,7 @@ name 4 rope
 	is_text_item 0
 	is_scavenge_tool 1
 	scavenge_loot_mult 1
-	scavenge_safety_mult 2
+	scavenge_safety_mult 4
 	scavenge_sneak_mult 1
 	sprite 102
 	sprite_on_hp -1
@@ -1392,4 +1392,72 @@ name 4 Wait
 	scavenge_safety_mult 0
 	scavenge_sneak_mult 0
 	sprite 115
+	sprite_on_hp -1
+name 4 Warn
+	ItemSlot 0
+	grid_size_x 2
+	grid_size_y 2
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
+	container_size_x 0
+	container_size_y 0
+	container_offset_x 0
+	container_offset_y 0
+	maxStack 1
+	weight -1
+	isVehicle 0
+	isContainer 0
+	isSkill 0
+	isLocation 0
+	isLiquid 0
+	isEncounterAction 1
+	canBeDamaged 1
+	apply_to_body 0
+	consumed_on_application 0
+	consumed_on_use 0
+	improves_hydration 0
+	improves_satiety 0
+	warmth 0
+	weapon_damage 0.0001
+	weapon_range 1
+	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
+	sprite 116
+	sprite_on_hp -1
+name 5 Leave
+	ItemSlot 0
+	grid_size_x 2
+	grid_size_y 2
+	grid_size_on_hp_x -1
+	grid_size_on_hp_y -1
+	container_size_x 0
+	container_size_y 0
+	container_offset_x 0
+	container_offset_y 0
+	maxStack 1
+	weight -1
+	isVehicle 0
+	isContainer 0
+	isSkill 0
+	isLocation 0
+	isLiquid 0
+	isEncounterAction 1
+	canBeDamaged 1
+	apply_to_body 0
+	consumed_on_application 0
+	consumed_on_use 0
+	improves_hydration 0
+	improves_satiety 0
+	warmth 0
+	weapon_damage 0.0001
+	weapon_range 1
+	is_text_item 0
+	is_scavenge_tool 0
+	scavenge_loot_mult 0
+	scavenge_safety_mult 0
+	scavenge_sneak_mult 0
+	sprite 117
 	sprite_on_hp -1
