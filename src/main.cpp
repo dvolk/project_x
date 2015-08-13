@@ -2271,6 +2271,10 @@ int distance_to_player(int n) {
     return g.map->distance(g.map->player->n, n);
 }
 
+bool different_factions(Character *c1, Character *c2) {
+    return c1->faction != c1->faction;
+}
+
 // do stuff on the map
 void Character::do_AI(void) {
     if(health < 0.01) {
@@ -2280,7 +2284,11 @@ void Character::do_AI(void) {
 
     update();
 
-    if(health > 0.95 && distance_to_player(n) < 4) {
+    bool very_healthy = health > 0.95;
+    bool player_near = distance_to_player(n) < 4;
+    bool player_enemy = different_factions(this, g.map->player);
+
+    if(very_healthy && player_near && player_enemy) {
         ai_move_toward(g.map->player->n);
     } else if(health < 0.5)
         ai_avoid();
@@ -4485,7 +4493,7 @@ static void end_turn() {
 
     // process characters until it's the player's turn again or we get
     // an encounter interrupt
-    while((c = next()) != g.map->player && g.encounterInterrupt == false && g.ai_encounterInterrupt == -1)
+    while((c = next()) != g.map->player && g.encounterInterrupt == false)
         {
             printf("%s (%d), ", c->name, c->nextMove);
 
@@ -4498,8 +4506,7 @@ static void end_turn() {
 
     g.map->player->update_visibility();
 
-    if(g.encounterInterrupt == true &&
-       g.ui != (UI*)g.ui_Encounter /* <-- TODO: still needed? */)
+    if(g.encounterInterrupt == true)
         {
             UI *prev_ui = g.ui;
             runPlayerEncounter();
@@ -4516,7 +4523,11 @@ static void end_turn() {
 
     isGameOver();
 
+    int tz_before = g.time_display->time_zone;
     g.time_display->calculate_tod();
+    int tz_after = g.time_display->time_zone;
+    if(tz_after != tz_before)
+        g.AddMessage("It is now " + string(g.time_display->current_time_string));
 
     g.map->updateColors();
 
@@ -4937,6 +4948,8 @@ static void runCrafting(void) {
 struct EncounterCharacter {
     bool visible;
     Item *last_move;
+    int warned;
+    int warned_other;
 
     void reset(void);
 
@@ -4950,6 +4963,8 @@ void EncounterCharacter::wait(void) {
 void EncounterCharacter::reset(void) {
     visible = false;
     last_move = NULL;
+    warned_other = 0;
+    warned = 0;
 }
 
 enum ENCOUNTER_ACTION {
@@ -4958,6 +4973,8 @@ enum ENCOUNTER_ACTION {
     FLEE,
     ATTACK,
     WAIT,
+    WARN,
+    LEAVE,
     ENCOUNTER_ACTION_MAX
 };
 
@@ -4972,6 +4989,10 @@ enum ENCOUNTER_ACTION string_to_action(const char *str) {
         return ATTACK;
     if(strcmp(str, "Wait") == 0)
         return WAIT;
+    if(strcmp(str, "Warn") == 0)
+        return WARN;
+    if(strcmp(str, "Leave") == 0)
+        return LEAVE;
     assert(false);
 }
 
@@ -5098,6 +5119,8 @@ struct EncounterUI : public UI {
     Item *retreat;
     Item *advance;
     Item *wait;
+    Item *warn;
+    Item *leave;
 
     const float l_pane_x = 202;
     const float l_pane_y = 65;
@@ -5128,6 +5151,10 @@ Item *item_from_action(enum ENCOUNTER_ACTION action) {
         return g.ui_Encounter->single_attack;
     if(action == WAIT)
         return g.ui_Encounter->wait;
+    if(action == WARN)
+        return g.ui_Encounter->warn;
+    if(action == LEAVE)
+        return g.ui_Encounter->leave;
     assert(false);
 }
 
@@ -5316,6 +5343,8 @@ void Encounter::npcEncounterStep(void) {
     npcEncounterStep(0);
 }
 
+int other(int n) { return n == 0 ? 1 : 0; }
+
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) {
@@ -5327,34 +5356,60 @@ void Encounter::npcEncounterStep(int n) {
 
     Character *_c1 = n == 0 ? c1 : c2;
     Character *_c2 = n == 0 ? c2 : c1;
+    // EncounterCharacter *_ec1 = n == 0 ? &ec1 : &ec2;
+    EncounterCharacter *_ec2 = n == 0 ? &ec2 : &ec1;
 
     enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
+
+    bool healthy = _c2->health > 0.8;
+    bool inrange = range <= _c2->getSelectedWeapon()->get_weapon_range();
+    bool seesenemy = seesOpponent(n);
+    bool hasammo = _c2->hasAmmoForWeapon();
+    bool samefaction = seesenemy && _c1->faction == _c2->faction;
+    bool hidden = range >= 7;
+    bool said_hello = _ec2->warned_other >= 1;
 
     /*
       "AI"
     */
-    uniform_int_distribution<> will_dist(0, 10);
-    bool wantsToFlee = will_dist(*g.rng) == 0;
-
-    if(wantsToFlee == true) {
-        action = FLEE;
-        goto act;
+    if(samefaction == true) {
+        if(said_hello == false) {
+            action = WARN;
+            goto act;
+        } else {
+            if(involvesPlayer() == true) {
+                action = LEAVE;
+                goto act;
+            }
+        }
     }
-    else if(_c2->health > 0.8 &&
-            range <= _c2->getSelectedWeapon()->get_weapon_range() &&
-            seesOpponent(n) &&
-            _c2->hasAmmoForWeapon()) {
+    if(healthy == false) {
+        goto disengage;
+    } else {
+        if(hasammo == false) {
+            goto disengage;
+        }
+        if(inrange == false || hasammo == false || seesenemy == false) {
+            action = ADVANCE;
+            goto act;
+        }
         action = ATTACK;
         goto act;
     }
-    else if(_c2->health <= 0.8) {
+
+    assert(false);
+
+ disengage:
+    if(hidden == true) {
+        action = FLEE;
+        goto act;
+    } else {
         action = RETREAT;
         goto act;
     }
-    else {
-        action = ADVANCE;
-        goto act;
-    }
+
+    assert(false);
+
     /*
       "AI" end
     */
@@ -5436,6 +5491,38 @@ void Encounter::npcEncounterStep(int n) {
             advance(2);
         }
         break;
+    case WARN:
+        {
+            if(involvesPlayer() == true)
+                sprintf(buf, "%s says \"hello there!\"", _c2->name);
+            else
+                sprintf(buf, "%s greets %s.", _c2->name, _c1->name);
+
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
+
+            _ec2->warned_other++;
+        }
+        break;
+
+    case LEAVE:
+        {
+            if(involvesPlayer() == true) {
+                sprintf(buf, "%s leaves the area.", _c2->name);
+                g.AddMessage("Encounter ends.");
+            }
+            else {
+                sprintf(buf, "%s leaves %s's general area.", _c2->name, _c1->name);
+                cout << _c2 << " left successfully" << endl;
+            }
+            /*
+              TODO: the characters should remain at the same place
+              but not be in an encounter
+             */
+            _c2->randomMove();
+        }
+        break;
+
 
     default:
         {
@@ -5448,44 +5535,6 @@ void Encounter::npcEncounterStep(int n) {
         g.map->removeCharacter(g.map->player);
 
     info("Encounter::npcEncounterStep() exit");
-}
-
-bool Encounter::isEncounterNPCdead(void) {
-    return isEncounterNPCdead(1);
-}
-
-bool Encounter::isEncounterNPCdead(int n) {
-    /* who wrote this shit?? */
-    Character *c = n == 0 ? c1 : c2;
-
-    // check if the npc has already been killed and removed
-    // this can happen if it dies in update()
-    bool alive = false;
-    for(auto&& ch : g.map->characters) {
-        if(ch == c) {
-            alive = true;
-            break;
-        }
-    }
-    if(alive == false) {
-        printf("isEncounterNPCdead(): gotcha %p\n", (void*)c);
-        return true;
-    }
-
-    if(c->health < 0.01) {
-        if(involvesPlayer() == true) {
-            world.player_faction_kills[c->faction] += 1;
-            g.AddMessage("The adversary succumbs to their wounds.");
-            g.AddMessage("Encounter ends.");
-            // g.map->updateCharsByPos();
-       } else if(g.map->playerSees(c->n)) {
-            char buf[100];
-            sprintf(buf, "%s dies!", c->name);
-            g.AddMessage(buf);
-        }
-        return true;
-    }
-    return false;
 }
 
 // runs one step of the encounter after the player pressed the
@@ -5532,6 +5581,9 @@ void Encounter::runPlayerEncounterStep(void) {
     case ADVANCE:
         {
             advance(2);
+
+            snprintf(msg, sizeof(msg), "You advance toward %s!", c2->name);
+            g.AddMessage(msg);
         }
         break;
 
@@ -5551,13 +5603,29 @@ void Encounter::runPlayerEncounterStep(void) {
     case RETREAT:
         {
             retreat(2);
+
+            snprintf(msg, sizeof(msg), "You retreat from %s!", c2->name);
+            g.AddMessage(msg);
         }
         break;
+
     case WAIT:
         {
             getEChar(0)->wait();
+            g.AddMessage("You wait a bit");
         }
         break;
+
+    case WARN:
+        {
+        }
+        break;
+
+    case LEAVE:
+        {
+        }
+        break;
+
     default:
         {
             assert(false);
@@ -5581,6 +5649,85 @@ void Encounter::runPlayerEncounterStep(void) {
 
     g.ui_Encounter->setup();
     info("Encounter::runPlayerEncounterStep() exit");
+}
+
+void EncounterUI::setup(void) {
+    info("EncounterUI::setup()");
+
+    widgets.clear();
+    widgets.push_back(button_confirm);
+    widgets.push_back(g.log);
+    addIndicatorWidgets();
+
+    // the tile sprite
+    cur_tile_sprite = g.map->tile_info[g.map->tiles[g.map->player->n].info_index].sprite;
+
+    if(encounter.isRunning() == false) {
+        Character *c1 = g.map->player;
+        g.map->updateCharsByPos();
+        Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
+
+        encounter.setup(c1, c2);
+
+        cout << "Running encounter at: " << c1->n << " with AI " << c2->name << endl;
+    }
+
+    encounterGrids->selected->items.clear();
+    encounterGrids->options->items.clear();
+    widgets.push_back(encounterGrids);
+
+    encounterGrids->options->PlaceItem(wait);
+    encounterGrids->options->PlaceItem(flee);
+    if(encounter.playerInRange() == true) {
+        encounterGrids->options->PlaceItem(warn);
+        encounterGrids->options->PlaceItem(single_attack);
+    }
+    if(encounter.getChar(0)->faction == encounter.getChar(1)->faction) {
+        encounterGrids->options->PlaceItem(leave);
+    }
+    encounterGrids->options->PlaceItem(retreat);
+    encounterGrids->options->PlaceItem(advance);
+
+    encounter.updateVisibility();
+    info("EncounterUI::setup() exit");
+}
+
+bool Encounter::isEncounterNPCdead(void) {
+    return isEncounterNPCdead(1);
+}
+
+bool Encounter::isEncounterNPCdead(int n) {
+    /* who wrote this shit?? */
+    Character *c = n == 0 ? c1 : c2;
+
+    // check if the npc has already been killed and removed
+    // this can happen if it dies in update()
+    bool alive = false;
+    for(auto&& ch : g.map->characters) {
+        if(ch == c) {
+            alive = true;
+            break;
+        }
+    }
+    if(alive == false) {
+        printf("isEncounterNPCdead(): gotcha %p\n", (void*)c);
+        return true;
+    }
+
+    if(c->health < 0.01) {
+        if(involvesPlayer() == true) {
+            world.player_faction_kills[c->faction] += 1;
+            g.AddMessage("The adversary succumbs to their wounds.");
+            g.AddMessage("Encounter ends.");
+            // g.map->updateCharsByPos();
+       } else if(g.map->playerSees(c->n)) {
+            char buf[100];
+            sprintf(buf, "%s dies!", c->name);
+            g.AddMessage(buf);
+        }
+        return true;
+    }
+    return false;
 }
 
 EncounterGridSystem::EncounterGridSystem() {
@@ -5615,6 +5762,9 @@ EncounterUI::EncounterUI() {
     retreat = new Item ("Retreat");
     advance = new Item ("Advance");
     wait = new Item ("Wait");
+    warn = new Item ("Warn");
+    leave = new Item ("Leave");
+
     unknown_character_sprite = g.bitmaps[83];
 
     button_confirm = new Button ("Commit selection");
@@ -5635,43 +5785,8 @@ EncounterUI::~EncounterUI() {
     delete flee;
     delete single_attack;
     delete wait;
-}
-
-void EncounterUI::setup(void) {
-    info("EncounterUI::setup()");
-
-    widgets.clear();
-    widgets.push_back(button_confirm);
-    widgets.push_back(g.log);
-    addIndicatorWidgets();
-
-    // the tile sprite
-    cur_tile_sprite = g.map->tile_info[g.map->tiles[g.map->player->n].info_index].sprite;
-
-    if(encounter.isRunning() == false) {
-        Character *c1 = g.map->player;
-        g.map->updateCharsByPos();
-        Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
-
-        encounter.setup(c1, c2);
-
-        cout << "Running encounter at: " << c1->n << " with AI " << c2->name << endl;
-    }
-
-    encounterGrids->selected->items.clear();
-    encounterGrids->options->items.clear();
-    widgets.push_back(encounterGrids);
-
-    encounterGrids->options->PlaceItem(wait);
-    encounterGrids->options->PlaceItem(flee);
-    if(encounter.playerInRange() == true) {
-        encounterGrids->options->PlaceItem(single_attack);
-    }
-    encounterGrids->options->PlaceItem(retreat);
-    encounterGrids->options->PlaceItem(advance);
-
-    encounter.updateVisibility();
-    info("EncounterUI::setup() exit");
+    delete warn;
+    delete leave;
 }
 
 Item *Encounter::getLastMove(int n) {
@@ -8671,6 +8786,8 @@ static void load_bitmaps(void) {
     /* 113 */ filenames.push_back("media/backgrounds/grid_icon_left_hand.png");
     /* 114 */ filenames.push_back("media/backgrounds/grid_icon_neck.png");
     /* 115 */ filenames.push_back("media/items/abstract/wait.png");
+    /* 116 */ filenames.push_back("media/items/abstract/warn.png");
+    /* 117 */ filenames.push_back("media/items/abstract/leave.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -9083,7 +9200,7 @@ static void init_player(void) {
 
     c->name = strdup("Player");
     c->nextMove = 9000;
-    c->faction = FACTION_PLAYER;
+    c->faction = (Faction)2;//FACTION_PLAYER;
 
     for(auto&& fac_rep : c->faction_reps) fac_rep = -1;
     c->faction_reps[c->faction] = 1;

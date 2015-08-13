@@ -1117,5 +1117,45 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
+
+    // 40
+    tmp.name = "Warn";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[116];
+    tmp.sprite_on_hp = NULL;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.isEncounterAction = true;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
+
+    // 40
+    tmp.name = "Leave";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = g.bitmaps[117];
+    tmp.sprite_on_hp = NULL;
+    tmp.isVehicle = false;
+    tmp.isContainer = false;
+    tmp.isEncounterAction = true;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    g.item_info.push_back(tmp);
 }
 */
