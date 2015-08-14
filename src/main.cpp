@@ -2672,8 +2672,10 @@ void Character::move(int new_n) {
     }
 
     activity = ACTIVITY_MOVE;
-    uniform_int_distribution<> dist(-100, 100);
-    spendTime( 1000 + dist(*g.rng) );
+    int base_tile_cost = 750;
+    float fatigue_move_cost = (1.0 - fatigue) * base_tile_cost;
+
+    spendTime( base_tile_cost + fatigue_move_cost  );
 }
 
 void Character::die(void) {
@@ -2744,8 +2746,15 @@ struct TimeDisplay : public Widget {
           "Dusk",
           "Night"
         };
+    const char * const time_strings_lcase[4] =
+        { "dawn",
+          "day",
+          "dusk",
+          "night"
+        };
 
     const char *current_time_string;
+    const char *current_time_string_lcase;
 
     TimeDisplay() { current_time_string = ""; };
     ~TimeDisplay() { };
@@ -2773,10 +2782,14 @@ void TimeDisplay::calculate_tod(void) {
 
     time_zone = i;
 
-    if(i == -1)
+    if(i == -1) {
         current_time_string = "";
-    else
+        current_time_string_lcase = "";
+    }
+    else {
         current_time_string = time_strings[i];
+        current_time_string_lcase = time_strings_lcase[i];
+    }
 }
 
 void TimeDisplay::draw(void) {
@@ -4508,9 +4521,7 @@ static void end_turn() {
 
     if(g.encounterInterrupt == true)
         {
-            UI *prev_ui = g.ui;
             runPlayerEncounter();
-            fade_to_UI(prev_ui, (UI*)g.ui_Encounter);
         }
 
     g.map->player->update();
@@ -4527,7 +4538,7 @@ static void end_turn() {
     g.time_display->calculate_tod();
     int tz_after = g.time_display->time_zone;
     if(tz_after != tz_before)
-        g.AddMessage("It is now " + string(g.time_display->current_time_string));
+        g.AddMessage("It is now " + string(g.time_display->current_time_string_lcase));
 
     g.map->updateColors();
 
@@ -5237,11 +5248,13 @@ void Encounter::setup(Character *c1, Character *c2) {
 
 static void runPlayerEncounter(void) {
     info("runPlayerEncounter()");
+    UI *prev_ui = g.ui;
     g.ui_Encounter->setup();
     // show the message log if it's hidden
     g.log->visible = true;
     g.ui_Encounter->encounter.do_encounter_messages();
     g.ui = g.ui_Encounter;
+    fade_to_UI(prev_ui, (UI*)g.ui_Encounter);
     info("runPlayerEncounter() exit");
 }
 
@@ -5343,8 +5356,6 @@ void Encounter::npcEncounterStep(void) {
     npcEncounterStep(0);
 }
 
-int other(int n) { return n == 0 ? 1 : 0; }
-
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) {
@@ -5359,15 +5370,26 @@ void Encounter::npcEncounterStep(int n) {
     // EncounterCharacter *_ec1 = n == 0 ? &ec1 : &ec2;
     EncounterCharacter *_ec2 = n == 0 ? &ec2 : &ec1;
 
-    enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
-
-    bool healthy = _c2->health > 0.8;
+    bool warned_times = _ec2->warned_other >= 1;
+    bool is_wild = _c2->faction == FACTION_WILD;
+    bool is_coward = _c2->faction == FACTION_SCIENTISTS;
+    float healthy_warning_bonus = 0.0;
+    if(is_wild == false) {
+        healthy_warning_bonus = ((float)warned_times / 4.0);
+    }
+    if(is_coward == true) {
+        healthy_warning_bonus += 1.0;
+    }
+    bool healthy = _c2->health > (0.5 + healthy_warning_bonus);
     bool inrange = range <= _c2->getSelectedWeapon()->get_weapon_range();
     bool seesenemy = seesOpponent(n);
     bool hasammo = _c2->hasAmmoForWeapon();
     bool samefaction = seesenemy && _c1->faction == _c2->faction;
     bool hidden = range >= 7;
     bool said_hello = _ec2->warned_other >= 1;
+    bool can_flee = hidden;
+
+    enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
 
     /*
       "AI"
@@ -5400,7 +5422,7 @@ void Encounter::npcEncounterStep(int n) {
     assert(false);
 
  disengage:
-    if(hidden == true) {
+    if(can_flee == true) {
         action = FLEE;
         goto act;
     } else {
@@ -5678,8 +5700,10 @@ void EncounterUI::setup(void) {
 
     encounterGrids->options->PlaceItem(wait);
     encounterGrids->options->PlaceItem(flee);
-    if(encounter.playerInRange() == true) {
+    if(encounter.seesOpponent(0)) {
         encounterGrids->options->PlaceItem(warn);
+    }
+    if(encounter.playerInRange() == true) {
         encounterGrids->options->PlaceItem(single_attack);
     }
     if(encounter.getChar(0)->faction == encounter.getChar(1)->faction) {
@@ -8258,6 +8282,17 @@ static void button_Help_press(void);
 static void button_Options_press(void);
 
 static void load_game_wrapper(void) {
+    if(config.native_dialogs == false) {
+        bool success = load_game("game.sav");
+        if(success == true) {
+            g.AddMessage("Game loaded.");
+            switch_to_MainMap();
+        } else {
+            notify("Couldn't load game.");
+        }
+        return;
+    }
+
     bool dialog_opened = al_show_native_file_dialog(NULL, g.load_filechooser);
     if(dialog_opened == true) {
         if(al_get_native_file_dialog_count(g.load_filechooser) != 0) {
@@ -8275,6 +8310,16 @@ static void load_game_wrapper(void) {
 }
 
 static void save_game_wrapper(void) {
+    if(config.native_dialogs == false) {
+        bool success = save_game("game.sav");
+        if(success == true) {
+            notify("Game saved.");
+        } else {
+            notify("Couldn't save game.");
+        }
+        return;
+    }
+
     // show save dialog
     bool dialog_opened = al_show_native_file_dialog(NULL, g.save_filechooser);
     if(dialog_opened == true) {
@@ -9241,11 +9286,11 @@ static void init_player(void) {
 }
 
 static char *random_human_NPC_name(void) {
-    vector<string> first_names =
+    vector<const char *> first_names =
         { "Herb", "Jepson", "Farley", "Homer", "Eustace", "Piers",
           "Sonnie", "Alycia", "Suzie", "Lilibeth", "Nat", "Keanna",
           "Jordyn", "Cary" };
-    vector<string> last_names =
+    vector<const char *> last_names =
         { "Bert", "Parker", "Rigby", "Brooke", "Chamberlain", "Moore",
           "Aitken", "Burke", "Martinson", "Beasley", "Corra", "Lowe",
           "Auttenberg", "Lamar" };
@@ -9253,8 +9298,12 @@ static char *random_human_NPC_name(void) {
     uniform_int_distribution<> fnd(0, first_names.size() - 1);
     uniform_int_distribution<> lnd(0, last_names.size() - 1);
 
-    string name = first_names.at(fnd(*g.rng)) + " " + last_names.at(lnd(*g.rng));
-    return strdup(name.c_str());
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%s %s",
+             first_names.at(fnd(*g.rng)),
+             last_names.at(lnd(*g.rng)));
+
+    return strdup(buf);
 }
 
 // creates the player and npcs

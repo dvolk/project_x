@@ -107,6 +107,10 @@ OptionsUI::OptionsUI() {
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Alternative Grid Movement", &config.alt_grid_movement);
     i++;
+    nativeSaveLoadDialogsCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Native Save/Load Dialogs", &config.native_dialogs);
+    i++;
     showFPSCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Show FPS in terminal", &config.showFPS);
@@ -164,6 +168,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(escMenuQuitsCB);
     checkboxes.push_back(showFPSCB);
     checkboxes.push_back(logToFileCB);
+    checkboxes.push_back(nativeSaveLoadDialogsCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
     widgets.push_back(musicVolumeSlider);
