@@ -1179,6 +1179,12 @@ Disease::Disease() {
     vulnerability = 0.5;
 }
 
+enum WEAPON_USE_RESULT {
+    WEAPON_USE_SUCCESS,
+    WEAPON_USE_MISS,
+    WEAPON_USE_OUT_OF_AMMO,
+};
+
 struct Character {
     int n; // position by offset
     int x, y; // cache to avoid computations
@@ -1312,7 +1318,7 @@ struct Character {
     void sleep(void);
     void wait(void);
 
-    bool useWeapon(void);
+    enum WEAPON_USE_RESULT useWeapon(void);
     void abuseItem(Item *item, float dt);
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
@@ -2344,14 +2350,23 @@ void Character::abuseItem(Item *item, float amount) {
     }
 }
 
-bool Character::useWeapon(void) {
+enum WEAPON_USE_RESULT Character::useWeapon(void) {
     if(consumeWeaponAmmo() == false)
-        return false;
+        return WEAPON_USE_OUT_OF_AMMO;
 
+    uniform_int_distribution<> cth_dist(0, 100);
+    int cth = getSelectedWeapon()->condition * 100.0;
+
+    if(cth < 0) cth = /* fist */ 75;
+
+    if(cth_dist(*g.rng) > cth)
+        return WEAPON_USE_MISS;
+
+    // TODO ranged weapons should be abused even if they miss...
     Item *w = getSelectedWeapon();
     abuseItem(w, 0.00777);
 
-    return true;
+    return WEAPON_USE_SUCCESS;
 }
 
 void Character::post_update(void) {
@@ -2674,7 +2689,7 @@ void Character::move(int new_n) {
     activity = ACTIVITY_MOVE;
     int base_tile_cost = 750;
     float fatigue_move_cost = (1.0 - fatigue) * base_tile_cost;
-
+    printf("[[%f]]", base_tile_cost + fatigue_move_cost);
     spendTime( base_tile_cost + fatigue_move_cost  );
 }
 
@@ -4961,6 +4976,7 @@ struct EncounterCharacter {
     Item *last_move;
     int warned;
     int warned_other;
+    bool in_cover;
 
     void reset(void);
 
@@ -4976,6 +4992,7 @@ void EncounterCharacter::reset(void) {
     last_move = NULL;
     warned_other = 0;
     warned = 0;
+    in_cover = false;
 }
 
 enum ENCOUNTER_ACTION {
@@ -5075,7 +5092,7 @@ bool Encounter::isBurdened(int n) {
 }
 
 const char *Encounter::getCover(int n) {
-    return "no";
+    return getEChar(n)->in_cover == true ? "yes" : "no";
 }
 
 const char *Encounter::getTerrainDifficulty(void) {
@@ -5370,12 +5387,12 @@ void Encounter::npcEncounterStep(int n) {
     // EncounterCharacter *_ec1 = n == 0 ? &ec1 : &ec2;
     EncounterCharacter *_ec2 = n == 0 ? &ec2 : &ec1;
 
-    bool warned_times = _ec2->warned_other >= 1;
+    int warned = _ec2->warned;
     bool is_wild = _c2->faction == FACTION_WILD;
     bool is_coward = _c2->faction == FACTION_SCIENTISTS;
     float healthy_warning_bonus = 0.0;
     if(is_wild == false) {
-        healthy_warning_bonus = ((float)warned_times / 4.0);
+        healthy_warning_bonus = ((float)warned / 5.0);
     }
     if(is_coward == true) {
         healthy_warning_bonus += 1.0;
@@ -5471,15 +5488,30 @@ void Encounter::npcEncounterStep(int n) {
     case ATTACK:
         {
             // we're in range, see the opponent and have enough ammo
-            bool used = _c2->useWeapon();
-            if(used == true) {
-                _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
-                if(involvesPlayer() == true)
-                    sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
-                else
-                    sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
-            } else {
-                sprintf(buf, "%s fumbled trying to use %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+            enum WEAPON_USE_RESULT used_result = _c2->useWeapon();
+            switch(used_result) {
+
+            case WEAPON_USE_SUCCESS:
+                {
+                    _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
+                    if(involvesPlayer() == true)
+                        sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                    else
+                        sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
+                }
+                break;
+
+            case WEAPON_USE_MISS:
+                {
+                    sprintf(buf, "%s missed with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                }
+                break;
+
+            case WEAPON_USE_OUT_OF_AMMO:
+                {
+                    sprintf(buf, "%s tried to use %s but didn't have any ammo!", _c2->name, _c2->getSelectedWeapon()->getName());
+                }
+                break;
             }
             if(g.map->playerSees(_c1->n))
                 g.AddMessage(buf);
@@ -5576,6 +5608,7 @@ void Encounter::runPlayerEncounterStep(void) {
     printf("Encounter::runPlayerEncounterStep() npc name %s\n", c2->name);
 
     getEChar(0)->last_move = item_from_action(action1);
+    getEChar(0)->in_cover = true;
 
     switch(action1) {
 
@@ -5611,12 +5644,30 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case ATTACK:
         {
-            if(c1->useWeapon() == true) {
-                c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
-                sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
-                g.AddMessage(msg);
-            } else {
-                g.AddMessage("Couldn't use weapon!");
+            enum WEAPON_USE_RESULT used_result = c1->useWeapon();
+            switch(used_result) {
+
+            case WEAPON_USE_SUCCESS:
+                {
+                    c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
+                    sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
+                    g.AddMessage(msg);
+                }
+                break;
+
+            case WEAPON_USE_MISS:
+                {
+                    sprintf(msg, "You miss with the %s!", c1->getSelectedWeapon()->getName());
+                    g.AddMessage(msg);
+                }
+                break;
+
+            case WEAPON_USE_OUT_OF_AMMO:
+                {
+                    sprintf(msg, "The %s is out of ammo!", c1->getSelectedWeapon()->getName());
+                    g.AddMessage(msg);
+                }
+                break;
             }
 
         }
@@ -5640,6 +5691,7 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case WARN:
         {
+            getEChar(1)->warned++;
         }
         break;
 
