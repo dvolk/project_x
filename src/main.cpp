@@ -298,6 +298,7 @@ struct Item {
     int get_weight(void);
     float get_warmth(void);
     void setHpDims(void);
+    void resetDims(void);
 
     bool isScavengeItem(void);
     float getScavengeLootMult(void);
@@ -838,15 +839,30 @@ static inline bool is_correct_slot(ItemSlot s, GridInfo *i) {
         ;
 }
 
+void Item::resetDims(void) {
+    pos.x2 = g.item_info[info_index].grid_size_x;
+    pos.y2 = g.item_info[info_index].grid_size_y;
+    if(rotated == true)
+        swap(pos.x2, pos.y2);
+}
+
 // an item on a hardpoint may have a different size than
 // on a normal grid. e.g. clothing
 void Item::setHpDims(void) {
-    if( parent != NULL &&
-        parent->info != g.default_info &&
-        parent->info->noGrid == true &&
-        g.item_info[info_index].grid_size_on_hp_x != -1 &&
-        is_correct_slot(g.item_info[info_index].slot, parent->info) == true &&
-        g.item_info[info_index].is_text_item == false) {
+    // printf("Item::setHpDims() before: %d %d %d %d %1.f %1.f\n",
+    //        g.item_info[info_index].grid_size_x,
+    //        g.item_info[info_index].grid_size_y,
+    //        g.item_info[info_index].grid_size_on_hp_x,
+    //        g.item_info[info_index].grid_size_on_hp_y,
+    //        pos.x2,
+    //        pos.y2);
+
+    if(parent != NULL &&
+       parent->info != g.default_info &&
+       parent->info->noGrid == true &&
+       g.item_info[info_index].grid_size_on_hp_x != -1 &&
+       is_correct_slot(g.item_info[info_index].slot, parent->info) == true &&
+       g.item_info[info_index].is_text_item == false) {
 
         pos.x2 = g.item_info[info_index].grid_size_on_hp_x;
         pos.y2 = g.item_info[info_index].grid_size_on_hp_y;
@@ -1714,7 +1730,7 @@ struct Location {
     float getBaseLootVal(void);
     float getBaseSafetyVal(void);
     float getBaseSneakVal(void);
-    vector<pair<float, int>> getLootTable(void);
+    vector<pair<float, int>>& getLootTable(void);
 };
 
 float Location::getBaseLootVal(void) {
@@ -1730,7 +1746,7 @@ int Location::getResetTime(void) {
     return g.location_info[info_index].reset_time;
 }
 
-vector<pair<float, int>> Location::getLootTable(void) {
+vector<pair<float, int>>& Location::getLootTable(void) {
     return g.location_info[info_index].loot_table;
 }
 
@@ -2962,6 +2978,7 @@ void GridSystem::MouseAutoMoveItemToGround() {
 
     if(item->storage != NULL)
         item->storage->gsb_displayed = false;
+    item->resetDims();
     PlaceItemOnMultiGrid(ground, item);
     reset();
 }
@@ -3982,7 +3999,7 @@ void GridSystem::GrabItem() {
     held = i;
     just_picked_up_item = true;
     was_rotated = i->rotated;
-    i->setHpDims();
+    i->resetDims();
     cout << was_rotated << endl;
     g.hold_off_x =
         mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
@@ -4308,7 +4325,10 @@ void Item::draw(void) {
     }
     else {
         if(sprite_on_hp != NULL &&
-           g.item_info[info_index].grid_size_x != pos.x2) {
+           /* check if we're "expanded" on a hardpoint */
+           g.item_info[info_index].grid_size_x != pos.x2 &&
+           /* or maybe it's rotated ... ffs */
+           g.item_info[info_index].grid_size_x != pos.y2) {
             al_draw_bitmap(sprite_on_hp, x1, y1, 0);
         } else {
             if(rotated == true) {
@@ -6180,7 +6200,7 @@ static void runScavenging(void) {
 
 void ScavengeUI::scavengeLocation(void) {
     Location *location = items_to_locations.find(selected_location)->second;
-    vector<pair<float, int>> loot_table = location->getLootTable();
+    vector<pair<float, int>>& loot_table = location->getLootTable();
     uniform_real_distribution<> prob(0, 1);
 
     for(auto& loot_entry : loot_table) {
@@ -10168,6 +10188,41 @@ void pressEscape() {
     }
 }
 
+bool handle_global_keys(void) {
+    if(g.key == ALLEGRO_KEY_ESCAPE) {
+        pressEscape();
+        return true;
+    }
+
+    if(is_game_over() == true && is_game_loaded() == false)
+        return false;
+    if(g.ui == g.ui_Encounter || g.ui == g.ui_Interact ||
+       g.ui == g.ui_MainMenu  || g.ui == ui_Options ||
+       g.ui == g.ui_Help)
+        return false;
+
+    enum UI_SOUND snd = SOUND_NONE;// g.button_MainMap->mouseDownSound // presumably they're all the same
+
+    switch(g.key) {
+    case ALLEGRO_KEY_1: { button_MainMap_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_2: { button_MiniMap_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_3: { button_Skills_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_4: { button_Crafting_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_5: { button_Items_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_6: { button_Condition_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_7: { button_Camp_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_8: { button_Vehicle_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_S:
+        {
+            button_Scavenge_press();
+            play_ui_sound(SOUND_NONE/*g.button_scavenge->mouseDownSound*/);
+            return true;
+        }
+        break;
+    }
+    return false;
+}
+
 int main(int argc, char **argv) {
     logo();
     init_logging();
@@ -10266,8 +10321,9 @@ int main(int argc, char **argv) {
     double frame_time = 0;
     int16_t frame_counter = 0;
 
-    running = true;
+    register_global_key_callback(handle_global_keys);
 
+    running = true;
     // main loop
     while(running) {
         frame_start = al_current_time();
@@ -10304,11 +10360,7 @@ int main(int argc, char **argv) {
 
         if(ev.type == ALLEGRO_EVENT_KEY_DOWN) {
             g.key = ev.keyboard.keycode;
-            if(g.key == ALLEGRO_KEY_ESCAPE) {
-                pressEscape();
-            } else {
-                g.ui->keyDownEvent();
-            }
+            g.ui->keyDownEvent();
         }
         else if(ev.type == ALLEGRO_EVENT_TIMER) {
             { // logic goes here

@@ -3,6 +3,18 @@
 extern int mouse_x;
 extern int mouse_y;
 
+/*
+  global keys shared by all UIs
+
+  returns true if it caught the key, false if it should
+  be passed to the widgets.
+ */
+bool (*global_key_callback)(void) = NULL;
+
+void register_global_key_callback(bool (*cb)(void)) {
+    global_key_callback = cb;
+}
+
 void UI::update(void) {
     for(auto& widget : widgets) {
         widget->update();
@@ -37,6 +49,10 @@ void UI::mouseUpEvent(void) {
 }
 
 void UI::keyDownEvent(void) {
+    if(global_key_callback != nullptr) {
+        if(global_key_callback() == true)
+            return;
+    }
     for(auto& widget : widgets) {
         if(widget->pos.x1 <= mouse_x &&
            widget->pos.y1 <= mouse_y &&

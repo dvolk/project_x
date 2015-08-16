@@ -33,6 +33,6 @@ void load_ui_sounds(void) {
 }
     
 void play_ui_sound(enum UI_SOUND s) {
-    if(config.playUISounds)
+    if(s != SOUND_NONE && config.playUISounds)
         al_play_sample(ui_sounds[s], ui_volume, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, NULL);
 }

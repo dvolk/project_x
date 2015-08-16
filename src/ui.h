@@ -7,6 +7,8 @@
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_color.h>
 
+void register_global_key_callback(bool (*)(void));
+
 struct UI {
     std::vector<Widget *> widgets;
 
