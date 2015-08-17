@@ -38,6 +38,7 @@
 #include "./ui.h"
 #include "./optionsui.h"
 #include "./sound.h"
+#include "./fadetransitionui.h"
 
 const int COMPILED_VERSION = 11; // save game version
 
@@ -69,9 +70,7 @@ struct TimeDisplay;
 struct WeaponSwitcher;
 struct Interact;
 struct MainMenuUI;
-struct FadeTransitionUI;
 struct NotificationUI;
-struct OptionsUI;
 
 bool running;
 Colors colors;
@@ -6775,6 +6774,7 @@ static void runInteract(const char *story_name) {
     }
 
     UI *prev_ui = g.ui;
+    assert(prev_ui);
 
     g.ui = g.ui_Interact;
 
@@ -8070,71 +8070,12 @@ void ConditionGridSystem::reset(void) {
     GridSystem::reset();
 }
 
-/*
-  Fades out from the `from' UI into the `to' UI
-
-  If from is NULL, it only fades-in
- */
-struct FadeTransitionUI : public UI {
-    UI *from;
-    UI *to;
-    const int fade_frames = 30;
-    int frame;
-
-    void start(UI *f, UI *t);
-
-    void draw(void) override;
-    void updateFrame(void);
-
-    // a widget whose only purpose is to call FadeTransitionUI::updateFrame
-    /*
-      TODO: is this better than making UI::update virtual?
-    */
-    struct UpdateCaller : public Widget {
-        FadeTransitionUI *parent;
-        UpdateCaller() { visible = false; }
-        void update(void) override { parent->updateFrame(); }
-    };
-    UpdateCaller upc;
-};
-
-void FadeTransitionUI::start(UI *f, UI *t) {
-    from = f;
-    to = t;
-
-    if(from != NULL)
-        frame = - fade_frames;
-    else
-        frame = 0;
-
-    upc.parent = this;
-    widgets.push_back(&upc);
+static void set_fade_time(float s) {
+    g.ui_FadeTransition->set_duration(s);
 }
 
-void FadeTransitionUI::draw(void) {
-    if(frame <= 0) {
-        al_clear_to_color(from->clear_to);
-        from->draw();
-        float alpha = 1.0 - ((-frame) / (float)fade_frames);
-        al_draw_filled_rectangle(0, 0, g.display_x, g.display_y,
-                                 al_map_rgba_f(0, 0, 0, alpha));
-    } else
-    if(frame > 0) {
-        al_clear_to_color(to->clear_to);
-        to->draw();
-        float alpha = 1.0 - (frame / (float)fade_frames);
-        al_draw_filled_rectangle(0, 0, g.display_x, g.display_y,
-                                 al_map_rgba_f(0, 0, 0, alpha));
-    }
-}
-
-void FadeTransitionUI::updateFrame(void) {
-    frame++;
-
-    if(frame >= fade_frames) {
-        widgets.clear();
-        g.ui = to;
-    }
+void set_global_ui(UI *ui) {
+    g.ui = ui;
 }
 
 static void fade_to_UI(UI *from, UI *to) {
@@ -10309,6 +10250,7 @@ int main(int argc, char **argv) {
         switchToMainMenu();
         if(config.start_nag == true)
             notify("This is pre-alpha software. Please report bugs and give feedback!");
+        set_fade_time(0.5);
         fade_to_UI();
     }
     else if(load_filename != NULL) {
