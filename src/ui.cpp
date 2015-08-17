@@ -9,7 +9,7 @@ extern int mouse_y;
   returns true if it caught the key, false if it should
   be passed to the widgets.
  */
-bool (*global_key_callback)(void) = NULL;
+static bool (*global_key_callback)(void) = NULL;
 
 void register_global_key_callback(bool (*cb)(void)) {
     global_key_callback = cb;

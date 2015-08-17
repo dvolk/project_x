@@ -11,15 +11,36 @@ enum ItemSlot {
     WATER_BOTTLE,
     WEAPON_BOW,
     AMMO_BOW,
-    SLOT_CRAFTING_ONLY
 };
 
-struct Grid;
+enum ItemFlag {
+    /*
+      TODO Replace slots with these
+     */
+    _SLOT_NONE = 0,
+    _ARMOR_HEAD,
+    _ARMOR_TORSO,
+    _ARMOR_LEGS,
+    _ARMOR_LEFT_SHOE,
+    _ARMOR_RIGHT_SHOE,
+    _ARMOR_LEFT_HAND,
+    _ARMOR_RIGHT_HAND,
+    _ARMOR_BACK,
+    _WATER_BOTTLE,
+    _WEAPON_BOW,
+    _AMMO_BOW,
+    VEHICLE,
+    CRAFTING_ONLY,
+    PUT_ON_SHOULDER,
+    PUT_ON_NECK
+};
 
 struct ItemInfo {
     const char *name;
 
-    ItemSlot slot;
+    ItemSlot slot; // remove this
+
+    vector<enum ItemFlag> flags;
 
     // the size of the item in grid units
     int grid_size_x;
@@ -39,7 +60,9 @@ struct ItemInfo {
     int16_t maxStack;
     int weight; // [g]
 
-    bool isVehicle;
+    /*
+      TODO replace these bools with flags
+     */
     bool isContainer;
     bool isSkill;
     bool isLocation;
@@ -94,7 +117,6 @@ void ItemInfo::save(ostream &os) {
     os << "\tcontainer_offset_y " << container_offset_y << endl;
     os << "\tmaxStack " << maxStack << endl;
     os << "\tweight " << weight << endl;
-    os << "\tisVehicle " << isVehicle << endl;
     os << "\tisContainer " << isContainer << endl;
     os << "\tisSkill " << isSkill << endl;
     os << "\tisLocation " << isLocation << endl;
@@ -116,6 +138,11 @@ void ItemInfo::save(ostream &os) {
     os << "\tscavenge_sneak_mult " << scavenge_sneak_mult << endl;
     os << "\tsprite " << find_bitmap_index(sprite) << endl;
     os << "\tsprite_on_hp " << find_bitmap_index(sprite_on_hp) << endl;
+    os << "\tflags: " << flags.size();
+    for(auto&& flag : flags) {
+        os << ' '<< flag;
+    }
+    os << endl;
 }
 
 void ItemInfo::load(istream &is) {
@@ -141,7 +168,6 @@ void ItemInfo::load(istream &is) {
     is.ignore(256, ' ');    is >> container_offset_y;
     is.ignore(256, ' ');    is >> maxStack;
     is.ignore(256, ' ');    is >> weight;
-    is.ignore(256, ' ');    is >> isVehicle;
     is.ignore(256, ' ');    is >> isContainer;
     is.ignore(256, ' ');    is >> isSkill;
     is.ignore(256, ' ');    is >> isLocation;
@@ -168,7 +194,21 @@ void ItemInfo::load(istream &is) {
     if(sprite_i < 0) sprite = NULL; else sprite = g.bitmaps[sprite_i];
     is.ignore(256, ' ');
     is >> sprite_i;
-    if(sprite_i < 0) sprite_on_hp = NULL;else sprite_on_hp = g.bitmaps[sprite_i];
+    if(sprite_i < 0) sprite_on_hp = NULL; else sprite_on_hp = g.bitmaps[sprite_i];
+
+    /*
+      read in iteminfo flags
+     */
+    is.ignore(256, ' ');
+    int flags_size = -1;
+    is >> flags_size;
+    flags.resize(flags_size);
+    for(auto&& flag : flags) {
+        int read_flag = -1;
+        is >> read_flag;
+        flag = (ItemFlag)read_flag;
+    }
+    is.ignore(1); // \n
 }
 
 void save_ItemInfo(void) {
@@ -199,7 +239,9 @@ void load_ItemInfo(void) {
     }
     in.close();
 }
-/*
+
+//#define REWRITE_ITEMDEFS
+#ifdef REWRITE_ITEMDEFS
 void init_iteminfo(void) {
     ItemInfo tmp;
     // 00
@@ -213,7 +255,6 @@ void init_iteminfo(void) {
     tmp.sprite = NULL;
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isLocation = false;
     tmp.isEncounterAction = false;
@@ -237,6 +278,7 @@ void init_iteminfo(void) {
     tmp.scavenge_loot_mult = 0;
     tmp.scavenge_safety_mult = 0;
     tmp.scavenge_sneak_mult = 0;
+    tmp.flags = { };
     g.item_info.push_back(tmp);
 
     // 01
@@ -247,7 +289,6 @@ void init_iteminfo(void) {
     tmp.weight = 1000;
     tmp.sprite = g.bitmaps[24];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 10;
     tmp.container_size_y = 10;
@@ -267,7 +308,6 @@ void init_iteminfo(void) {
     tmp.weight = 750;
     tmp.sprite = g.bitmaps[22];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 4;
     tmp.container_size_y = 4;
@@ -287,7 +327,6 @@ void init_iteminfo(void) {
     tmp.weight = 2500;
     tmp.sprite = g.bitmaps[20];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -302,6 +341,7 @@ void init_iteminfo(void) {
     tmp.scavenge_loot_mult = 10.0;
     tmp.scavenge_safety_mult = 1.0;
     tmp.scavenge_sneak_mult = 1.0;
+    tmp.flags = { PUT_ON_SHOULDER };
     g.item_info.push_back(tmp);
 
     // 04
@@ -312,7 +352,6 @@ void init_iteminfo(void) {
     tmp.weight = 5000;
     tmp.sprite = g.bitmaps[26];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = true;
     tmp.isContainer = true;
     tmp.container_size_x = 20;
     tmp.container_size_y = 20;
@@ -327,6 +366,7 @@ void init_iteminfo(void) {
     tmp.scavenge_loot_mult = 0;
     tmp.scavenge_safety_mult = 0;
     tmp.scavenge_sneak_mult = 0;
+    tmp.flags = { VEHICLE };
     g.item_info.push_back(tmp);
 
     // 05
@@ -337,7 +377,6 @@ void init_iteminfo(void) {
     tmp.weight = 50;
     tmp.sprite = g.bitmaps[27];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 1;
     tmp.container_size_y = 2;
@@ -346,6 +385,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_application = false;
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
+    tmp.flags = { };
     g.item_info.push_back(tmp);
 
     // 06
@@ -356,7 +396,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[31];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -376,7 +415,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[32];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -396,7 +434,6 @@ void init_iteminfo(void) {
     tmp.weight = 5;
     tmp.sprite = g.bitmaps[34];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = false;
     tmp.container_size_x = 0;
@@ -417,7 +454,6 @@ void init_iteminfo(void) {
     tmp.weight = 75;
     tmp.sprite = g.bitmaps[35];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -437,7 +473,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[36];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -457,7 +492,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[37];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -476,7 +510,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[38];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -495,7 +528,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[39];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -515,7 +547,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[40];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = true;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -537,7 +568,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[41];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -558,7 +588,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[42];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isLocation = true;
     tmp.container_size_x = 0;
@@ -578,7 +607,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[43];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isLocation = true;
     tmp.container_size_x = 0;
@@ -598,7 +626,6 @@ void init_iteminfo(void) {
     tmp.weight = 100;
     tmp.sprite = g.bitmaps[49];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.isLocation = false;
     tmp.container_size_x = 1;
@@ -620,7 +647,6 @@ void init_iteminfo(void) {
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[50];
     tmp.sprite = g.bitmaps[51];
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 2;
     tmp.container_size_y = 4;
@@ -644,7 +670,6 @@ void init_iteminfo(void) {
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[52];
     tmp.sprite = g.bitmaps[53];
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 2;
     tmp.container_size_y = 2;
@@ -668,7 +693,6 @@ void init_iteminfo(void) {
     tmp.weight = 500;
     tmp.sprite_on_hp = g.bitmaps[54];
     tmp.sprite = g.bitmaps[55];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -690,7 +714,6 @@ void init_iteminfo(void) {
     tmp.weight = 500;
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[56];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -710,7 +733,6 @@ void init_iteminfo(void) {
     tmp.weight = 500;
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[57];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -733,7 +755,6 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[85];
     tmp.sprite_on_hp = g.bitmaps[58];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -757,7 +778,6 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[86];
     tmp.sprite_on_hp = g.bitmaps[59];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -780,7 +800,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[80];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -800,7 +819,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[81];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -820,7 +838,6 @@ void init_iteminfo(void) {
     tmp.weight = 500;
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[82];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -844,7 +861,6 @@ void init_iteminfo(void) {
     tmp.weight = 1500;
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[84];
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 10;
     tmp.container_size_y = 1;
@@ -869,7 +885,6 @@ void init_iteminfo(void) {
     tmp.weight = 300;
     tmp.sprite_on_hp = NULL;
     tmp.sprite = g.bitmaps[96];
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = -1;
     tmp.container_size_y = -1;
@@ -897,7 +912,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[97];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = true;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -919,7 +933,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[97];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = true;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -941,7 +954,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[100];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -963,7 +975,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[101];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -989,7 +1000,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[102];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = 0;
     tmp.container_size_y = 0;
@@ -1015,7 +1025,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[103];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = true;
     tmp.container_size_x = 3;
     tmp.container_size_y = 3;
@@ -1041,7 +1050,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[104];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = -1;
     tmp.container_size_y = -1;
@@ -1063,7 +1071,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[105];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = -1;
     tmp.container_size_y = -1;
@@ -1073,7 +1080,8 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.improves_hydration = 0.0;
     tmp.improves_satiety = 0.0;
-    tmp.slot = SLOT_CRAFTING_ONLY;
+    tmp.slot = SLOT_NONE;
+    tmp.flags = { CRAFTING_ONLY };
     g.item_info.push_back(tmp);
 
     // 39
@@ -1085,7 +1093,6 @@ void init_iteminfo(void) {
     tmp.sprite = g.bitmaps[106];
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.container_size_x = -1;
     tmp.container_size_y = -1;
@@ -1096,6 +1103,7 @@ void init_iteminfo(void) {
     tmp.improves_hydration = 0.0;
     tmp.improves_satiety = 0.0;
     tmp.slot = SLOT_NONE;
+    tmp.flags = { };
     g.item_info.push_back(tmp);
 
     // 40
@@ -1106,7 +1114,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[115];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -1126,7 +1133,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[116];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -1146,7 +1152,6 @@ void init_iteminfo(void) {
     tmp.weight = -1;
     tmp.sprite = g.bitmaps[117];
     tmp.sprite_on_hp = NULL;
-    tmp.isVehicle = false;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;
     tmp.container_size_x = 0;
@@ -1158,4 +1163,4 @@ void init_iteminfo(void) {
     tmp.slot = SLOT_NONE;
     g.item_info.push_back(tmp);
 }
-*/
+#endif

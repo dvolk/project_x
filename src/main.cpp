@@ -284,7 +284,6 @@ struct Item {
     int get_grid_size_x(void);
     int get_grid_size_y(void);
 
-    bool isVehicle(void);
     bool isMedical(void);
     bool isConsumedOnApplication(void);
     bool isUsable(void);
@@ -304,7 +303,17 @@ struct Item {
     float getScavengeLootMult(void);
     float getScavengeSafetyMult(void);
     float getScavengeSneakMult(void);
+
+    bool hasFlag(enum ItemFlag _flag) const;
 };
+
+bool Item::hasFlag(const enum ItemFlag _flag) const {
+    for(auto&& flag : g.item_info[info_index].flags) {
+        if(flag == _flag)
+            return true;
+    }
+    return false;
+}
 
 bool Item::isScavengeItem(void) {
     return g.item_info[info_index].is_scavenge_tool;
@@ -322,7 +331,6 @@ float Item::getScavengeSneakMult(void) {
 bool Item::isTextItem(void) {
     return g.item_info[info_index].is_text_item;
 }
-
 
 static ALLEGRO_BITMAP *little_pink_bitmap(void);
 
@@ -440,10 +448,6 @@ int Item::get_grid_size_y(void) {
 
 const char *Item::getName(void) {
     return g.item_info[info_index].name;
-}
-
-bool Item::isVehicle(void) {
-    return g.item_info[info_index].isVehicle;
 }
 
 bool Item::isMedical(void) {
@@ -1049,7 +1053,7 @@ bool Grid::item_compatible(Item *i) {
     ItemSlot slot = i->getItemSlot();
 
     // g.ingredients is both the ingredients grid and results grid
-    if(slot == SLOT_CRAFTING_ONLY && info != g.ingredients && info != g.ground)
+    if(i->hasFlag(CRAFTING_ONLY) && info != g.ingredients && info != g.ground)
         return false;
 
     // you can place anything in a grid
@@ -1076,6 +1080,12 @@ bool Grid::item_compatible(Item *i) {
         return false;
     if(info == g.left_hand && slot != ARMOR_LEFT_HAND)
         return false;
+    if(info == g.right_shoulder && i->hasFlag(PUT_ON_SHOULDER) == false)
+        return false;
+    if(info == g.left_shoulder && i->hasFlag(PUT_ON_SHOULDER) == false)
+        return false;
+    if(info == g.neck && i->hasFlag(PUT_ON_NECK) == false)
+        return false;
 
     // can't place/use non-medical items on body parts
     if(info->medical == true &&
@@ -1083,14 +1093,15 @@ bool Grid::item_compatible(Item *i) {
         return false;
 
     // can only place vehicles in vehicle hardpoint
-    if(info->vehiclepoint == true &&
-       i->isVehicle() == false)
+    if(i->hasFlag(VEHICLE) == false &&
+       info->vehiclepoint == true)
         return false;
 
     // can't place vehicle on non-vehicle hardpoints
-    if(i->isVehicle() == true &&
-       info->vehiclepoint == false)
-        return false;
+    if(i->hasFlag(VEHICLE) == true) {
+        if(info->vehiclepoint == false && info != g.ground)
+            return false;
+    }
 
     // allow by default
     return true;
@@ -2628,7 +2639,7 @@ void TileMap::removeTempItems(int n) {
     for(auto&& g : *mg) {
         vector<Item *>::iterator it;
         for(it = g->items.begin(); it != g->items.end() ;) {
-            if((*it)->getItemSlot() == SLOT_CRAFTING_ONLY) {
+            if((*it)->hasFlag(CRAFTING_ONLY) == true) {
                 delete *it;
                 it = g->items.erase(it);
             }
@@ -2705,7 +2716,6 @@ void Character::move(int new_n) {
     activity = ACTIVITY_MOVE;
     int base_tile_cost = 750;
     float fatigue_move_cost = (1.0 - fatigue) * base_tile_cost;
-    printf("[[%f]]", base_tile_cost + fatigue_move_cost);
     spendTime( base_tile_cost + fatigue_move_cost  );
 }
 
@@ -3556,12 +3566,9 @@ void TileMap::keyDown(void) {
     if(g.key == ALLEGRO_KEY_C) {
         g.map->focusOnPlayer();
     }
-    else if(g.key == ALLEGRO_KEY_M) {
-        toggleMsgLogVisibility();
-    }
     else if(g.key == ALLEGRO_KEY_SPACE) {
-        end_turn();
         player->wait();
+        end_turn();
     }
 
     char buf[35];
@@ -10212,6 +10219,7 @@ bool handle_global_keys(void) {
     case ALLEGRO_KEY_6: { button_Condition_press(); play_ui_sound(snd); return true; } break;
     case ALLEGRO_KEY_7: { button_Camp_press(); play_ui_sound(snd); return true; } break;
     case ALLEGRO_KEY_8: { button_Vehicle_press(); play_ui_sound(snd); return true; } break;
+    case ALLEGRO_KEY_M: { toggleMsgLogVisibility(); return true; } break;
     case ALLEGRO_KEY_S:
         {
             button_Scavenge_press();
@@ -10261,9 +10269,11 @@ int main(int argc, char **argv) {
         load_ui_sounds();
         init_rng( seed );
         init_colors();
-        //init_iteminfo();
-        //save_ItemInfo();
-        //g.item_info.clear();
+        #ifdef REWRITE_ITEMDEFS
+        init_iteminfo();
+        save_ItemInfo();
+        g.item_info.clear();
+        #endif
         load_ItemInfo();
         init_hardpointinfo();
         init_weaponswitcher();

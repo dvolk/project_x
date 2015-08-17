@@ -15,8 +15,8 @@
 extern bool running;
 extern Config config;
 
-ALLEGRO_AUDIO_STREAM *stream = NULL;
-ALLEGRO_THREAD *music_thread = NULL;
+static ALLEGRO_AUDIO_STREAM *stream = NULL;
+static ALLEGRO_THREAD *music_thread = NULL;
 
 void init_music_player(void) {
     music_thread = al_create_thread(music_player, NULL);

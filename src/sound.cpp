@@ -8,11 +8,10 @@
 
 #include <vector>
 
-std::vector<ALLEGRO_SAMPLE *> ui_sounds;
-
 extern Config config;
 
-float ui_volume;
+static std::vector<ALLEGRO_SAMPLE *> ui_sounds;
+static float ui_volume;
 
 void set_ui_volume(float vol) {
     ui_volume = vol;
