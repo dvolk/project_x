@@ -134,7 +134,7 @@ name 7 crowbar
 	scavenge_sneak_mult 1
 	sprite 20
 	sprite_on_hp -1
-	flags: 1 15
+	flags: 1 14
 name 16 shopping trolley
 	ItemSlot 0
 	grid_size_x 12
@@ -168,7 +168,7 @@ name 16 shopping trolley
 	scavenge_sneak_mult 0
 	sprite 26
 	sprite_on_hp -1
-	flags: 1 13
+	flags: 1 12
 name 11 pill bottle
 	ItemSlot 0
 	grid_size_x 1
@@ -1324,7 +1324,7 @@ name 4 fire
 	scavenge_sneak_mult 0
 	sprite 105
 	sprite_on_hp -1
-	flags: 1 14
+	flags: 1 13
 name 11 cooking pot
 	ItemSlot 0
 	grid_size_x 4
