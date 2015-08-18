@@ -30,6 +30,7 @@ void Config::save(const char *filename) {
     snprintf(buf, sizeof(buf), "%d", displayY);
     al_set_config_value(cfg, NULL, "display-y", buf);
     snprintf(buf, sizeof(buf), "%s", font_filename);
+    free(font_filename);
     al_set_config_value(cfg, NULL, "font-filename", buf);
     snprintf(buf, sizeof(buf), "%d", font_height);
     al_set_config_value(cfg, NULL, "font-height", buf);

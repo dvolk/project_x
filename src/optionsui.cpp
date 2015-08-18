@@ -47,6 +47,8 @@ void OptionsUI::apply_settings(void) {
 void runMainMenu(void);
 
 extern OptionsUI *ui_Options;
+extern bool restart;
+extern bool running;
 
 OptionsUI::OptionsUI() {
     clear_to = colors.grey2;
@@ -63,7 +65,8 @@ OptionsUI::OptionsUI() {
 
     button_apply->onMouseDown = [] { ui_Options->apply_settings();
                                      config.save("game.conf");
-                                     runMainMenu();
+                                     restart = true;
+                                     running = false;
     };
 
     const float start_x = round((config.displayX - 485) / 2);
@@ -233,4 +236,3 @@ OptionsUI::~OptionsUI() {
         delete widget;
     }
 }
-

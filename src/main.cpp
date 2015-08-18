@@ -626,6 +626,7 @@ void init_hardpointinfo(void) {
     g.gridinfo_store.push_back(g.ground);
     g.gridinfo_store.push_back(g.bottle);
     g.gridinfo_store.push_back(g.ammo_bow);
+    g.gridinfo_store.push_back(g.ingredients);
 }
 
 struct GridSortButton : public Widget {
@@ -2639,6 +2640,7 @@ void TileMap::removeTempItems(int n) {
         vector<Item *>::iterator it;
         for(it = g->items.begin(); it != g->items.end() ;) {
             if((*it)->hasFlag(CRAFTING_ONLY) == true) {
+                printf("deleting %s\n", (*it)->getName());
                 delete *it;
                 it = g->items.erase(it);
             }
@@ -8577,7 +8579,7 @@ void runMainMenu(void) {
        g.ui == ui_Options) {
         switchToMainMenu();
     } else {
-        info("You can only go to the main menu from the map or minimap");
+        info("You can't go to the menu from this UI");
     }
 }
 
@@ -8876,6 +8878,7 @@ static void load_bitmaps(void) {
 static void unload_bitmaps(void) {
     for(auto& bitmap : g.bitmaps)
         al_destroy_bitmap(bitmap);
+    g.bitmaps.clear();
 }
 
 static void init_buttons(void) {
@@ -9627,6 +9630,7 @@ static void unload_game(void) {
     delete g.ui_Condition;
     delete g.ui_Camp;
     delete g.ui_Scavenge;
+
     // the map may already be unloaded if the player dies
     if(g.map != NULL) {
         delete g.map;
@@ -10011,13 +10015,12 @@ void load_map_stories(istream &is) {
     }
 }
 
-static bool save_game(const char *filename) {
+static bool save_game(ofstream &out) {
     PerfTimer t("Save game");
 
     if(g.map == NULL)
         return false;
 
-    ofstream out(filename, ios::out);
     if(out.fail() == true) {
         info("Error: Couldn't open save file for writing");
         cout << strerror(errno) << endl;
@@ -10039,10 +10042,15 @@ static bool save_game(const char *filename) {
     return true;
 }
 
-static bool load_game(const char *filename) {
+static bool save_game(const char *filename) {
+    ofstream out(filename, ios::out);
+    bool ret = save_game(out);
+    return ret;
+}
+
+static bool load_game(ifstream &in) {
     PerfTimer t("Load game");
 
-    ifstream in(filename, ios::in);
     if(in.fail() == true) {
         info("Error: Couldn't open load file for reading");
         cout << strerror(errno) << endl;
@@ -10089,6 +10097,11 @@ static bool load_game(const char *filename) {
     return true;
 }
 
+static bool load_game(const char *filename) {
+    ifstream in(filename, ios::in);
+    return load_game(in);
+}
+
 float get_mouse_x(void) { return mouse_x; }
 
 static void logo(void) {
@@ -10108,7 +10121,9 @@ void pressEscape() {
 
     // can't get out of encounter or stories with escape
     if(g.ui == g.ui_Encounter ||
-       g.ui == g.ui_Interact) {
+       g.ui == g.ui_Interact ||
+       g.ui == g.ui_FadeTransition ||
+       g.ui == g.ui_Notification) {
         return;
     }
     if(g.ui == ui_Options) {
@@ -10137,6 +10152,10 @@ void pressEscape() {
 }
 
 bool handle_global_keys(void) {
+    if(g.ui == g.ui_FadeTransition ||
+       g.ui == g.ui_Notification) {
+        return false;
+    }
     if(g.key == ALLEGRO_KEY_ESCAPE) {
         pressEscape();
         return true;
@@ -10172,29 +10191,78 @@ bool handle_global_keys(void) {
     return false;
 }
 
-int main(int argc, char **argv) {
-    logo();
-    init_logging();
+ALLEGRO_EVENT_QUEUE *event_queue;
+ALLEGRO_TIMER *timer;
 
-    int seed;
-    char *load_filename = NULL;
-    init_args(argc, argv, &seed, &load_filename);
+void unload(void) {
+    exitUIs();
+    exit_music_player();
 
+    unload_game();
+    unload_bitmaps();
+
+    al_destroy_display(g.display);
+    // al_destroy_font(g_font);
+    font_unload();
+
+    delete g.ui_MainMenu;
+    delete g.ui_FadeTransition;
+    delete g.ui_Notification;
+    delete ui_Options;
+    delete g.ui_Interact;
+    delete g.time_display;
+    delete g.weapon_switcher;
+    delete g.hand_combat;
+    delete g.log;
+
+    delete g.button_endturn;
+    delete g.button_scavenge;
+    delete g.button_sleep;
+
+    for(auto&& button : g.main_buttons)
+        delete button;
+    g.main_buttons.clear();
+    for(auto&& skill : g.skills)
+        delete skill;
+    /* fixed sized array */
+    for(auto&& recipe : recipes)
+        delete recipe;
+    recipes.clear();
+    for(auto&& loc : g.location_info)
+        if(loc.location_item->isTextItem() == false)
+            delete loc.location_item;
+    g.location_info.clear();
+    for(auto&& i : g.text_items)
+        delete i.second;
+    g.text_items.clear();
+    for(auto&& s : g.stories)
+        delete s.second;
+    g.stories.clear();
+    for(auto&& ii : g.item_info)
+        free((char*)ii.name);
+    g.item_info.clear();
+    for(auto&& gridinfo : g.gridinfo_store)
+        delete gridinfo;
+    g.gridinfo_store.clear();
+
+    al_destroy_event_queue(event_queue);
+    al_destroy_timer(timer);
+}
+
+void load(void) {
     allegro_init();
 
-    ALLEGRO_EVENT_QUEUE *event_queue = al_create_event_queue();
+    event_queue = al_create_event_queue();
     if(event_queue == NULL)
         errorQuit("Failed to create event queue.");
     else
         info("Created event queue.");
 
-    ALLEGRO_TIMER *timer = al_create_timer(1.0 / config.frame_rate);
+    timer = al_create_timer(1.0 / config.frame_rate);
     if(timer == NULL)
         errorQuit("Error: failed to create timer.");
     else
         info("Created timer.");
-
-    ALLEGRO_EVENT ev;
 
     al_start_timer(timer);
 
@@ -10208,7 +10276,6 @@ int main(int argc, char **argv) {
         load_fonts();
         load_bitmaps();
         load_ui_sounds();
-        init_rng( seed );
         init_colors();
         #ifdef REWRITE_ITEMDEFS
         init_iteminfo();
@@ -10240,13 +10307,35 @@ int main(int argc, char **argv) {
     }
 
     al_set_target_backbuffer(g.display);
+}
+
+int main(int argc, char **argv) {
+
+    logo();
+    init_logging();
+
+    int seed;
+    char *load_filename = NULL;
+    init_args(argc, argv, &seed, &load_filename);
+    init_rng(seed);
 
     /*
       TODO: Check maximum video bitmap dimensions and
       warn user if it's less than 2048x2048
      */
+    bool restart_load_game = false;
+    bool restart = false;
 
-    if(argc <= 1) {
+ restart:
+    load();
+
+    if(restart == true) {
+        switchToMainMenu();
+        if(restart_load_game == true) {
+            load_game("reload.sav");
+        }
+    }
+    else if(argc <= 1) {
         switchToMainMenu();
         if(config.start_nag == true)
             notify("This is pre-alpha software. Please report bugs and give feedback!");
@@ -10275,7 +10364,13 @@ int main(int argc, char **argv) {
 
     register_global_key_callback(handle_global_keys);
 
+    ALLEGRO_EVENT ev;
+
     running = true;
+    restart = false;
+    restart_load_game = false;
+
+
     // main loop
     while(running) {
         frame_start = al_current_time();
@@ -10351,51 +10446,25 @@ int main(int argc, char **argv) {
 
     info("Exiting");
 
-    exitUIs();
-    exit_music_player();
+    if(restart == true)
+        if(is_game_loaded() == true)
+            // TODO it'd be better if the game simply didn't unload...
+            if(save_game("reload.sav") == true)
+                restart_load_game = true;
 
-    unload_game();
-    unload_bitmaps();
+    unload();
 
-    al_destroy_display(g.display);
-    // al_destroy_font(g_font);
-    font_unload();
+    if(restart == true) {
+        printf("****************\n");
+        printf("* reloading... *\n");
+        printf("****************\n");
+        goto restart;
+    }
 
-    delete g.ui_MainMenu;
-    delete g.ui_FadeTransition;
-    delete g.ui_Notification;
-    delete ui_Options;
-    delete g.ui_Interact;
     delete g.rng;
-    delete g.time_display;
-    delete g.weapon_switcher;
-    delete g.hand_combat;
-
-    for(auto&& button : g.main_buttons)
-        delete button;
-    for(auto&& skill : g.skills)
-        delete skill;
-    for(auto&& gridinfo : g.gridinfo_store)
-        delete gridinfo;
-    for(auto&& recipe : recipes)
-        delete recipe;
-    for(auto&& loc : g.location_info)
-        if(loc.location_item->isTextItem() == false)
-            delete loc.location_item;
-    for(auto&& i : g.text_items)
-        delete i.second;
-    for(auto&& s : g.stories)
-        delete s.second;
-    for(auto&& ii : g.item_info)
-        free((char*)ii.name);
-
-    g.stories.clear();
-    g.map_stories.clear();
-    g.item_info.clear();
-    g.location_info.clear();
-    g.text_items.clear();
 
     info("Bye");
+
     stop_logging();
 
     return 0;
