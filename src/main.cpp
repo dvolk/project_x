@@ -40,7 +40,7 @@
 #include "./sound.h"
 #include "./fadetransitionui.h"
 
-const int COMPILED_VERSION = 11; // save game version
+const int COMPILED_VERSION = 12; // save game version
 
 using namespace std;
 
@@ -82,6 +82,11 @@ OptionsUI *ui_Options;
 
 int mouse_x;
 int mouse_y;
+
+struct WeatherInfo {
+    const char *name;
+    vector<int> bmaps;
+};
 
 // global state
 struct Game {
@@ -208,6 +213,8 @@ struct Game {
     //                 ^^      ^^
     //         map position   story name
     unordered_map<const char *, Item *> text_items;
+
+    vector<WeatherInfo> weatherinfo;
 
     bool encounterInterrupt; // player
     int ai_encounterInterrupt; // AI at index (value is position)
@@ -1791,6 +1798,37 @@ struct RealityBubble {
     int radius;
 };
 
+static void init_weatherinfo(void) {
+    WeatherInfo clear;
+    clear.name = "Clear";
+    clear.bmaps = { -1 }; // -1: no bitmaps
+
+    WeatherInfo raining;
+    raining.name = "Raining";
+    raining.bmaps = { 118, 119 };
+
+    g.weatherinfo.push_back(clear);
+    g.weatherinfo.push_back(raining);
+}
+
+struct Weather {
+    int idx; // index into g.weather_info;
+    int bitmap; // index into g.bitmaps[], -1 = don't draw
+    int duration;
+    int frame;
+
+    void save(ostream &os);
+    void load(istream &is);
+};
+
+void Weather::save(ostream &os) {
+    os << idx << ' ' << duration << ' ' << bitmap << ' ' << frame << endl;
+}
+
+void Weather::load(istream &is) {
+    is >> idx >> duration >> bitmap >> frame;
+}
+
 struct TileMap : public Widget {
     // display dimensions
     int cols;
@@ -1843,6 +1881,8 @@ struct TileMap : public Widget {
     ALLEGRO_COLOR notseen_tile_tint;
     ALLEGRO_COLOR mouseover_tile_tint;
 
+    Weather weather;
+
     TileMap(int sx, int sy, int cols, int rows);
     ~TileMap();
 
@@ -1885,6 +1925,7 @@ struct TileMap : public Widget {
     bool blocks_los(int n);
 
     void runEcology();
+    void runWeather();
 
     int random_uninhabited_position(void);
     int random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2);
@@ -1899,9 +1940,29 @@ struct TileMap : public Widget {
     void updateColors(void);
 };
 
+void init_weather(void) {
+    g.map->weather.idx = 1; // rain;
+    g.map->weather.duration = 0;
+    g.map->weather.frame = 0;
+
+    g.map->weather.bitmap = g.weatherinfo[g.map->weather.idx].bmaps.front();
+}
+
 void TileMap::update(void) {
     // handles smooth scrolling
     int d = 1000 * g.dt;
+
+    // update the weather animation at 6fps
+    static int c;
+    if(c == 10) {
+        c = 0;
+        weather.frame++;
+        if(weather.frame > (int)g.weatherinfo[weather.idx].bmaps.size() - 1)
+            weather.frame = 0;
+        weather.bitmap = g.weatherinfo[weather.idx].bmaps[weather.frame];
+    }
+    else
+        c++;
 
     // keyboard scrolling
     if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_UP))
@@ -1981,6 +2042,20 @@ void TileMap::addLabel(int n, const char *text) {
 }
 
 static char *random_human_NPC_name(void);
+
+void TileMap::runWeather() {
+    printf("weather.duration: %d\n", weather.duration);
+    weather.duration += g.map->player->dt;
+    printf("weather.duration: %d\n", weather.duration);
+    if(weather.duration > 4000) {
+        weather.duration = 0;
+        weather.idx++;
+        if(weather.idx > (int)g.weatherinfo.size() - 1) {
+            weather.idx = 0;
+        }
+        weather.bitmap = g.weatherinfo[weather.idx].bmaps[0];
+    }
+}
 
 void TileMap::runEcology() {
     int removed = 0;
@@ -3802,6 +3877,12 @@ void TileMap::drawTile(int i, int x, int y) {
                 offset_y += 10;
             }
         }
+        if(weather.bitmap != -1)
+            al_draw_tinted_bitmap(g.bitmaps[weather.bitmap],
+                                  seen_tile_tint,
+                                  pos.x1 + off_x,
+                                  pos.y1 + off_y,
+                                  0);
     }
     else {
         /*
@@ -4566,6 +4647,8 @@ static void end_turn() {
         {
             runPlayerEncounter();
         }
+
+    g.map->runWeather();
 
     g.map->player->update();
 
@@ -8855,6 +8938,8 @@ static void load_bitmaps(void) {
     /* 115 */ filenames.push_back("media/items/abstract/wait.png");
     /* 116 */ filenames.push_back("media/items/abstract/warn.png");
     /* 117 */ filenames.push_back("media/items/abstract/leave.png");
+    /* 118 */ filenames.push_back("media/tile/rain1.png");
+    /* 119 */ filenames.push_back("media/tile/rain2.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -9195,6 +9280,7 @@ static void init_tileinfo(void) {
 
 static void init_tilemap(void) {
     init_tileinfo();
+    init_weather();
     g.map->generate();
 }
 
@@ -9930,6 +10016,8 @@ void TileMap::save(ostream &os) {
         label.save(os);
         os << '\n';
     }
+
+    weather.save(os);
 }
 
 void TileMap::load(istream &is) {
@@ -9989,6 +10077,8 @@ void TileMap::load(istream &is) {
         tmp.load(is);
         labels.push_back(tmp);
     }
+
+    weather.load(is);
 }
 
 void save_map_stories(ostream &os) {
@@ -10289,6 +10379,7 @@ void load(void) {
         init_recipes();
         init_skills();
         init_locationdata();
+        init_weatherinfo();
         init_timedisplay();
         init_misc();
         init_text_items();
@@ -10309,6 +10400,8 @@ void load(void) {
     al_set_target_backbuffer(g.display);
 }
 
+bool restart = false;
+
 int main(int argc, char **argv) {
 
     logo();
@@ -10324,7 +10417,6 @@ int main(int argc, char **argv) {
       warn user if it's less than 2048x2048
      */
     bool restart_load_game = false;
-    bool restart = false;
 
  restart:
     load();
