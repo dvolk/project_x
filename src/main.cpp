@@ -39,8 +39,9 @@
 #include "./optionsui.h"
 #include "./sound.h"
 #include "./fadetransitionui.h"
+#include "./animation.h"
 
-const int COMPILED_VERSION = 12; // save game version
+const int COMPILED_VERSION = 13; // save game version
 
 using namespace std;
 
@@ -86,6 +87,7 @@ int mouse_y;
 struct WeatherInfo {
     const char *name;
     vector<int> bmaps;
+    int fps;
 };
 
 // global state
@@ -1802,10 +1804,12 @@ static void init_weatherinfo(void) {
     WeatherInfo clear;
     clear.name = "Clear";
     clear.bmaps = { -1 }; // -1: no bitmaps
+    clear.fps = 1;
 
     WeatherInfo raining;
     raining.name = "Raining";
     raining.bmaps = { 118, 119 };
+    raining.fps = 10;
 
     g.weatherinfo.push_back(clear);
     g.weatherinfo.push_back(raining);
@@ -1813,20 +1817,23 @@ static void init_weatherinfo(void) {
 
 struct Weather {
     int idx; // index into g.weather_info;
-    int bitmap; // index into g.bitmaps[], -1 = don't draw
     int duration;
-    int frame;
+
+    Animation anim;
 
     void save(ostream &os);
     void load(istream &is);
 };
 
 void Weather::save(ostream &os) {
-    os << idx << ' ' << duration << ' ' << bitmap << ' ' << frame << endl;
+    os << idx << ' ' << duration << ' ' << endl;
 }
 
 void Weather::load(istream &is) {
-    is >> idx >> duration >> bitmap >> frame;
+    is >> idx >> duration;
+
+    anim.setup(&g.weatherinfo[idx].bmaps,
+               g.weatherinfo[idx].fps);
 }
 
 struct TileMap : public Widget {
@@ -1943,26 +1950,16 @@ struct TileMap : public Widget {
 void init_weather(void) {
     g.map->weather.idx = 1; // rain;
     g.map->weather.duration = 0;
-    g.map->weather.frame = 0;
 
-    g.map->weather.bitmap = g.weatherinfo[g.map->weather.idx].bmaps.front();
+    g.map->weather.anim.setup(&g.weatherinfo[g.map->weather.idx].bmaps,
+                              g.weatherinfo[g.map->weather.idx].fps);
 }
 
 void TileMap::update(void) {
     // handles smooth scrolling
     int d = 1000 * g.dt;
 
-    // update the weather animation at 6fps
-    static int c;
-    if(c == 10) {
-        c = 0;
-        weather.frame++;
-        if(weather.frame > (int)g.weatherinfo[weather.idx].bmaps.size() - 1)
-            weather.frame = 0;
-        weather.bitmap = g.weatherinfo[weather.idx].bmaps[weather.frame];
-    }
-    else
-        c++;
+    weather.anim.update();
 
     // keyboard scrolling
     if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_UP))
@@ -2044,16 +2041,18 @@ void TileMap::addLabel(int n, const char *text) {
 static char *random_human_NPC_name(void);
 
 void TileMap::runWeather() {
-    printf("weather.duration: %d\n", weather.duration);
+    /*
+      change the weather
+     */
     weather.duration += g.map->player->dt;
-    printf("weather.duration: %d\n", weather.duration);
     if(weather.duration > 4000) {
         weather.duration = 0;
         weather.idx++;
         if(weather.idx > (int)g.weatherinfo.size() - 1) {
             weather.idx = 0;
         }
-        weather.bitmap = g.weatherinfo[weather.idx].bmaps[0];
+        weather.anim.setup(&g.weatherinfo[weather.idx].bmaps,
+                           g.weatherinfo[weather.idx].fps);
     }
 }
 
@@ -3877,8 +3876,8 @@ void TileMap::drawTile(int i, int x, int y) {
                 offset_y += 10;
             }
         }
-        if(weather.bitmap != -1)
-            al_draw_tinted_bitmap(g.bitmaps[weather.bitmap],
+        if(weather.anim.bitmap != -1)
+            al_draw_tinted_bitmap(g.bitmaps[weather.anim.bitmap],
                                   seen_tile_tint,
                                   pos.x1 + off_x,
                                   pos.y1 + off_y,
