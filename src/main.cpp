@@ -40,6 +40,10 @@
 #include "./sound.h"
 #include "./fadetransitionui.h"
 #include "./animation.h"
+#include "./gridinfo.h"
+#include "./weatherinfo.h"
+#include "./iteminfo.h"
+#include "./itemdefs.h"
 
 const int COMPILED_VERSION = 13; // save game version
 
@@ -63,8 +67,6 @@ struct CampUI;
 struct ScavengeUI;
 struct InteractUI;
 struct HelpUI;
-struct GridInfo;
-struct ItemInfo;
 struct LocationInfo;
 struct Item;
 struct TimeDisplay;
@@ -83,12 +85,6 @@ OptionsUI *ui_Options;
 
 int mouse_x;
 int mouse_y;
-
-struct WeatherInfo {
-    const char *name;
-    vector<int> bmaps;
-    int fps;
-};
 
 // global state
 struct Game {
@@ -239,8 +235,6 @@ struct Game {
 };
 
 static Game g;
-
-#include "./itemdefs.h"
 
 // an item is something that lives on the grid
 struct Item {
@@ -514,28 +508,6 @@ void MessageLog::load(istream &is) {
     for(auto&& line : lines)
         getline(is, line);
 }
-
-struct GridInfo {
-    ALLEGRO_BITMAP *sprite;
-    int16_t maxItems;
-    bool noGrid;
-    bool canHoldLiquid;
-    bool vehiclepoint;
-    bool medical;
-    bool visible;
-    bool pleaseRotateIt;
-
-    GridInfo() {
-        vehiclepoint = false;
-        maxItems = 1;
-        noGrid = true;
-        canHoldLiquid = false;
-        sprite = NULL;
-        medical = false;
-        visible = true;
-        pleaseRotateIt = false;
-    }
-};
 
 void init_hardpointinfo(void) {
     g.right_hand_hold = new GridInfo;
@@ -2379,7 +2351,7 @@ int distance_to_player(int n) {
 }
 
 bool different_factions(Character *c1, Character *c2) {
-    return c1->faction != c1->faction;
+    return c1->faction != c2->faction;
 }
 
 // do stuff on the map
@@ -9554,7 +9526,7 @@ static void allegro_init(void) {
                config.setClipRectangle == true)
                 al_set_clipping_rectangle(g.tx * g.scale + 1, g.ty * g.scale + 1,
                                           g.display_x * g.scale,
-                                          g.display_y * g.scale);
+                                          g.display_y * g.scale - 1);
         }
         else {
             g.display_x = sx;
@@ -9758,6 +9730,53 @@ static void new_game(void) {
     init_UIs();
 }
 
+int find_bitmap_index(ALLEGRO_BITMAP *searched) {
+    size_t i = 0;
+    for(auto&& bitmap : g.bitmaps) {
+        if(bitmap == searched)
+            return i;
+        i++;
+    }
+    return -1;
+}
+
+ALLEGRO_BITMAP *get_global_bitmap(size_t n) {
+    return g.bitmaps[n];
+}
+
+void save_ItemInfo(void) {
+    ofstream out("data/item_info.txt", ios::out);
+    if(out.fail() == true)
+        errorQuit("failed to open data/item_info.txt for writing");
+
+    out << g.item_info.size() - 1 << endl;
+
+    for(auto&& ii : g.item_info)
+        ii.save(out);
+
+    out.close();
+}
+
+void load_ItemInfo(void) {
+    ifstream in("data/item_info.txt", ios::in);
+    if(in.fail() == true)
+        errorQuit("failed to open data/item_info.txt for reading");
+
+    int item_info_size;
+    in >> item_info_size;
+
+    ItemInfo tmp;
+    for(int i = 0; i <= item_info_size; i++) {
+        tmp.load(in);
+        g.item_info.push_back(tmp);
+    }
+    in.close();
+}
+
+vector<ItemInfo>& get_global_iteminfo(void) {
+    return g.item_info;
+}
+
 void Disease::save(ostream &os) {
     os << duration << ' ' << vulnerability << ' ';
 }
@@ -9780,16 +9799,6 @@ void Label::load(istream &is) {
     is.read(&text[0], text_len);
     text[text_len] = '\0';
     this->text = text;
-}
-
-static int find_bitmap_index(ALLEGRO_BITMAP *searched) {
-    size_t i = 0;
-    for(auto&& bitmap : g.bitmaps) {
-        if(bitmap == searched)
-            return i;
-        i++;
-    }
-    return -1;
 }
 
 void Item::save(ostream &os) {
@@ -10389,6 +10398,7 @@ void load(void) {
 
         g.ui_MainMenu = new MainMenuUI;
         g.ui_FadeTransition = new FadeTransitionUI;
+        set_fade_time(1.0);
         g.ui_Notification = new NotificationUI;
         ui_Options = new OptionsUI;
 
@@ -10430,7 +10440,6 @@ int main(int argc, char **argv) {
         switchToMainMenu();
         if(config.start_nag == true)
             notify("This is pre-alpha software. Please report bugs and give feedback!");
-        set_fade_time(0.5);
         fade_to_UI();
     }
     else if(load_filename != NULL) {
@@ -10460,7 +10469,6 @@ int main(int argc, char **argv) {
     running = true;
     restart = false;
     restart_load_game = false;
-
 
     // main loop
     while(running) {
