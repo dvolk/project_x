@@ -1193,6 +1193,40 @@ enum WEAPON_USE_RESULT {
     WEAPON_USE_OUT_OF_AMMO,
 };
 
+struct ai_state {
+    int fleeing;
+
+    ai_state();
+
+    void save(ostream &os);
+    void load(istream &is);
+};
+
+ai_state::ai_state() {
+    fleeing = 0;
+}
+
+void ai_state::save(ostream &os) {
+    os << fleeing << ' ';
+}
+
+void ai_state::load(istream &is) {
+    is >> fleeing;
+}
+
+// stats associated with characters but only needed during an
+// encounter
+struct encounter_state {
+    bool visible;
+    Item *last_move;
+    int warned;
+    int warned_other;
+    bool in_cover;
+
+    void reset(void);
+    void wait(void);
+};
+
 struct Character {
     int n; // position by offset
     int x, y; // cache to avoid computations
@@ -1258,6 +1292,9 @@ struct Character {
 
     ActivityKind activity;
 
+    encounter_state es;
+    ai_state ai;
+
     vector<Grid *> inventory_hardpoints;
     vector<Grid *> clothing;
     vector<Grid *> medical_hardpoints;
@@ -1305,7 +1342,7 @@ struct Character {
     void addInventoryHardpoints(GridSystem *gs);
     void addVehicleHardpoint(GridSystem *gs);
 
-    void do_AI(void);
+    void do_map_AI(void);
     void die(void);
     void drop_all_items(void);
     void randomMove(void);
@@ -1326,7 +1363,7 @@ struct Character {
     void sleep(void);
     void wait(void);
 
-    enum WEAPON_USE_RESULT useWeapon(void);
+    enum WEAPON_USE_RESULT useWeapon(Character *against);
     void abuseItem(Item *item, float dt);
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
@@ -2354,8 +2391,15 @@ bool different_factions(Character *c1, Character *c2) {
     return c1->faction != c2->faction;
 }
 
+enum AI_MAP_ACTION {
+    AI_ATTACK,
+    AI_AVOID,
+    AI_FLEE,
+    AI_WANDER,
+};
+
 // do stuff on the map
-void Character::do_AI(void) {
+void Character::do_map_AI(void) {
     if(health < 0.01) {
         this->die();
         return;
@@ -2366,14 +2410,50 @@ void Character::do_AI(void) {
     bool very_healthy = health > 0.95;
     bool player_near = distance_to_player(n) < 4;
     bool player_enemy = different_factions(this, g.map->player);
+    bool fleeing = ai.fleeing > 0;
 
-    if(very_healthy && player_near && player_enemy) {
-        ai_move_toward(g.map->player->n);
-    } else if(health < 0.5)
-        ai_avoid();
-    else {
-        randomMove();
+    AI_MAP_ACTION action;
+
+    if(fleeing == true) {
+        action = AI_FLEE;
+        goto act;
     }
+    if(very_healthy && player_near && player_enemy) {
+        action = AI_ATTACK;
+        goto act;
+    }
+    if(very_healthy == false) {
+        action = AI_AVOID;
+        goto act;
+    }
+    action = AI_WANDER;
+    goto act;
+
+ act:
+    switch(action)
+        {
+        case AI_FLEE:
+            {
+                ai_avoid();
+                ai.fleeing -= 1;
+            }
+            break;
+        case AI_AVOID:
+            {
+                ai_avoid();
+            }
+            break;
+        case AI_ATTACK:
+            {
+                ai_move_toward(g.map->player->n);
+            }
+            break;
+        case AI_WANDER:
+            {
+                randomMove();
+            }
+            break;
+        }
 
     post_update();
 }
@@ -2423,7 +2503,7 @@ void Character::abuseItem(Item *item, float amount) {
     }
 }
 
-enum WEAPON_USE_RESULT Character::useWeapon(void) {
+enum WEAPON_USE_RESULT Character::useWeapon(Character *against) {
     if(consumeWeaponAmmo() == false)
         return WEAPON_USE_OUT_OF_AMMO;
 
@@ -4543,7 +4623,7 @@ static void processAI(void) {
     Character *c;
     while((c = next()) != g.map->player)
         {
-            c->do_AI();
+            c->do_map_AI();
             if(g.ai_encounterInterrupt != -1) {
                 runAIEncounter(g.ai_encounterInterrupt);
             }
@@ -4605,7 +4685,7 @@ static void end_turn() {
         {
             printf("%s (%d), ", c->name, c->nextMove);
 
-            c->do_AI();
+            c->do_map_AI();
             if(g.ai_encounterInterrupt != -1) {
                 runAIEncounter(g.ai_encounterInterrupt);
             }
@@ -5051,25 +5131,11 @@ static void runCrafting(void) {
     updateCraftingOutput();
 }
 
-// stats associated with characters but only needed during an
-// encounter
-struct EncounterCharacter {
-    bool visible;
-    Item *last_move;
-    int warned;
-    int warned_other;
-    bool in_cover;
-
-    void reset(void);
-
-    void wait(void);
-};
-
-void EncounterCharacter::wait(void) {
-    info("EncounterCharacter::wait()");
+void encounter_state::wait(void) {
+    info("encounter_state::wait()");
 }
 
-void EncounterCharacter::reset(void) {
+void encounter_state::reset(void) {
     visible = false;
     last_move = NULL;
     warned_other = 0;
@@ -5112,11 +5178,10 @@ private:
 
     Character *c1;
     Character *c2;
-    EncounterCharacter ec1;
-    EncounterCharacter ec2;
 
     // the distance between the characters (approx. [m])
     int range;
+    int detection_range;
 
     // general
     void advance(int steps);
@@ -5132,6 +5197,8 @@ private:
     void npcEncounterStep(void);
     bool isEncounterNPCdead(void);
     bool involvesPlayer(void);
+    void set_start_range(void);
+    void set_detection_range(void);
 
 public:
     Encounter(void);
@@ -5157,7 +5224,7 @@ public:
     const char *getTerrainDifficulty(void);
     const char *getBestCover(void);
     const char *getWeather(void);
-    EncounterCharacter *getEChar(int n);
+    // encounter_state *getEChar(int n);
 
     Item *getLastMove(int n);
     ALLEGRO_BITMAP *get_character_sprite(int i);
@@ -5174,7 +5241,7 @@ bool Encounter::isBurdened(int n) {
 }
 
 const char *Encounter::getCover(int n) {
-    return getEChar(n)->in_cover == true ? "yes" : "no";
+    return getChar(n)->es.in_cover == true ? "yes" : "no";
 }
 
 const char *Encounter::getTerrainDifficulty(void) {
@@ -5186,24 +5253,24 @@ const char *Encounter::getBestCover(void) {
 }
 
 const char *Encounter::getWeather(void) {
-    return "cold, raining";
+    return g.weatherinfo[g.map->weather.idx].name;
 }
 
 const Character *Encounter::getChar(int n) {
     return n == 0 ? c1 : c2;
 }
 
-EncounterCharacter *Encounter::getEChar(int n) {
-    return n == 0 ? &ec1 : &ec2;
-}
+// encounter_state & Encounter::getEChar(int n) {
+//     return getChar(n).es;
+// }
 
 void Encounter::updateVisibility(void) {
-    if(range <= 6) {
-        ec1.visible = true;
-        ec2.visible = true;
+    if(range <= detection_range) {
+        c1->es.visible = true;
+        c2->es.visible = true;
     } else {
-        ec1.visible = false;
-        ec2.visible = false;
+        c1->es.visible = false;
+        c2->es.visible = false;
     }
 }
 
@@ -5248,6 +5315,8 @@ struct EncounterUI : public UI {
     void drawCenterPane(float x, float y);
 
     void setup(void);
+
+    void addPlayerOptions(void);
 };
 
 Item *item_from_action(enum ENCOUNTER_ACTION action) {
@@ -5273,7 +5342,7 @@ Encounter::Encounter(void) {
 }
 
 bool Encounter::seesOpponent(int n) {
-    return n == 0 ? ec2.visible : ec1.visible;
+    return n == 0 ? c2->es.visible : c1->es.visible;
 }
 
 bool Encounter::isRunning(void) { return running; }
@@ -5334,14 +5403,50 @@ void Encounter::retreat(int steps) {
     range += steps;
 }
 
+void Encounter::set_detection_range(void) {
+    detection_range = (float)range * 0.5;
+}
+
+void Encounter::set_start_range(void) {
+    switch(g.time_display->time_zone)
+        {
+        case 0: // dawn
+            {
+                range = 15;
+            }
+            break;
+        case 1: // day
+            {
+                range = 20;
+            }
+            break;
+        case 2: // dusk
+            {
+                range = 10;
+            }
+            break;
+        case 3: // night
+            {
+                range = 5;
+            }
+            break;
+        }
+
+    if(g.map->weather.idx == 1) {
+        range = (float)range * 0.7;
+    }
+}
+
 void Encounter::setup(Character *c1, Character *c2) {
     info("Encounter::setup()");
     this->c1 = c1;
     this->c2 = c2;
-    ec1.reset();
-    ec2.reset();
+    c1->es.reset();
+    c2->es.reset();
+    set_start_range();
+    set_detection_range();
     running = true;
-    range = 10;
+
     info("Encounter::setup() exit");
 }
 
@@ -5387,7 +5492,7 @@ void Encounter::runAIEncounter(int n) {
         cs++;
         c2 = cs->second;
 
-        range = 10;
+        setup(c1, c2);
 
         printf("Fight!\n");
         printf("%15s\t%15s\n", c1->name, c2->name);
@@ -5418,7 +5523,7 @@ void Encounter::endEncounter(void) {
     running = false;
     g.encounterInterrupt = false;
 
-    c2->do_AI(); // this removes the npc if they're dead
+    c2->do_map_AI(); // this removes the npc if they're dead
     processAI();
 
     g.map->updateCharsByPos();
@@ -5466,10 +5571,10 @@ void Encounter::npcEncounterStep(int n) {
 
     Character *_c1 = n == 0 ? c1 : c2;
     Character *_c2 = n == 0 ? c2 : c1;
-    // EncounterCharacter *_ec1 = n == 0 ? &ec1 : &ec2;
-    EncounterCharacter *_ec2 = n == 0 ? &ec2 : &ec1;
+    // encounter_state *_ec1 = n == 0 ? &ec1 : &ec2;
+    // encounter_state *c2->es_ec2 = n == 0 ? &ec2 : &ec1;
 
-    int warned = _ec2->warned;
+    int warned = _c2->es.warned;
     bool is_wild = _c2->faction == FACTION_WILD;
     bool is_coward = _c2->faction == FACTION_SCIENTISTS;
     float healthy_warning_bonus = 0.0;
@@ -5485,7 +5590,7 @@ void Encounter::npcEncounterStep(int n) {
     bool hasammo = _c2->hasAmmoForWeapon();
     bool samefaction = seesenemy && _c1->faction == _c2->faction;
     bool hidden = range >= 7;
-    bool said_hello = _ec2->warned_other >= 1;
+    bool said_hello = _c2->es.warned_other >= 1;
     bool can_flee = hidden;
 
     enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
@@ -5536,7 +5641,7 @@ void Encounter::npcEncounterStep(int n) {
     */
  act:
 
-    getEChar(n == 0 ? 1 : 0)->last_move = item_from_action(action);
+    _c2->es.last_move = item_from_action(action);
 
     switch(action) {
 
@@ -5554,6 +5659,7 @@ void Encounter::npcEncounterStep(int n) {
                     sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
                     cout << _c2 << " fled successfully" << endl;
                 }
+                _c2->ai.fleeing = 2;
                 _c2->randomMove();
             } else {
                 if(involvesPlayer() == true)
@@ -5570,12 +5676,13 @@ void Encounter::npcEncounterStep(int n) {
     case ATTACK:
         {
             // we're in range, see the opponent and have enough ammo
-            enum WEAPON_USE_RESULT used_result = _c2->useWeapon();
+            enum WEAPON_USE_RESULT used_result = _c2->useWeapon(_c1);
             switch(used_result) {
 
             case WEAPON_USE_SUCCESS:
                 {
                     _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
+
                     if(involvesPlayer() == true)
                         sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
                     else
@@ -5637,7 +5744,7 @@ void Encounter::npcEncounterStep(int n) {
             if(g.map->playerSees(_c1->n))
                 g.AddMessage(buf);
 
-            _ec2->warned_other++;
+            _c2->es.warned_other++;
         }
         break;
 
@@ -5689,8 +5796,8 @@ void Encounter::runPlayerEncounterStep(void) {
 
     printf("Encounter::runPlayerEncounterStep() npc name %s\n", c2->name);
 
-    getEChar(0)->last_move = item_from_action(action1);
-    getEChar(0)->in_cover = true;
+    c1->es.last_move = item_from_action(action1);
+    c1->es.in_cover = true;
 
     switch(action1) {
 
@@ -5700,7 +5807,7 @@ void Encounter::runPlayerEncounterStep(void) {
             bool successfully_fled = fled_dist(*g.rng) > 0;
 
             if(successfully_fled == true) {
-                if(c2->useWeapon() == true)
+                if(c2->useWeapon(c1) == true)
                     c1->hurt(c2->getSelectedWeapon()->get_weapon_damage() / 3);
 
                 // TODO case of player died?
@@ -5726,7 +5833,7 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case ATTACK:
         {
-            enum WEAPON_USE_RESULT used_result = c1->useWeapon();
+            enum WEAPON_USE_RESULT used_result = c1->useWeapon(c2);
             switch(used_result) {
 
             case WEAPON_USE_SUCCESS:
@@ -5766,14 +5873,14 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case WAIT:
         {
-            getEChar(0)->wait();
+            c1->es.wait();
             g.AddMessage("You wait a bit");
         }
         break;
 
     case WARN:
         {
-            getEChar(1)->warned++;
+            c2->es.warned++;
         }
         break;
 
@@ -5807,6 +5914,22 @@ void Encounter::runPlayerEncounterStep(void) {
     info("Encounter::runPlayerEncounterStep() exit");
 }
 
+void EncounterUI::addPlayerOptions(void) {
+    encounterGrids->options->PlaceItem(wait);
+    encounterGrids->options->PlaceItem(flee);
+    if(encounter.seesOpponent(0)) {
+        encounterGrids->options->PlaceItem(warn);
+    }
+    if(encounter.playerInRange() == true) {
+        encounterGrids->options->PlaceItem(single_attack);
+    }
+    if(encounter.getChar(0)->faction == encounter.getChar(1)->faction) {
+        encounterGrids->options->PlaceItem(leave);
+    }
+    encounterGrids->options->PlaceItem(retreat);
+    encounterGrids->options->PlaceItem(advance);
+}
+
 void EncounterUI::setup(void) {
     info("EncounterUI::setup()");
 
@@ -5832,21 +5955,9 @@ void EncounterUI::setup(void) {
     encounterGrids->options->items.clear();
     widgets.push_back(encounterGrids);
 
-    encounterGrids->options->PlaceItem(wait);
-    encounterGrids->options->PlaceItem(flee);
-    if(encounter.seesOpponent(0)) {
-        encounterGrids->options->PlaceItem(warn);
-    }
-    if(encounter.playerInRange() == true) {
-        encounterGrids->options->PlaceItem(single_attack);
-    }
-    if(encounter.getChar(0)->faction == encounter.getChar(1)->faction) {
-        encounterGrids->options->PlaceItem(leave);
-    }
-    encounterGrids->options->PlaceItem(retreat);
-    encounterGrids->options->PlaceItem(advance);
-
     encounter.updateVisibility();
+    addPlayerOptions();
+
     info("EncounterUI::setup() exit");
 }
 
@@ -5948,7 +6059,7 @@ EncounterUI::~EncounterUI() {
 }
 
 Item *Encounter::getLastMove(int n) {
-    return getEChar(n)->last_move;
+    return getChar(n)->es.last_move;
 }
 
 void EncounterUI::drawCharacterSheet(int n, float x, float y) {
@@ -9910,6 +10021,8 @@ void Character::save(ostream &os) {
 
     for(auto&& d : diseases)
         d.save(os);
+
+    ai.save(os);
 }
 
 void Character::load(istream &is) {
@@ -9964,6 +10077,8 @@ void Character::load(istream &is) {
     diseases.resize(DISEASE_MAX);
     for(auto&& d : diseases)
         d.load(is);
+
+    ai.load(is);
 }
 
 void Location::save(ostream &os) {
