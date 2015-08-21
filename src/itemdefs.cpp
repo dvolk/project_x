@@ -891,7 +891,7 @@ void init_iteminfo(void) {
     tmp.slot = SLOT_NONE;
     get_global_iteminfo().push_back(tmp);
 
-    // 40
+    // 41
     tmp.name = "Warn";
     tmp.grid_size_x = 2;
     tmp.grid_size_y = 2;
@@ -910,13 +910,51 @@ void init_iteminfo(void) {
     tmp.slot = SLOT_NONE;
     get_global_iteminfo().push_back(tmp);
 
-    // 40
+    // 42
     tmp.name = "Leave";
     tmp.grid_size_x = 2;
     tmp.grid_size_y = 2;
     tmp.maxStack = 1;
     tmp.weight = -1;
     tmp.sprite = get_global_bitmap(117);
+    tmp.sprite_on_hp = NULL;
+    tmp.isContainer = false;
+    tmp.isEncounterAction = true;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    get_global_iteminfo().push_back(tmp);
+
+    // 43
+    tmp.name = "Enter cover";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = get_global_bitmap(120);
+    tmp.sprite_on_hp = NULL;
+    tmp.isContainer = false;
+    tmp.isEncounterAction = true;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    get_global_iteminfo().push_back(tmp);
+
+    // 44
+    tmp.name = "Leave cover";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = get_global_bitmap(121);
     tmp.sprite_on_hp = NULL;
     tmp.isContainer = false;
     tmp.isEncounterAction = true;

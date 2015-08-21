@@ -1831,14 +1831,23 @@ static void init_weatherinfo(void) {
     clear.name = "Clear";
     clear.bmaps = { -1 }; // -1: no bitmaps
     clear.fps = 1;
+    clear.duration = 7000;
 
     WeatherInfo raining;
     raining.name = "Raining";
     raining.bmaps = { 118, 119 };
     raining.fps = 10;
+    raining.duration = 3000;
+
+    WeatherInfo foggy;
+    foggy.name = "Fog";
+    foggy.bmaps = { 122 };
+    foggy.fps = 1;
+    foggy.duration = 2000;
 
     g.weatherinfo.push_back(clear);
     g.weatherinfo.push_back(raining);
+    g.weatherinfo.push_back(foggy);
 }
 
 struct Weather {
@@ -2100,15 +2109,19 @@ void TileMap::runWeather() {
       change the weather
      */
     weather.duration += g.map->player->dt;
-    if(weather.duration > 4000) {
-        weather.duration = 0;
-        weather.idx++;
-        if(weather.idx > (int)g.weatherinfo.size() - 1) {
-            weather.idx = 0;
+    printf("*** weather: %d %d %d\n", weather.idx, weather.duration, g.weatherinfo[weather.idx].duration);
+
+    if(weather.duration > g.weatherinfo[weather.idx].duration)
+        {
+            uniform_int_distribution<>
+                next_weather_dist(0, g.weatherinfo.size() - 1);
+
+            weather.idx = next_weather_dist(*g.rng);
+            weather.duration = 0;
+
+            weather.anim.setup(&g.weatherinfo[weather.idx].bmaps,
+                               g.weatherinfo[weather.idx].fps);
         }
-        weather.anim.setup(&g.weatherinfo[weather.idx].bmaps,
-                           g.weatherinfo[weather.idx].fps);
-    }
 }
 
 void TileMap::runEcology() {
@@ -5222,6 +5235,8 @@ enum ENCOUNTER_ACTION {
     WAIT,
     WARN,
     LEAVE,
+    ENTER_COVER,
+    LEAVE_COVER,
     ENCOUNTER_ACTION_MAX
 };
 
@@ -5240,6 +5255,10 @@ enum ENCOUNTER_ACTION string_to_action(const char *str) {
         return WARN;
     if(strcmp(str, "Leave") == 0)
         return LEAVE;
+    if(strcmp(str, "Enter cover") == 0)
+        return ENTER_COVER;
+    if(strcmp(str, "Leave cover") == 0)
+        return LEAVE_COVER;
     assert(false);
 }
 
@@ -5378,6 +5397,8 @@ struct EncounterUI : public UI {
     Item *wait;
     Item *warn;
     Item *leave;
+    Item *enter_cover;
+    Item *leave_cover;
 
     const float l_pane_x = 202;
     const float l_pane_y = 65;
@@ -5414,6 +5435,10 @@ Item *item_from_action(enum ENCOUNTER_ACTION action) {
         return g.ui_Encounter->warn;
     if(action == LEAVE)
         return g.ui_Encounter->leave;
+    if(action == ENTER_COVER)
+        return g.ui_Encounter->enter_cover;
+    if(action == LEAVE_COVER)
+        return g.ui_Encounter->leave_cover;
     assert(false);
 }
 
@@ -5879,6 +5904,17 @@ void Encounter::npcEncounterStep(int n) {
         }
         break;
 
+    case ENTER_COVER:
+        {
+            // TODO
+        }
+        break;
+
+    case LEAVE_COVER:
+        {
+            // TODO
+        }
+        break;
 
     default:
         {
@@ -5910,7 +5946,6 @@ void Encounter::runPlayerEncounterStep(void) {
     printf("Encounter::runPlayerEncounterStep() npc name %s\n", c2->name);
 
     c1->es.last_move = item_from_action(action1);
-    c1->es.in_cover = true;
 
     switch(action1) {
 
@@ -6005,6 +6040,22 @@ void Encounter::runPlayerEncounterStep(void) {
         }
         break;
 
+    case ENTER_COVER:
+        {
+            c1->es.in_cover = true;
+            g.AddMessage("You jiggle your parts into cover.");
+            // TODO
+        }
+        break;
+
+    case LEAVE_COVER:
+        {
+            c1->es.in_cover = false;
+            g.AddMessage("You jiggle your parts out of cover.");
+            // TODO
+        }
+        break;
+
     default:
         {
             assert(false);
@@ -6033,6 +6084,12 @@ void Encounter::runPlayerEncounterStep(void) {
 void EncounterUI::addPlayerOptions(void) {
     encounterGrids->options->PlaceItem(wait);
     encounterGrids->options->PlaceItem(flee);
+    if(encounter.getChar(0)->es.in_cover == false) {
+        encounterGrids->options->PlaceItem(enter_cover);
+    }
+    if(encounter.getChar(0)->es.in_cover == true) {
+        encounterGrids->options->PlaceItem(leave_cover);
+    }
     if(encounter.seesOpponent(0)) {
         encounterGrids->options->PlaceItem(warn);
     }
@@ -6139,6 +6196,8 @@ EncounterUI::EncounterUI() {
     wait = new Item ("Wait");
     warn = new Item ("Warn");
     leave = new Item ("Leave");
+    enter_cover = new Item("Enter cover");
+    leave_cover = new Item("Leave cover");
 
     unknown_character_sprite = g.bitmaps[83];
 
@@ -6162,6 +6221,8 @@ EncounterUI::~EncounterUI() {
     delete wait;
     delete warn;
     delete leave;
+    delete enter_cover;
+    delete leave_cover;
 }
 
 Item *Encounter::getLastMove(int n) {
@@ -9128,6 +9189,9 @@ static void load_bitmaps(void) {
     /* 117 */ filenames.push_back("media/items/abstract/leave.png");
     /* 118 */ filenames.push_back("media/tile/rain1.png");
     /* 119 */ filenames.push_back("media/tile/rain2.png");
+    /* 120 */ filenames.push_back("media/items/abstract/enter_cover.png");
+    /* 121 */ filenames.push_back("media/items/abstract/leave_cover.png");
+    /* 122 */ filenames.push_back("media/tile/fog.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -9998,8 +10062,6 @@ void ai_state::save(ostream &os) {
 }
 
 void ai_state::load(istream &is, DeferredCharacterLoadingData& data) {
-    // TODO load 'ignoring' here. The problem is that the character
-    // vector isn't done by the time we're loading in the ai state
     is >> fleeing >> data.ignoring_index;
 }
 
