@@ -386,6 +386,11 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     tmp.sprite = b;
     tmp.name = strdup(text);
     tmp.is_text_item = true;
+    tmp.grid_size_x = item_size_x / 18;
+    tmp.grid_size_y = 2;
+    tmp.grid_size_on_hp_x = -1;
+    tmp.grid_size_on_hp_y = -1;
+
     g.item_info.push_back(tmp);
 
     // construct new Item with the above ItemInfo
