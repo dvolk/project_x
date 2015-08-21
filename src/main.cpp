@@ -45,7 +45,7 @@
 #include "./iteminfo.h"
 #include "./itemdefs.h"
 
-const int COMPILED_VERSION = 13; // save game version
+const int COMPILED_VERSION = 14; // save game version
 
 using namespace std;
 
@@ -214,9 +214,6 @@ struct Game {
 
     vector<WeatherInfo> weatherinfo;
 
-    bool encounterInterrupt; // player
-    int ai_encounterInterrupt; // AI at index (value is position)
-
     int old_mx; // stores mouse position before we pressed MMB
     int old_my;
 
@@ -233,6 +230,19 @@ struct Game {
     // add a message to the message log
     void AddMessage(string str);
 };
+
+struct EncounterRecord {
+    Character *c1;
+    Character *c2;
+
+    EncounterRecord() { };
+    EncounterRecord(Character *_c1, Character *_c2) {
+        c1 = _c1;
+        c2 = _c2;
+    }
+};
+
+vector<EncounterRecord> encounters;
 
 static Game g;
 
@@ -1193,25 +1203,26 @@ enum WEAPON_USE_RESULT {
     WEAPON_USE_OUT_OF_AMMO,
 };
 
+// character data that needs the map fully loaded
+// before it can be initialized
+struct DeferredCharacterLoadingData {
+    int ignoring_index;
+};
+
 struct ai_state {
     int fleeing;
+    Character *ignoring;
 
     ai_state();
 
     void save(ostream &os);
-    void load(istream &is);
+    void load(istream &is, DeferredCharacterLoadingData& data);
+    void load(DeferredCharacterLoadingData& data);
 };
 
 ai_state::ai_state() {
     fleeing = 0;
-}
-
-void ai_state::save(ostream &os) {
-    os << fleeing << ' ';
-}
-
-void ai_state::load(istream &is) {
-    is >> fleeing;
+    ignoring = NULL;
 }
 
 // stats associated with characters but only needed during an
@@ -1323,7 +1334,8 @@ struct Character {
     ~Character();
 
     void save(ostream &os);
-    void load(istream &is);
+    void load(istream &is, DeferredCharacterLoadingData& data);
+    void load(DeferredCharacterLoadingData& data);
 
     void ai_avoid(void);
     void ai_move_toward(int position);
@@ -1954,7 +1966,36 @@ struct TileMap : public Widget {
     void CollectGroundGrids(int n);
 
     void updateColors(void);
+
+    // for saving and loading characters by index
+    Character *chr_by_index(int n);
+    int index_from_chr(Character *c);
 };
+
+Character *TileMap::chr_by_index(int n) {
+    if(n < 0) return NULL;
+    if(n == 0) return player;
+    // since n == 0 is the player, the rest are offset by 1
+    if(n - 1 > (int)characters.size() - 1) {
+        return NULL;
+    }
+    else {
+        return characters.at(n - 1);
+    }
+}
+
+int TileMap::index_from_chr(Character *c) {
+    if(c == NULL) return -1;
+    if(c == player) return 0;
+    int n = 0;
+    for(auto&& it : characters) {
+        if(c == it)
+            return n + 1;
+        n++;
+    }
+    info("index_from_chr(): couldn't find character");
+    return -1;
+}
 
 void init_weather(void) {
     g.map->weather.idx = 1; // rain;
@@ -2194,6 +2235,13 @@ void Character::setPos(int x, int y) {
 void Character::sleep(void) {
     if(this == g.map->player)
         g.AddMessage("You go to sleep...");
+    else {
+        if(g.map->playerSees(this->n)) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s appears to be getting ready for bed...", name);
+            g.AddMessage(buf);
+        }
+    }
     activity = ACTIVITY_SLEEP;
     spendTime(10000);
 }
@@ -2201,6 +2249,13 @@ void Character::sleep(void) {
 void Character::wait(void) {
     if(this == g.map->player)
         g.AddMessage("You play with yourself for a while...");
+    else {
+        if(g.map->playerSees(this->n)) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s plays around with themself for a while...", name);
+            g.AddMessage(buf);
+        }
+    }
     activity = ACTIVITY_WAIT;
     spendTime(1000);
 }
@@ -2396,7 +2451,11 @@ enum AI_MAP_ACTION {
     AI_AVOID,
     AI_FLEE,
     AI_WANDER,
+    AI_WAIT,
+    AI_SLEEP,
 };
+
+static int get_time_zone(void);
 
 // do stuff on the map
 void Character::do_map_AI(void) {
@@ -2408,9 +2467,13 @@ void Character::do_map_AI(void) {
     update();
 
     bool very_healthy = health > 0.95;
+    bool injured = health < 0.7;
     bool player_near = distance_to_player(n) < 4;
     bool player_enemy = different_factions(this, g.map->player);
     bool fleeing = ai.fleeing > 0;
+    bool tired = fatigue < 0.5;
+    bool its_late /*sic*/ = get_time_zone() == 2 || // dusk or night
+                            get_time_zone() == 3;
 
     AI_MAP_ACTION action;
 
@@ -2418,13 +2481,20 @@ void Character::do_map_AI(void) {
         action = AI_FLEE;
         goto act;
     }
+    if(tired == true) {
+        action = AI_WAIT;
+
+        if(its_late == true)
+            action = AI_SLEEP;
+
+        goto act;
+    }
     if(very_healthy && player_near && player_enemy) {
         action = AI_ATTACK;
         goto act;
     }
-    if(very_healthy == false) {
+    if(injured == true) {
         action = AI_AVOID;
-        goto act;
     }
     action = AI_WANDER;
     goto act;
@@ -2448,9 +2518,24 @@ void Character::do_map_AI(void) {
                 ai_move_toward(g.map->player->n);
             }
             break;
+        case AI_WAIT:
+            {
+                wait();
+            }
+            break;
+        case AI_SLEEP:
+            {
+                sleep();
+            }
+            break;
         case AI_WANDER:
             {
                 randomMove();
+            }
+            break;
+        default:
+            {
+                assert(false);
             }
             break;
         }
@@ -2561,7 +2646,7 @@ void Character::recomputeCarryWeight(void) {
 }
 
 void Character::update(void) {
-    assert(activity != ACTIVITY_NONE || g.encounterInterrupt == true);
+    assert(activity != ACTIVITY_NONE || encounters.empty() == false);
 
     // heal 0.5% over 1000 time units
     float healChange = 0.005 * 0.001 * dt;
@@ -2701,7 +2786,7 @@ void Character::randomMove(void) {
     move(new_n);
 }
 
-static void runPlayerEncounter(void);
+static bool runPlayerEncounter(EncounterRecord r);
 
 // character c1 interrupts c2.
 static void chInterruptsPlayer(Character *c1) {
@@ -2731,7 +2816,7 @@ static void runRandomMoveEvents(void) {
     }
 }
 
-static void runAIEncounter(int n);
+static void runAIEncounter(EncounterRecord r);
 
 // deletes empty ground grids at tile
 void TileMap::CollectGroundGrids(int n) {
@@ -2797,47 +2882,31 @@ void TileMap::DeleteGroundIfEmpty(int n) {
 }
 
 void Character::move(int new_n) {
-    if(good_index(new_n) == true) {
-        g.map->DeleteGroundIfEmpty(this->n);
-
-        setPos(new_n);
-        g.map->updateCharsByPos();
-
-        // start an encounter if
-        if(this == g.map->player) {
-
-            g.map->removeTempItems(this->n);
-            g.map->CollectGroundGrids(this->n);
-            // this character is the player and there's more than
-            // one character on that tile
-            if(g.map->charsByPos.count(this->n) > 1) {
-                g.encounterInterrupt = true;
-                /*
-                  TODO: player interrupts AIs
-                */
-            } else {
-                // check if there are any interactions on this map tile
-                if(g.map_stories.count(n) > 0) {
-                    runInteract(g.map_stories.find(n)->second);
-                } else {
-                    runRandomMoveEvents();
-                }
-            }
-        } else if(this->n == g.map->player->n) {
-            // or if this npc moved into the player's position
-            g.encounterInterrupt = true;
-            // the npc interrupts the player
-            chInterruptsPlayer(this);
-
-        } else if(g.map->charsByPos.count(this->n) > 1) {
-            g.ai_encounterInterrupt = this->n;
-            /*
-              TODO: AI interrupts AIs
-            */
-        }
-    }
-    else {
+    if(good_index(new_n) == false) {
         info("WARNING: tried to Character::move() to invalid index");
+        return;
+    }
+
+    g.map->DeleteGroundIfEmpty(this->n);
+
+    setPos(new_n);
+    g.map->updateCharsByPos();
+
+    if(this == g.map->player) {
+        g.map->removeTempItems(this->n);
+        g.map->CollectGroundGrids(this->n);
+        runRandomMoveEvents();
+    }
+
+    // add encounters
+    if(g.map->charsByPos.count(this->n) > 1) {
+        auto p = g.map->charsByPos.equal_range(new_n);
+        for(auto&& it = p.first; it != p.second; it++) {
+            if(it->second != this) {
+                printf("**** adding: %s vs %s\n", this->name, it->second->name);
+                encounters.emplace_back(EncounterRecord(this, it->second));
+            }
+        }
     }
 
     activity = ACTIVITY_MOVE;
@@ -2937,6 +3006,10 @@ struct TimeDisplay : public Widget {
     void update(void) { };
     void calculate_tod(void);
 };
+
+static int get_time_zone(void) {
+    return g.time_display->time_zone;
+}
 
 void TimeDisplay::calculate_tod(void) {
     tod = g.map->player->nextMove % 24000;
@@ -4608,26 +4681,13 @@ static Character *next(void) {
 // }
 
 static void end_turn_debug_print(void) {
-    printf("turn ends (%d) with %d characters. Interrupt: %d\n",
+    printf("turn ends (%d) with %d characters. encounters: %lu\n",
            g.map->player->nextMove,
            (int)g.map->characters.size(),
-           g.encounterInterrupt
+           encounters.size()
            );
 
     // g.map->player->print_stats();
-}
-
-// process AI's without caring about player encounter interrupts.
-// used when player is already in an encounter.
-static void processAI(void) {
-    Character *c;
-    while((c = next()) != g.map->player)
-        {
-            c->do_map_AI();
-            if(g.ai_encounterInterrupt != -1) {
-                runAIEncounter(g.ai_encounterInterrupt);
-            }
-        }
 }
 
 static void player_hurt_messages(void) {
@@ -4675,29 +4735,34 @@ void isGameOver(void) {
 }
 
 static void fade_to_UI(UI *from, UI *to);
+static void removeEncounter(EncounterRecord r);
 
 static void end_turn() {
     Character *c;
-
     // process characters until it's the player's turn again or we get
     // an encounter interrupt
-    while((c = next()) != g.map->player && g.encounterInterrupt == false)
+    while((c = next()) != g.map->player)
         {
             printf("%s (%d), ", c->name, c->nextMove);
 
             c->do_map_AI();
-            if(g.ai_encounterInterrupt != -1) {
-                runAIEncounter(g.ai_encounterInterrupt);
+
+            for(auto&& encounter : encounters) {
+                if(encounter.c1 != g.map->player && encounter.c2 != g.map->player) {
+                    runAIEncounter(encounter);
+                }
+                else {
+                    if(runPlayerEncounter(encounter) == true)
+                        goto player_control;
+                }
             }
         }
+
+ player_control:
+
     puts("\n");
 
     g.map->player->update_visibility();
-
-    if(g.encounterInterrupt == true)
-        {
-            runPlayerEncounter();
-        }
 
     g.map->runWeather();
 
@@ -4714,6 +4779,7 @@ static void end_turn() {
     int tz_before = g.time_display->time_zone;
     g.time_display->calculate_tod();
     int tz_after = g.time_display->time_zone;
+
     if(tz_after != tz_before)
         g.AddMessage("It is now " + string(g.time_display->current_time_string_lcase));
 
@@ -5183,6 +5249,8 @@ private:
     int range;
     int detection_range;
 
+    bool ignoring;
+
     // general
     void advance(int steps);
     void retreat(int steps);
@@ -5199,15 +5267,18 @@ private:
     bool involvesPlayer(void);
     void set_start_range(void);
     void set_detection_range(void);
+    bool ignoring_eachother(void);
 
 public:
     Encounter(void);
+
+    EncounterRecord record;
 
     // general
     void setup(Character *c1, Character *c2);
 
     // AI vs AI
-    void runAIEncounter(int n);
+    void runAIEncounter(EncounterRecord r);
 
     // player vs AI
     void runPlayerEncounterStep(void);
@@ -5235,6 +5306,10 @@ public:
     bool seesOpponent(int n);
     void updateVisibility(void);
 };
+
+bool Encounter::ignoring_eachother(void) {
+    return c1->ai.ignoring == c2 && c2->ai.ignoring == c1;
+}
 
 bool Encounter::isBurdened(int n) {
     return true;
@@ -5445,73 +5520,126 @@ void Encounter::setup(Character *c1, Character *c2) {
     c2->es.reset();
     set_start_range();
     set_detection_range();
+    ignoring = false;
     running = true;
 
     info("Encounter::setup() exit");
 }
 
-static void runPlayerEncounter(void) {
+static bool runPlayerEncounter(EncounterRecord r) {
     info("runPlayerEncounter()");
+
+    bool c1alive = false;
+    bool c2alive = false;
+    for(auto&& c : g.map->characters) {
+        if(c == r.c1) c1alive = true;
+        if(c == r.c2) c2alive = true;
+    }
+    if(r.c1 == g.map->player) c1alive = true;
+    if(r.c2 == g.map->player) c2alive = true;
+
+    if(c1alive == false || c2alive == false || r.c1->n != r.c2->n) {
+        info("runPlayerEncounter(): stale EncounterRecord");
+        removeEncounter(r);
+        return false;
+    }
+
+    bool ignoring = r.c1->ai.ignoring == r.c2 && r.c2->ai.ignoring == r.c1;
+    if(ignoring == true) {
+        info("runPlayerEncounter(): characters are ignoring each other");
+        removeEncounter(r);
+        return false;
+    }
+
+    // we're in a valid encounter now...
+
+    chInterruptsPlayer(r.c1 == g.map->player ? r.c2 : r.c1);
+
     UI *prev_ui = g.ui;
+
+    Character *player = r.c1 == g.map->player ? r.c1 : r.c2;
+    Character *ai     = r.c1 == g.map->player ? r.c2 : r.c1;
+
+    cout << "Running encounter at: " << r.c1->n << " with AI " << ai->name << endl;
+
+    g.ui_Encounter->encounter.setup(player, ai);
     g.ui_Encounter->setup();
+
     // show the message log if it's hidden
     g.log->visible = true;
     g.ui_Encounter->encounter.do_encounter_messages();
+
     g.ui = g.ui_Encounter;
     fade_to_UI(prev_ui, (UI*)g.ui_Encounter);
+
     info("runPlayerEncounter() exit");
+    return true;
 }
 
-static void runAIEncounter(int n) {
+static void runAIEncounter(EncounterRecord r) {
     Encounter e;
-    e.runAIEncounter(n);
+    e.record = r;
+    e.runAIEncounter(r);
+    removeEncounter(r);
+}
+
+static void removeEncounter(EncounterRecord r) {
+    vector<EncounterRecord>::iterator it;
+    for(it = encounters.begin(); it != encounters.end();) {
+        if(it->c1 == r.c1 && it->c2 == r.c2) {
+            printf("removing record %p %p\n", (void*)r.c1, (void*)r.c2);
+            it = encounters.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
 }
 
 // resolve all AI encounters at pos n
-void Encounter::runAIEncounter(int n) {
+void Encounter::runAIEncounter(EncounterRecord r) {
     info("Encounter::runAIEncounter()");
-    int num_there;
-    // run encounters until only one character remains
-    do {
-        // setup
-        auto cs = g.map->charsByPos.equal_range(n).first;
 
-        if(cs == g.map->charsByPos.end()) {
-            cout << "***********************************" << endl;
-            info("runAIEncounter(): No characters?");
-            cout << "***********************************" << endl;
-            return;
-        }
-        c1 = cs->second;
-        if(cs == g.map->charsByPos.end()) {
-            cout << "***********************************" << endl;
-            info("runAIEncounter(): Just one character?");
-            cout << "***********************************" << endl;
-            return;
-        }
-        cs++;
-        c2 = cs->second;
+    bool c1alive = false;
+    bool c2alive = false;
+    for(auto&& c : g.map->characters) {
+        if(c == r.c1) c1alive = true;
+        if(c == r.c2) c2alive = true;
+    }
+    if(c1alive == false || c2alive == false || r.c1->n != r.c2->n) {
+        info("runAIEncounter(): stale EncounterRecord");
+        return;
+    }
 
-        setup(c1, c2);
+    bool ignoring =
+        r.c1->ai.ignoring == r.c2 &&
+        r.c2->ai.ignoring == r.c1;
 
-        printf("Fight!\n");
-        printf("%15s\t%15s\n", c1->name, c2->name);
+    if(ignoring == true) {
+        info("runAIEncounter(): characters are ignoring each other");
+        removeEncounter(r);
+        return;
+    }
 
-        while(true) {
-            npcEncounterStep(0);
-            if(isEncounterNPCdead(0) == true || npcRelocated() == true) break;
+    setup(r.c1, r.c2);
 
-            npcEncounterStep(1);
-            if(isEncounterNPCdead(1) == true || npcRelocated() == true) break;
+    printf("Fight!\n");
+    printf("%15s\t%15s\n", c1->name, c2->name);
 
-            printf("%15f\t%15f\n", c1->health, c2->health);
-        }
-        c1->post_update();
-        c2->post_update();
+    while(true) {
+        npcEncounterStep(0);
 
-        num_there = g.map->charsByPos.count(n);
-    } while(num_there >= 2);
-    g.ai_encounterInterrupt = -1;
+        if(isEncounterNPCdead(0) == true || npcRelocated() == true || ignoring_eachother() == true) break;
+
+        npcEncounterStep(1);
+
+        if(isEncounterNPCdead(1) == true || npcRelocated() == true || ignoring_eachother() == true) break;
+
+        printf("%15f\t%15f\n", c1->health, c2->health);
+
+    }
+    c1->post_update();
+    c2->post_update();
 
     info("Encounter::runAIEncounter() exit");
 }
@@ -5521,27 +5649,11 @@ static void switch_to_MainMap(void);
 void Encounter::endEncounter(void) {
     info("Encounter::endEncounter()");
     running = false;
-    g.encounterInterrupt = false;
+    removeEncounter(record);
+    switch_to_MainMap();
 
-    c2->do_map_AI(); // this removes the npc if they're dead
-    processAI();
+    c2->post_update(); // this removes the npc if they're dead
 
-    g.map->updateCharsByPos();
-    int num_there = g.map->charsByPos.count(g.map->player->n);
-
-    if(num_there > 1) {
-        cout << "There are more encounters here: " << num_there - 1 << endl;
-        runPlayerEncounter();
-    } else {
-        cout << "All encounters ended" << endl;
-        switch_to_MainMap();
-        /*
-          TODO: crash here because the character is deleted when
-          fade_to_UI tries to draw the bitmap
-        */
-        // fade_to_UI(g.ui_Encounter, g.ui_MainMap);
-        g.map->player->update_visibility();
-    }
     info("Encounter::endEncounter() exit");
 }
 
@@ -5565,7 +5677,7 @@ void Encounter::npcEncounterStep(void) {
 void Encounter::npcEncounterStep(int n) {
     char buf[100];
 
-    info("Encounter::npcEncounterStep()");
+    // info("Encounter::npcEncounterStep()");
 
     updateVisibility();
 
@@ -5603,10 +5715,8 @@ void Encounter::npcEncounterStep(int n) {
             action = WARN;
             goto act;
         } else {
-            if(involvesPlayer() == true) {
-                action = LEAVE;
-                goto act;
-            }
+            action = LEAVE;
+            goto act;
         }
     }
     if(healthy == false) {
@@ -5751,18 +5861,16 @@ void Encounter::npcEncounterStep(int n) {
     case LEAVE:
         {
             if(involvesPlayer() == true) {
-                sprintf(buf, "%s leaves the area.", _c2->name);
-                g.AddMessage("Encounter ends.");
+                sprintf(buf, "%s has no more business with you.", _c2->name);
             }
             else {
-                sprintf(buf, "%s leaves %s's general area.", _c2->name, _c1->name);
-                cout << _c2 << " left successfully" << endl;
+                sprintf(buf, "%s has no more business with %s.", _c2->name, _c1->name);
             }
-            /*
-              TODO: the characters should remain at the same place
-              but not be in an encounter
-             */
-            _c2->randomMove();
+
+            _c2->ai.ignoring = _c1;
+            _c1->ai.ignoring = _c2;
+
+            g.AddMessage(buf);
         }
         break;
 
@@ -5777,7 +5885,7 @@ void Encounter::npcEncounterStep(int n) {
     if(involvesPlayer() == true && _c1->health < 0.01)
         g.map->removeCharacter(g.map->player);
 
-    info("Encounter::npcEncounterStep() exit");
+    // info("Encounter::npcEncounterStep() exit");
 }
 
 // runs one step of the encounter after the player pressed the
@@ -5886,6 +5994,9 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case LEAVE:
         {
+            c2->ai.ignoring = c1;
+            c1->ai.ignoring = c2;
+            ignoring = true;
         }
         break;
 
@@ -5896,7 +6007,7 @@ void Encounter::runPlayerEncounterStep(void) {
         break;
     }
 
-    if(isEncounterNPCdead() == true || npcRelocated() == true) {
+    if(isEncounterNPCdead() == true || npcRelocated() == true || ignoring == true) {
         info("Encounter::runPlayerEncounterStep() npc died 1");
         endEncounter();
         return;
@@ -5904,7 +6015,7 @@ void Encounter::runPlayerEncounterStep(void) {
 
     npcEncounterStep();
 
-    if(isEncounterNPCdead() == true || npcRelocated() == true) {
+    if(isEncounterNPCdead() == true || npcRelocated() == true || ignoring == true) {
         info("Encounter::runPlayerEncounterStep() npc died 2");
         endEncounter();
         return;
@@ -5940,16 +6051,6 @@ void EncounterUI::setup(void) {
 
     // the tile sprite
     cur_tile_sprite = g.map->tile_info[g.map->tiles[g.map->player->n].info_index].sprite;
-
-    if(encounter.isRunning() == false) {
-        Character *c1 = g.map->player;
-        g.map->updateCharsByPos();
-        Character *c2 = g.map->charsByPos.equal_range(g.map->player->n).first->second;
-
-        encounter.setup(c1, c2);
-
-        cout << "Running encounter at: " << c1->n << " with AI " << c2->name << endl;
-    }
 
     encounterGrids->selected->items.clear();
     encounterGrids->options->items.clear();
@@ -9533,7 +9634,6 @@ MainMapUI::~MainMapUI(void) {
 
 static void init_misc(void) {
     g.hand_combat = new Item ("fist");
-    g.ai_encounterInterrupt = -1;
 }
 
 static void allegro_init(void) {
@@ -9888,6 +9988,20 @@ vector<ItemInfo>& get_global_iteminfo(void) {
     return g.item_info;
 }
 
+void ai_state::save(ostream &os) {
+    os << fleeing << ' ' << g.map->index_from_chr(ignoring);
+}
+
+void ai_state::load(istream &is, DeferredCharacterLoadingData& data) {
+    // TODO load 'ignoring' here. The problem is that the character
+    // vector isn't done by the time we're loading in the ai state
+    is >> fleeing >> data.ignoring_index;
+}
+
+void ai_state::load(DeferredCharacterLoadingData& data) {
+    ignoring = g.map->chr_by_index(data.ignoring_index);
+}
+
 void Disease::save(ostream &os) {
     os << duration << ' ' << vulnerability << ' ';
 }
@@ -10025,7 +10139,7 @@ void Character::save(ostream &os) {
     ai.save(os);
 }
 
-void Character::load(istream &is) {
+void Character::load(istream &is, DeferredCharacterLoadingData& data) {
     int name_len;
     is >> name_len;
     char *name = (char *)malloc(name_len + 1);
@@ -10078,7 +10192,11 @@ void Character::load(istream &is) {
     for(auto&& d : diseases)
         d.load(is);
 
-    ai.load(is);
+    ai.load(is, data);
+}
+
+void Character::load(DeferredCharacterLoadingData& data) {
+    ai.load(data);
 }
 
 void Location::save(ostream &os) {
@@ -10185,15 +10303,32 @@ void TileMap::load(istream &is) {
         }
     }
     player = new Character;
-    player->load(is);
+    DeferredCharacterLoadingData p_data;
+    player->load(is, p_data);
+
     is >> n;
     characters.resize(n);
+    vector<DeferredCharacterLoadingData> ch_data;
+    ch_data.resize(n);
+
+    int i = 0;
     for(auto&& ch : characters) {
         ch = new Character;
-        ch->load(is);
+        ch->load(is, ch_data.at(i));
+        i++;
     }
+
+    // load deferred data now that all the characters are loaded
+    player->load(p_data);
+    i = 0;
+    for(auto&& ch : characters) {
+        ch->load(ch_data.at(i));
+        i++;
+    }
+
     player->update_visibility();
     updateCharsByPos();
+
     is >> n;
     for(size_t i = 0; i < n; i++) {
         Label tmp;
