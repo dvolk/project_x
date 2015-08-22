@@ -1233,6 +1233,7 @@ ai_state::ai_state() {
 // stats associated with characters but only needed during an
 // encounter
 struct encounter_state {
+    bool in_encounter;
     bool visible;
     Item *last_move;
     int warned;
@@ -1378,6 +1379,7 @@ struct Character {
     void print_stats(void);
     void hurt(float amount);
     void sleep(void);
+    bool wake_up(void);
     void wait(void);
 
     enum WEAPON_USE_RESULT useWeapon(Character *against);
@@ -1394,6 +1396,10 @@ struct Character {
 
     Wound *random_wound(void);
 };
+
+bool Character::wake_up(void) {
+    return fatigue > 0.8;
+}
 
 /*
   TODO: these functions have confusing names and functionality
@@ -1640,7 +1646,8 @@ Character::Character(void) {
 
     faction_reps.resize(6);
 
-
+    es.reset();
+    es.in_encounter = false;
     // info("Character()");
 }
 
@@ -2251,17 +2258,49 @@ void Character::setPos(int x, int y) {
 }
 
 void Character::sleep(void) {
-    if(this == g.map->player)
-        g.AddMessage("You go to sleep...");
-    else {
-        if(g.map->playerSees(this->n)) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "%s appears to be getting ready for bed...", name);
-            g.AddMessage(buf);
+    bool sufficiently_tired = fatigue < 0.4;
+
+    if(sufficiently_tired == true)
+        activity = ACTIVITY_SLEEP;
+    else
+        activity = ACTIVITY_WAIT;
+
+    switch(activity)
+        {
+        case ACTIVITY_SLEEP:
+            {
+                if(this == g.map->player)
+                    g.AddMessage("You lay down and go to sleep...");
+                else {
+                    if(g.map->playerSees(this->n)) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "%s appears to be getting ready for bed...", name);
+                        g.AddMessage(buf);
+                    }
+                }
+            }
+            break;
+        case ACTIVITY_WAIT:
+            {
+                if(this == g.map->player)
+                    g.AddMessage("You try to sleep but can't...");
+                else {
+                    if(g.map->playerSees(this->n)) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "%s lays down and stares at the heavens.", name);
+                        g.AddMessage(buf);
+                    }
+                }
+            }
+            break;
+        default:
+            {
+                assert(false);
+            }
+            break;
         }
-    }
-    activity = ACTIVITY_SLEEP;
-    spendTime(10000);
+
+    spendTime(1000);
 }
 
 void Character::wait(void) {
@@ -2484,6 +2523,13 @@ void Character::do_map_AI(void) {
 
     update();
 
+    if(activity == ACTIVITY_SLEEP) {
+        spendTime(1000);
+        printf("Z");
+        post_update();
+        return;
+    }
+
     bool very_healthy = health > 0.95;
     bool injured = health < 0.7;
     bool player_near = distance_to_player(n) < 4;
@@ -2664,7 +2710,7 @@ void Character::recomputeCarryWeight(void) {
 }
 
 void Character::update(void) {
-    assert(activity != ACTIVITY_NONE || encounters.empty() == false);
+    assert(activity != ACTIVITY_NONE || es.in_encounter == true);
 
     // heal 0.5% over 1000 time units
     float healChange = 0.005 * 0.001 * dt;
@@ -2674,12 +2720,12 @@ void Character::update(void) {
     float fatigueChange = 0.03 * 0.001 * dt;
     if(activity == ACTIVITY_MOVE)
         fatigue = max((float)0.0, fatigue - fatigueChange);
-
-    // else recover 3% per 1000 time units if we're sleeping
-    // or waiting
-    if(activity == ACTIVITY_SLEEP ||
-       activity == ACTIVITY_WAIT)
-        fatigue = min((float)1.0, fatigue + fatigueChange);
+    // else recover 4% per 1000 time units if we're sleeping
+    if(activity == ACTIVITY_SLEEP)
+        fatigue = min((float)1.0, fatigue + fatigueChange * (float)1.5);
+    // or 2% when waiting
+    if(activity == ACTIVITY_WAIT)
+        fatigue = min((float)1.0, fatigue + fatigueChange / (float)1.5);
 
     // increase pain stat by 6% per 1000 time units
     float painChange = 0.06 * 0.001 * dt;
@@ -2783,7 +2829,19 @@ void Character::update(void) {
     }
 
     dt = 0;
+
+    bool sleeping = activity == ACTIVITY_SLEEP;
+
     activity = ACTIVITY_NONE;
+
+    if(es.in_encounter == true) {
+        return;
+    }
+
+    if(sleeping == true && wake_up() == false) {
+        printf("sleeping again... %f\n", fatigue);
+        activity = ACTIVITY_SLEEP;
+    }
 }
 
 void Character::print_stats(void) {
@@ -4757,6 +4815,8 @@ static void removeEncounter(EncounterRecord r);
 
 static void end_turn() {
     Character *c;
+
+ begin_again:
     // process characters until it's the player's turn again or we get
     // an encounter interrupt
     while((c = next()) != g.map->player)
@@ -4777,14 +4837,17 @@ static void end_turn() {
         }
 
  player_control:
-
     puts("\n");
 
     g.map->player->update_visibility();
 
     g.map->runWeather();
 
+    ActivityKind prev = g.map->player->activity;
+
     g.map->player->update();
+
+    ActivityKind next = g.map->player->activity;
 
     player_hurt_messages();
 
@@ -4807,6 +4870,20 @@ static void end_turn() {
         if(g.map->player->health < 0.01) {
             g.map->removeCharacter(g.map->player);
         }
+    }
+
+    if(g.map->player->es.in_encounter == true) {
+        return;
+    }
+
+    if(next == ACTIVITY_SLEEP) {
+        g.map->player->spendTime(1000);
+        g.AddMessage("zzz...");
+        goto begin_again;
+    }
+
+    if(prev == ACTIVITY_SLEEP) {
+        g.AddMessage("You wake up.");
     }
 }
 
@@ -5220,6 +5297,7 @@ void encounter_state::wait(void) {
 }
 
 void encounter_state::reset(void) {
+    in_encounter = true;
     visible = false;
     last_move = NULL;
     warned_other = 0;
@@ -5668,6 +5746,9 @@ void Encounter::runAIEncounter(EncounterRecord r) {
         printf("%15f\t%15f\n", c1->health, c2->health);
 
     }
+    c1->es.in_encounter = false;
+    c2->es.in_encounter = false;
+
     c1->post_update();
     c2->post_update();
 
@@ -5681,6 +5762,9 @@ void Encounter::endEncounter(void) {
     running = false;
     removeEncounter(record);
     switch_to_MainMap();
+
+    c1->es.in_encounter = false;
+    c2->es.in_encounter = false;
 
     c2->post_update(); // this removes the npc if they're dead
 
