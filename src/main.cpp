@@ -1661,6 +1661,7 @@ struct TileInfo {
     bool blocks_los;
     bool blocks_movement;
     bool has_locations;
+    int visibility_mod;
 };
 
 // data that's common to all locations of the same type
@@ -3640,6 +3641,11 @@ void Character::update_visibility(void) {
         current_los_distance = 1;
     else
         current_los_distance = 0; // night
+
+    current_los_distance +=
+        g.map->tile_info[g.map->tiles[n].info_index].visibility_mod;
+
+    current_los_distance = max(0, min(3, current_los_distance));
 
     currently_seeing.clear();
     currently_seeing.push_back(n);
@@ -9562,6 +9568,7 @@ static void init_tileinfo(void) {
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = false;
+    i.visibility_mod = 0;
     i.name = "Grassland";
     g.map->tile_info.push_back(i);
     // tree
@@ -9570,6 +9577,7 @@ static void init_tileinfo(void) {
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.visibility_mod = -1;
     i.name = "Wood";
     g.map->tile_info.push_back(i);
     // city
@@ -9578,6 +9586,7 @@ static void init_tileinfo(void) {
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.visibility_mod = 0;
     i.name = "City";
     g.map->tile_info.push_back(i);
     // swamp
@@ -9586,6 +9595,7 @@ static void init_tileinfo(void) {
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.visibility_mod = 0;
     i.name = "Swamp";
     g.map->tile_info.push_back(i);
     // Hilly grass
@@ -9594,6 +9604,7 @@ static void init_tileinfo(void) {
     i.blocks_los = true;
     i.blocks_movement = false;
     i.has_locations = false;
+    i.visibility_mod = 1;
     i.name = "Hill";
     g.map->tile_info.push_back(i);
     // Dirt
@@ -9602,6 +9613,7 @@ static void init_tileinfo(void) {
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.visibility_mod = 0;
     i.name = "Dirt";
     g.map->tile_info.push_back(i);
     // crackedground
@@ -9610,6 +9622,7 @@ static void init_tileinfo(void) {
     i.blocks_los = false;
     i.blocks_movement = false;
     i.has_locations = true;
+    i.visibility_mod = 0;
     i.name = "Cracked ground";
     g.map->tile_info.push_back(i);
 }
