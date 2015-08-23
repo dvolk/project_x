@@ -1018,7 +1018,7 @@ name 18 makeshift wood bow
 	scavenge_sneak_mult 0
 	sprite 84
 	sprite_on_hp -1
-	flags: 0
+	flags: 1 16
 name 11 moldy bread
 	ItemSlot 0
 	grid_size_x 2

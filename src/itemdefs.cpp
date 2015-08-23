@@ -45,6 +45,8 @@ void init_iteminfo(void) {
     tmp.scavenge_safety_mult = 0;
     tmp.scavenge_sneak_mult = 0;
     tmp.flags = { };
+    tmp.tooltip_size_x = -1;
+    tmp.weapon_with_ammo = false;
     get_global_iteminfo().push_back(tmp);
 
     // 01
@@ -638,6 +640,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.canBeDamaged = true;
     tmp.slot = WEAPON_BOW;
+    tmp.flags = { WEAPON_WITH_AMMO };
     tmp.warmth = 0.0;
     tmp.weapon_damage = 0.2;
     tmp.weapon_range = 8;
@@ -664,6 +667,7 @@ void init_iteminfo(void) {
     tmp.improves_satiety = 0.1;
     tmp.canBeDamaged = true;
     tmp.slot = SLOT_NONE;
+    tmp.flags = { };
     tmp.warmth = 0.0;
     tmp.weapon_damage = 0.0001;
     tmp.weapon_range = 1;

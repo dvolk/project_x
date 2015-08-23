@@ -315,6 +315,7 @@ struct Item {
     float getScavengeLootMult(void);
     float getScavengeSafetyMult(void);
     float getScavengeSneakMult(void);
+    bool is_weapon_with_ammo(void);
 
     bool hasFlag(enum ItemFlag _flag) const;
 };
@@ -340,11 +341,16 @@ float Item::getScavengeSneakMult(void) {
     return g.item_info[info_index].scavenge_sneak_mult;
 }
 
+bool Item::is_weapon_with_ammo(void) {
+    return g.item_info[info_index].weapon_with_ammo;
+}
+
 bool Item::isTextItem(void) {
     return g.item_info[info_index].is_text_item;
 }
 
 static ALLEGRO_BITMAP *little_pink_bitmap(void);
+static void calc_iteminfo_params(ItemInfo & it);
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     int text_len = al_get_text_width(g_font, text);
@@ -390,7 +396,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
     tmp.grid_size_y = 2;
     tmp.grid_size_on_hp_x = -1;
     tmp.grid_size_on_hp_y = -1;
-
+    calc_iteminfo_params(tmp);
     g.item_info.push_back(tmp);
 
     // construct new Item with the above ItemInfo
@@ -803,7 +809,8 @@ void Item::init(int16_t info_index) {
        g.item_info[info_index].maxStack != 1 ||
        g.item_info[info_index].isSkill == true ||
        g.item_info[info_index].isLocation == true ||
-       g.item_info[info_index].isEncounterAction == true) {
+       g.item_info[info_index].isEncounterAction == true ||
+       g.item_info[info_index].is_text_item == true) {
         // skills, locations and stackable items don't have condition
         this->condition = -1.0;
     }
@@ -3042,12 +3049,14 @@ void WeaponSwitcher::draw(void) {
 
     if(w->storage != NULL) {
         char buf[20];
-        if(w->storage->items.size() != 0) {
-            sprintf(buf, "Ammo: %d", w->storage->items.front()->cur_stack);
-        } else {
-            sprintf(buf, "Ammo: empty");
+        if(w->is_weapon_with_ammo() == true) {
+            if(w->storage->items.size() != 0) {
+                sprintf(buf, "Ammo: %d", w->storage->items.front()->cur_stack);
+            } else {
+                sprintf(buf, "Ammo: empty");
+            }
+            al_draw_text(g_font, colors.white, pos.x1 + 8, pos.y1 + 2 * config.font_height, 0, buf);
         }
-        al_draw_text(g_font, colors.white, pos.x1 + 8, pos.y1 + 2 * config.font_height, 0, buf);
     }
 }
 
@@ -4155,27 +4164,29 @@ void GridSystem::drawItemTooltip(void) {
         for(auto& item : grid->items) {
             sx = item->pos.x2;
             sy = item->pos.y2;
-            // item->getHpDims(sx, sy);
 
             if(item->parent->pos.x1 + item->pos.x1 * Grid::grid_px_x <= mouse_x &&
                item->parent->pos.y1 + item->pos.y1 * Grid::grid_px_y <= mouse_y &&
                item->parent->pos.x1 + (item->pos.x1 + sx) * Grid::grid_px_x >= mouse_x &&
                item->parent->pos.y1 + (item->pos.y1 + sy) * Grid::grid_px_y >= mouse_y) {
 
-                // if(g.item_info[item->info_index].is_text_item == true)
-                //     return;
+                // TODO rewrite this
 
                 int weight = g.item_info[item->info_index].weight;
                 bool display_weight = weight > 0;
                 bool display_condition = item->condition > 0.0;
+                float box_width = g.item_info[item->info_index].tooltip_size_x + 36;
                 float off_y = 24.0;
                 float box_height =
                     off_y
-                    + (display_weight == true ? config.font_height : 0)
-                    + (display_condition == true ? config.font_height : 0) + 8;
+                    + (display_weight == true ? config.font_height + 2: 0)
+                    + (display_condition == true ? config.font_height + 2 : 0) + 8;
 
-                al_draw_filled_rectangle(mouse_x + 16, mouse_y,
-                                         mouse_x + 200, mouse_y + box_height, colors.black);
+                al_draw_filled_rectangle
+                    (mouse_x + 16, mouse_y,
+                     mouse_x + box_width, mouse_y + box_height,
+                     colors.black
+                     );
 
                 al_draw_text(g_font, colors.grey3, mouse_x + 24, mouse_y + 8,
                              0, g.item_info[item->info_index].name);
@@ -4183,13 +4194,13 @@ void GridSystem::drawItemTooltip(void) {
                 if(display_condition == true) {
                     al_draw_textf(g_font, colors.grey3, mouse_x + 24, mouse_y + off_y,
                                   0, "condition: %.1f%%", item->condition * 100);
-                    off_y += 14;
+                    off_y += 16;
                 }
 
                 if(display_weight == true) {
                     al_draw_textf(g_font, colors.grey3, mouse_x + 24, mouse_y + off_y,
                                   0, "%d g", weight * item->cur_stack);
-                    off_y += 14;
+                    off_y += 16;
                 }
 
                 // if the item has a grid, draw it under the text
@@ -10077,6 +10088,55 @@ static void unload_game(void) {
     g.map_stories.clear();
 }
 
+static void calc_tooltip_size(ItemInfo & it) {
+    float condition_text_len = al_get_text_width(g_font, "condition: 88.8%");
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%d g", it.weight);
+    float weight_text_len = al_get_text_width(g_font, buf);
+    float other_text_len = condition_text_len;
+    if(it.weight > 0) {
+        other_text_len = max(condition_text_len, weight_text_len);
+    }
+
+    // TODO abstract this
+    // copied from Item::Init
+    bool displayCondition =
+        !(it.canBeDamaged == false ||
+          it.maxStack != 1 ||
+          it.isSkill == true ||
+          it.isLocation == true ||
+          it.isEncounterAction == true ||
+          it.is_text_item == true);
+
+    float name_text_len = al_get_text_width(g_font, it.name);
+    if(displayCondition == true) {
+        it.tooltip_size_x = max(other_text_len, name_text_len);
+    } else {
+        it.tooltip_size_x = name_text_len;
+    }
+}
+
+static void calc_iteminfo_params(ItemInfo& it) {
+
+    calc_tooltip_size(it);
+    bool found = false;
+    for(auto&& flag : it.flags) {
+        if(flag == WEAPON_WITH_AMMO) {
+            it.weapon_with_ammo = true;
+            found = true;
+        }
+    }
+    if(found == false) {
+        it.weapon_with_ammo = false;
+    }
+}
+
+static void calc_iteminfos_params(void) {
+    for(auto&& it : g.item_info) {
+        calc_iteminfo_params(it);
+    }
+}
+
 static void init_UIs(void) {
     g.ui_MainMap   = new MainMapUI;
     g.ui_MiniMap   = new MiniMapUI;
@@ -10795,6 +10855,7 @@ void load(void) {
         g.item_info.clear();
         #endif
         load_ItemInfo();
+        calc_iteminfos_params();
         init_hardpointinfo();
         init_weaponswitcher();
         init_buttons();

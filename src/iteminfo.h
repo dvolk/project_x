@@ -41,7 +41,8 @@ enum ItemFlag {
     VEHICLE,
     CRAFTING_ONLY,
     PUT_ON_SHOULDER,
-    PUT_ON_NECK
+    PUT_ON_NECK,
+    WEAPON_WITH_AMMO,
 };
 
 struct ItemInfo {
@@ -109,4 +110,13 @@ struct ItemInfo {
 
     void save(std::ostream &os);
     void load(std::istream &is);
+
+    /*
+      values filled at runtime in calc_iteminfo_params
+     */
+
+    // the size of the tooltip
+    float tooltip_size_x;
+    // derived from WEAPON_WITH_AMMO flag
+    bool weapon_with_ammo;
 };
