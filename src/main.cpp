@@ -1246,6 +1246,7 @@ struct encounter_state {
     int warned;
     int warned_other;
     bool in_cover;
+    int stunned_for;
 
     void reset(void);
     void wait(void);
@@ -1393,10 +1394,9 @@ struct Character {
     void abuseItem(Item *item, float dt);
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
-    bool weaponUsesAmmo(void);
     bool hasAmmoForWeapon(void);
     bool consumeWeaponAmmo(void);
-    int16_t countWeaponAmmo(void);
+    float get_weapon_condition(void);
 
     void recomputeCarryWeight(void);
     void recomputeWarmth(void);
@@ -1408,21 +1408,10 @@ bool Character::wake_up(void) {
     return fatigue > 0.8;
 }
 
-/*
-  TODO: these functions have confusing names and functionality
-*/
-bool Character::weaponUsesAmmo(void) {
-    return getSelectedWeapon()->getItemSlot() == WEAPON_BOW;
-}
-
-int16_t Character::countWeaponAmmo(void) {
-    return getSelectedWeapon()->storage->items.front()->cur_stack;
-}
-
 bool Character::hasAmmoForWeapon(void) {
     Item *w = getSelectedWeapon();
 
-    if(w->getItemSlot() == WEAPON_BOW) {
+    if(w->is_weapon_with_ammo() == true) {
         if(w->storage->items.empty() == true) {
             return false;
         }
@@ -1430,24 +1419,38 @@ bool Character::hasAmmoForWeapon(void) {
     return true;
 }
 
-// consume ammo if we can
 bool Character::consumeWeaponAmmo(void) {
-    if(weaponUsesAmmo() == true) {
-        if(hasAmmoForWeapon() == true) {
-            Item *ammo = getSelectedWeapon()->storage->items.front();
-            if(ammo->cur_stack == 1) {
-                getSelectedWeapon()->storage->RemoveItem(ammo);
-                delete ammo;
-            } else {
-                ammo->cur_stack--;
-            }
-            return true;
-        } else {
-            return false;
-        }
+    Item *w = getSelectedWeapon();
+
+    assert(w->is_weapon_with_ammo() == true);
+
+    if(hasAmmoForWeapon() == false) {
+        // failure: no ammo
+        return false;
+    }
+
+    Item *ammo = w->storage->items.front();
+    if(ammo->cur_stack == 1) {
+        w->storage->RemoveItem(ammo);
+        delete ammo;
+    } else {
+        ammo->cur_stack--;
     }
     return true;
 }
+
+float Character::get_weapon_condition(void) {
+    Item *w = getSelectedWeapon();
+
+    if(w->condition > 0.0)
+        // if it's a real item, return its condition
+        return w->condition;
+    else
+        // if it's virtual like a hand or bite or whatever,
+        // return the character's health
+        return health;
+}
+
 
 void Character::switchWeaponHand(void) {
     selected_weapon_slot = selected_weapon_slot == 0 ? 1 : 0;
@@ -2661,20 +2664,31 @@ void Character::abuseItem(Item *item, float amount) {
 }
 
 enum WEAPON_USE_RESULT Character::useWeapon(Character *against) {
-    if(consumeWeaponAmmo() == false)
-        return WEAPON_USE_OUT_OF_AMMO;
+    Item *weapon = getSelectedWeapon();
+
+    if(weapon->is_weapon_with_ammo() == true) {
+        if(consumeWeaponAmmo() == false) {
+            return WEAPON_USE_OUT_OF_AMMO;
+        }
+    }
 
     uniform_int_distribution<> cth_dist(0, 100);
-    int cth = getSelectedWeapon()->condition * 100.0;
+    int cth = weapon->condition * 100.0;
 
     if(cth < 0) cth = /* fist */ 75;
+
+    if(against->es.in_cover == true)
+        cth *= 0.5;
+    if(against->es.stunned_for >= 0)
+        cth *= 10.0;
+
+    cth = min(85, cth);
 
     if(cth_dist(*g.rng) > cth)
         return WEAPON_USE_MISS;
 
     // TODO ranged weapons should be abused even if they miss...
-    Item *w = getSelectedWeapon();
-    abuseItem(w, 0.00777);
+    abuseItem(weapon, 0.00777);
 
     return WEAPON_USE_SUCCESS;
 }
@@ -2840,7 +2854,8 @@ void Character::update(void) {
 
     bool sleeping = activity == ACTIVITY_SLEEP;
 
-    activity = ACTIVITY_NONE;
+    if(es.in_encounter == false)
+        activity = ACTIVITY_NONE;
 
     if(es.in_encounter == true) {
         return;
@@ -3644,7 +3659,7 @@ void Character::update_visibility(void) {
     int tod = nextMove % 24000;
     if(tod > 5000 && tod <= 8000) // morning
         current_los_distance = 1;
-    else if(tod > 8000 && tod <= 18000) // early day
+    else if(tod > 8000 && tod <= 18000) // day
         current_los_distance = 2;
     else if(tod > 18000 && tod <= 22000) // evening
         current_los_distance = 1;
@@ -4019,6 +4034,8 @@ void TileMap::generate(void) {
 }
 
 bool TileMap::playerSees(int n) {
+    if(player->activity == ACTIVITY_SLEEP)
+        return false;
     for(auto& cs : player->currently_seeing) {
         if(n == cs) {
             return true;
@@ -4866,8 +4883,6 @@ static void end_turn() {
 
     ActivityKind next = g.map->player->activity;
 
-    player_hurt_messages();
-
     g.map->runEcology();
 
     end_turn_debug_print();
@@ -4892,6 +4907,9 @@ static void end_turn() {
     if(g.map->player->es.in_encounter == true) {
         return;
     }
+
+    if(next != ACTIVITY_SLEEP)
+        player_hurt_messages();
 
     if(next == ACTIVITY_SLEEP) {
         g.map->player->spendTime(1000);
@@ -5320,6 +5338,7 @@ void encounter_state::reset(void) {
     warned_other = 0;
     warned = 0;
     in_cover = false;
+    stunned_for = -1;
 }
 
 enum ENCOUNTER_ACTION {
@@ -5332,7 +5351,9 @@ enum ENCOUNTER_ACTION {
     LEAVE,
     ENTER_COVER,
     LEAVE_COVER,
-    ENCOUNTER_ACTION_MAX
+    STUNNED, /* This could just be part of WAIT */
+    RECOVERED_FROM_STUN,
+    ENCOUNTER_ACTION_MAX,
 };
 
 enum ENCOUNTER_ACTION string_to_action(const char *str) {
@@ -5354,6 +5375,10 @@ enum ENCOUNTER_ACTION string_to_action(const char *str) {
         return ENTER_COVER;
     if(strcmp(str, "Leave cover") == 0)
         return LEAVE_COVER;
+    if(strcmp(str, "Stunned") == 0)
+        return WAIT;
+    if(strcmp(str, "Recovered from stun") == 0)
+        return WAIT;
     assert(false);
 }
 
@@ -5431,7 +5456,10 @@ bool Encounter::ignoring_eachother(void) {
 }
 
 bool Encounter::isBurdened(int n) {
-    return true;
+    if(getChar(n)->burden < 0.5)
+        return true;
+    else
+        return false;
 }
 
 const char *Encounter::getCover(int n) {
@@ -5534,6 +5562,10 @@ Item *item_from_action(enum ENCOUNTER_ACTION action) {
         return g.ui_Encounter->enter_cover;
     if(action == LEAVE_COVER)
         return g.ui_Encounter->leave_cover;
+    if(action == STUNNED)
+        return g.ui_Encounter->wait;
+    if(action == RECOVERED_FROM_STUN)
+        return g.ui_Encounter->wait;
     assert(false);
 }
 
@@ -5763,9 +5795,9 @@ void Encounter::runAIEncounter(EncounterRecord r) {
         printf("%15f\t%15f\n", c1->health, c2->health);
 
     }
+
     c1->es.in_encounter = false;
     c2->es.in_encounter = false;
-
     c1->post_update();
     c2->post_update();
 
@@ -5835,13 +5867,25 @@ void Encounter::npcEncounterStep(int n) {
     bool hidden = range >= 7;
     bool said_hello = _c2->es.warned_other >= 1;
     bool can_flee = hidden;
+    int & stunned_for = _c2->es.stunned_for;
+    int & enemy_stunned_for = _c1->es.stunned_for;
 
     enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
 
     /*
       "AI"
     */
+    if(stunned_for >= 0) {
+        if(stunned_for == 0) {
+            action = RECOVERED_FROM_STUN;
+            goto act;
+        }
+        action = STUNNED;
+        goto act;
+    }
+
     if(samefaction == true) {
+
         if(said_hello == false) {
             action = WARN;
             goto act;
@@ -5902,7 +5946,9 @@ void Encounter::npcEncounterStep(int n) {
                 }
                 _c2->ai.fleeing = 2;
                 _c2->randomMove();
-            } else {
+                _c2->update();
+            }
+            else {
                 if(involvesPlayer() == true)
                     sprintf(buf, "%s tries to flee but can't!", _c2->name);
                 else
@@ -5922,12 +5968,24 @@ void Encounter::npcEncounterStep(int n) {
 
             case WEAPON_USE_SUCCESS:
                 {
-                    _c1->hurt(_c2->getSelectedWeapon()->get_weapon_damage());
+                    Item *weapon = _c2->getSelectedWeapon();
+                    float dmg = weapon->get_weapon_damage() * _c2->get_weapon_condition();
+                    _c1->hurt(dmg);
 
                     if(involvesPlayer() == true)
                         sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
                     else
                         sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
+
+                    uniform_int_distribution<> stunned_dist(0, 100);
+                    int stunned_val = stunned_dist(*g.rng);
+                    if(stunned_val > 75) {
+                        enemy_stunned_for = max(0, enemy_stunned_for);
+                        enemy_stunned_for += 1;
+                        if(stunned_val > 90) {
+                            enemy_stunned_for += 2;
+                        }
+                    }
                 }
                 break;
 
@@ -5973,6 +6031,15 @@ void Encounter::npcEncounterStep(int n) {
                 g.AddMessage(buf);
 
             advance(2);
+
+            if(_c1->es.in_cover && range <= 3) {
+                if(involvesPlayer() == true)
+                    sprintf(buf, "Your cover is broken!");
+                else
+                    sprintf(buf, "%s's cover is broken!", _c2->name);
+                g.AddMessage(buf);
+                _c1->es.in_cover = false;
+            }
         }
         break;
     case WARN:
@@ -6001,7 +6068,8 @@ void Encounter::npcEncounterStep(int n) {
             _c2->ai.ignoring = _c1;
             _c1->ai.ignoring = _c2;
 
-            g.AddMessage(buf);
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
         }
         break;
 
@@ -6014,6 +6082,25 @@ void Encounter::npcEncounterStep(int n) {
     case LEAVE_COVER:
         {
             // TODO
+        }
+        break;
+
+    case STUNNED:
+        {
+            sprintf(buf, "%s is stunned!", _c2->name);
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage(buf);
+            stunned_for--;
+        }
+        break;
+
+    case RECOVERED_FROM_STUN:
+        {
+            sprintf(buf, "%s recovers!", _c2->name);
+            if(g.map->playerSees(_c1->n)) {
+                g.AddMessage(buf);
+            }
+            stunned_for = -1;
         }
         break;
 
@@ -6048,6 +6135,16 @@ void Encounter::runPlayerEncounterStep(void) {
 
     c1->es.last_move = item_from_action(action1);
 
+    if(c1->es.stunned_for >= 0) {
+        if(c1->es.stunned_for == 0) {
+            action1 = RECOVERED_FROM_STUN;
+            goto act;
+        }
+        action1 = STUNNED;
+        goto act;
+    }
+
+ act:
     switch(action1) {
 
     case FLEE:
@@ -6059,9 +6156,9 @@ void Encounter::runPlayerEncounterStep(void) {
                 if(c2->useWeapon(c1) == true)
                     c1->hurt(c2->getSelectedWeapon()->get_weapon_damage() / 3);
 
-                // TODO case of player died?
-
                 c1->randomMove();
+                c1->update_visibility();
+                c1->update();
                 g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
                 g.AddMessage("Encounter ends.");
             } else {
@@ -6077,6 +6174,12 @@ void Encounter::runPlayerEncounterStep(void) {
 
             snprintf(msg, sizeof(msg), "You advance toward %s!", c2->name);
             g.AddMessage(msg);
+
+            if(c2->es.in_cover && range <= 3) {
+                sprintf(msg, "%s's cover is broken!", c2->name);
+                g.AddMessage(msg);
+                c2->es.in_cover = false;
+            }
         }
         break;
 
@@ -6087,9 +6190,24 @@ void Encounter::runPlayerEncounterStep(void) {
 
             case WEAPON_USE_SUCCESS:
                 {
-                    c2->hurt(c1->getSelectedWeapon()->get_weapon_damage());
+                    Item *weapon = c1->getSelectedWeapon();
+                    float dmg = weapon->get_weapon_damage() * c1->get_weapon_condition();
+                    c2->hurt(dmg);
+
                     sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
                     g.AddMessage(msg);
+
+                    int & enemy_stunned_for = c2->es.stunned_for;
+
+                    uniform_int_distribution<> stunned_dist(0, 100);
+                    int stunned_val = stunned_dist(*g.rng);
+                    if(stunned_val > 75) {
+                        enemy_stunned_for = max(0, enemy_stunned_for);
+                        enemy_stunned_for += 1;
+                        if(stunned_val > 90) {
+                            enemy_stunned_for += 2;
+                        }
+                    }
                 }
                 break;
 
@@ -6157,6 +6275,20 @@ void Encounter::runPlayerEncounterStep(void) {
         }
         break;
 
+    case STUNNED:
+        {
+            c1->es.stunned_for--;
+            // TODO
+        }
+        break;
+
+    case RECOVERED_FROM_STUN:
+        {
+            c1->es.stunned_for = -1;
+            // TODO
+        }
+        break;
+
     default:
         {
             assert(false);
@@ -6184,8 +6316,11 @@ void Encounter::runPlayerEncounterStep(void) {
 
 void EncounterUI::addPlayerOptions(void) {
     encounterGrids->options->PlaceItem(wait);
+    if(encounter.getChar(0)->es.stunned_for >= 0) {
+        return;
+    }
     encounterGrids->options->PlaceItem(flee);
-    if(encounter.getChar(0)->es.in_cover == false) {
+    if(encounter.getChar(0)->es.in_cover == false && encounter.getRange() >= 3) {
         encounterGrids->options->PlaceItem(enter_cover);
     }
     if(encounter.getChar(0)->es.in_cover == true) {
@@ -6193,12 +6328,13 @@ void EncounterUI::addPlayerOptions(void) {
     }
     if(encounter.seesOpponent(0)) {
         encounterGrids->options->PlaceItem(warn);
-    }
-    if(encounter.playerInRange() == true) {
-        encounterGrids->options->PlaceItem(single_attack);
-    }
-    if(encounter.getChar(0)->faction == encounter.getChar(1)->faction) {
-        encounterGrids->options->PlaceItem(leave);
+
+        if(encounter.playerInRange() == true) {
+            encounterGrids->options->PlaceItem(single_attack);
+        }
+        if(encounter.getChar(0)->faction == encounter.getChar(1)->faction) {
+            encounterGrids->options->PlaceItem(leave);
+        }
     }
     encounterGrids->options->PlaceItem(retreat);
     encounterGrids->options->PlaceItem(advance);
@@ -6382,6 +6518,11 @@ void EncounterUI::drawCharacterSheet(int n, float x, float y) {
         al_draw_text(g_font, colors.red, x, y + 70 + i * line_height, 0, "Burdened");
         i++;
     }
+    if(encounter.getChar(n)->es.stunned_for >= 0) {
+        al_draw_text(g_font, colors.red, x, y + 70 + i * line_height, 0, "Stunned");
+        i++;
+    }
+
     al_draw_text(g_font, colors.black, x + 180, y, 0, "Last move:");
 
     Item *last_move = encounter.getLastMove(n);
@@ -10088,6 +10229,7 @@ static void unload_game(void) {
     g.map_stories.clear();
 }
 
+// calculates the x size of the item tooltip
 static void calc_tooltip_size(ItemInfo & it) {
     float condition_text_len = al_get_text_width(g_font, "condition: 88.8%");
     char buf[64];
@@ -10116,6 +10258,7 @@ static void calc_tooltip_size(ItemInfo & it) {
     }
 }
 
+// fill in runtime iteminfo
 static void calc_iteminfo_params(ItemInfo& it) {
 
     calc_tooltip_size(it);
