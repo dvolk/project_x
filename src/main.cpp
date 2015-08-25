@@ -231,6 +231,16 @@ struct Game {
     void AddMessage(string str);
 };
 
+static Game g;
+
+vector<ItemInfo>& get_global_iteminfo(void) {
+    return g.item_info;
+}
+
+vector<WeatherInfo> *get_global_weatherinfo(void) {
+    return &g.weatherinfo;
+}
+
 struct EncounterRecord {
     Character *c1;
     Character *c2;
@@ -243,8 +253,6 @@ struct EncounterRecord {
 };
 
 vector<EncounterRecord> encounters;
-
-static Game g;
 
 // an item is something that lives on the grid
 struct Item {
@@ -1671,7 +1679,8 @@ struct TileInfo {
     bool blocks_los;
     bool blocks_movement;
     bool has_locations;
-    int visibility_mod;
+    int8_t visibility_mod;
+    int8_t encounter_cover; // 1, 2, or 3
 };
 
 // data that's common to all locations of the same type
@@ -1843,30 +1852,6 @@ struct Ecology {
 struct RealityBubble {
     int radius;
 };
-
-static void init_weatherinfo(void) {
-    WeatherInfo clear;
-    clear.name = "Clear";
-    clear.bmaps = { -1 }; // -1: no bitmaps
-    clear.fps = 1;
-    clear.duration = 7000;
-
-    WeatherInfo raining;
-    raining.name = "Raining";
-    raining.bmaps = { 118, 119 };
-    raining.fps = 10;
-    raining.duration = 3000;
-
-    WeatherInfo foggy;
-    foggy.name = "Fog";
-    foggy.bmaps = { 122 };
-    foggy.fps = 1;
-    foggy.duration = 2000;
-
-    g.weatherinfo.push_back(clear);
-    g.weatherinfo.push_back(raining);
-    g.weatherinfo.push_back(foggy);
-}
 
 struct Weather {
     int idx; // index into g.weather_info;
@@ -5417,9 +5402,11 @@ public:
     Encounter(void);
 
     EncounterRecord record;
+    TileInfo *cur_tileinfo;
 
     // general
     void setup(Character *c1, Character *c2);
+    void set_tileinfo(TileInfo *t);
 
     // AI vs AI
     void runAIEncounter(EncounterRecord r);
@@ -5439,6 +5426,7 @@ public:
     const char *getTerrainDifficulty(void);
     const char *getBestCover(void);
     const char *getWeather(void);
+    float getMobility(int n);
     // encounter_state *getEChar(int n);
 
     Item *getLastMove(int n);
@@ -5471,7 +5459,13 @@ const char *Encounter::getTerrainDifficulty(void) {
 }
 
 const char *Encounter::getBestCover(void) {
-    return "low";
+    switch(cur_tileinfo->encounter_cover)
+        {
+        case 1: { return "low"; } break;
+        case 2: { return "medium"; } break;
+        case 3: { return "high"; } break;
+        }
+    assert(false);
 }
 
 const char *Encounter::getWeather(void) {
@@ -5482,17 +5476,22 @@ const Character *Encounter::getChar(int n) {
     return n == 0 ? c1 : c2;
 }
 
-// encounter_state & Encounter::getEChar(int n) {
-//     return getChar(n).es;
-// }
-
 void Encounter::updateVisibility(void) {
+    c1->es.visible = false;
+    c2->es.visible = false;
+
     if(range <= detection_range) {
         c1->es.visible = true;
         c2->es.visible = true;
-    } else {
-        c1->es.visible = false;
-        c2->es.visible = false;
+
+        bool cover_range =
+            range > detection_range / 2;//cur_tileinfo->encounter_cover;
+
+        if(c1->es.in_cover == true && cover_range)
+            c1->es.visible = false;
+
+        if(c2->es.in_cover == true && cover_range)
+            c2->es.visible = false;
     }
 }
 
@@ -5595,6 +5594,18 @@ const char *Encounter::getName(int n) {
     return n == 0 ? c1->name : c2->name;
 }
 
+float Encounter::getMobility(int n) {
+    // 0 - 4
+    int s = getChar(n)->pain * 4;
+
+    if(getChar(n)->es.in_cover == true)
+        s /= 2;
+
+    printf("Encounter::getMobility(): %s -> %d\n", getChar(n)->name, s);
+
+    return max(1, s);
+}
+
 const char *Encounter::getFaction(int n) {
     return
         n == 0
@@ -5624,15 +5635,16 @@ bool Encounter::playerInRange(void) {
     return weapon->get_weapon_range() >= range;
 }
 
-void Encounter::advance(int steps) {
+void Encounter::advance(int n) {
+    int steps = getMobility(n);
     if(steps >= range)
         range = 0;
     else
         range -= steps;
 }
 
-void Encounter::retreat(int steps) {
-    range += steps;
+void Encounter::retreat(int n) {
+    range += getMobility(n);
 }
 
 void Encounter::set_detection_range(void) {
@@ -5644,29 +5656,32 @@ void Encounter::set_start_range(void) {
         {
         case 0: // dawn
             {
-                range = 15;
+                range = 25;
             }
             break;
         case 1: // day
             {
-                range = 20;
+                range = 40;
             }
             break;
         case 2: // dusk
             {
-                range = 10;
+                range = 20;
             }
             break;
         case 3: // night
             {
-                range = 5;
+                range = 10;
             }
             break;
         }
 
-    if(g.map->weather.idx == 1) {
-        range = (float)range * 0.7;
-    }
+    // divide by 1.0, 1.5, 2.0 depending on tile cover type
+    range /= (1 + cur_tileinfo->encounter_cover) / 2.0;
+
+    range *= g.weatherinfo[g.map->weather.idx].encounter_range_mult;
+
+    range = max(1, range);
 }
 
 void Encounter::setup(Character *c1, Character *c2) {
@@ -5675,6 +5690,7 @@ void Encounter::setup(Character *c1, Character *c2) {
     this->c2 = c2;
     c1->es.reset();
     c2->es.reset();
+    cur_tileinfo = &g.map->tile_info[g.map->tiles[c1->n].info_index];
     set_start_range();
     set_detection_range();
     ignoring = false;
@@ -5837,7 +5853,7 @@ void Encounter::npcEncounterStep(void) {
 
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
-void Encounter::npcEncounterStep(int n) {
+void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusing
     char buf[100];
 
     // info("Encounter::npcEncounterStep()");
@@ -6016,7 +6032,8 @@ void Encounter::npcEncounterStep(int n) {
             if(g.map->playerSees(_c1->n))
                 g.AddMessage(buf);
 
-            retreat(1);
+            puts(buf);
+            retreat(n == 0 ? 1 : 0);
         }
         break;
 
@@ -6030,7 +6047,8 @@ void Encounter::npcEncounterStep(int n) {
             if(g.map->playerSees(_c1->n))
                 g.AddMessage(buf);
 
-            advance(2);
+            puts(buf);
+            advance(n == 0 ? 1 : 0);
 
             if(_c1->es.in_cover && range <= 3) {
                 if(involvesPlayer() == true)
@@ -6170,7 +6188,7 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case ADVANCE:
         {
-            advance(2);
+            advance(0);
 
             snprintf(msg, sizeof(msg), "You advance toward %s!", c2->name);
             g.AddMessage(msg);
@@ -6231,7 +6249,7 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case RETREAT:
         {
-            retreat(2);
+            retreat(0);
 
             snprintf(msg, sizeof(msg), "You retreat from %s!", c2->name);
             g.AddMessage(msg);
@@ -6348,12 +6366,12 @@ void EncounterUI::setup(void) {
     widgets.push_back(g.log);
     addIndicatorWidgets();
 
-    // the tile sprite
-    cur_tile_sprite = g.map->tile_info[g.map->tiles[g.map->player->n].info_index].sprite;
-
     encounterGrids->selected->items.clear();
     encounterGrids->options->items.clear();
     widgets.push_back(encounterGrids);
+
+    // the tile sprite
+    cur_tile_sprite = g.map->tile_info[g.map->tiles[g.map->player->n].info_index].sprite;
 
     encounter.updateVisibility();
     addPlayerOptions();
@@ -6478,7 +6496,7 @@ void EncounterUI::drawCharacterSheet(int n, float x, float y) {
     sprintf(buf, "Faction: %s", encounter.getFaction(n));
     al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0, buf);
     i++;
-    if(encounter.seesOpponent(n) == true) {
+    if(encounter.seesOpponent(n == 0 ? 1 : 0) == true) {
         al_draw_text(g_font, colors.black, x, y + 70 + i * line_height, 0,
                      "Visible: yes");
     } else {
@@ -6523,11 +6541,11 @@ void EncounterUI::drawCharacterSheet(int n, float x, float y) {
         i++;
     }
 
-    al_draw_text(g_font, colors.black, x + 180, y, 0, "Last move:");
-
     Item *last_move = encounter.getLastMove(n);
-    if(last_move != NULL)
+    if(last_move != NULL) {
+        al_draw_text(g_font, colors.black, x + 180, y, 0, "Last move:");
         al_draw_bitmap(last_move->get_sprite(), x + 180 + 25, y + line_height + 5, 0);
+    }
 }
 
 void EncounterUI::drawCenterPane(float x, float y) {
@@ -6571,7 +6589,7 @@ void EncounterUI::draw(void) {
     drawCenterPane(c_pane_x + 20, c_pane_y + 25); // TODO parametrize
 
     // right pane
-    if(encounter.seesOpponent(1) == true) {
+    if(encounter.seesOpponent(0) == true) {
         drawCharacterSheet(1, r_pane_x + 15.0, r_pane_y + 15);
     } else {
         al_draw_bitmap(unknown_character_sprite, r_pane_x + 15, r_pane_y + 15, 0);
@@ -9722,6 +9740,7 @@ static void init_tileinfo(void) {
     i.has_locations = false;
     i.visibility_mod = 0;
     i.name = "Grassland";
+    i.encounter_cover = 1;
     g.map->tile_info.push_back(i);
     // tree
     i.minimap_color = al_map_rgb(0, 150, 0);
@@ -9731,6 +9750,7 @@ static void init_tileinfo(void) {
     i.has_locations = true;
     i.visibility_mod = -1;
     i.name = "Wood";
+    i.encounter_cover = 2;
     g.map->tile_info.push_back(i);
     // city
     i.minimap_color = al_map_rgb(255, 255, 255);
@@ -9740,6 +9760,7 @@ static void init_tileinfo(void) {
     i.has_locations = true;
     i.visibility_mod = 0;
     i.name = "City";
+    i.encounter_cover = 3;
     g.map->tile_info.push_back(i);
     // swamp
     i.minimap_color = al_map_rgb(0, 0, 200);
@@ -9749,6 +9770,7 @@ static void init_tileinfo(void) {
     i.has_locations = true;
     i.visibility_mod = 0;
     i.name = "Swamp";
+    i.encounter_cover = 2;
     g.map->tile_info.push_back(i);
     // Hilly grass
     i.minimap_color = al_map_rgb(0, 150, 0);
@@ -9758,6 +9780,7 @@ static void init_tileinfo(void) {
     i.has_locations = false;
     i.visibility_mod = 1;
     i.name = "Hill";
+    i.encounter_cover = 1;
     g.map->tile_info.push_back(i);
     // Dirt
     i.minimap_color = al_map_rgb(150, 75, 0);
@@ -9767,6 +9790,7 @@ static void init_tileinfo(void) {
     i.has_locations = true;
     i.visibility_mod = 0;
     i.name = "Dirt";
+    i.encounter_cover = 1;
     g.map->tile_info.push_back(i);
     // crackedground
     i.minimap_color = al_map_rgb(125, 50, 0);
@@ -9776,6 +9800,7 @@ static void init_tileinfo(void) {
     i.has_locations = true;
     i.visibility_mod = 0;
     i.name = "Cracked ground";
+    i.encounter_cover = 1;
     g.map->tile_info.push_back(i);
 }
 
@@ -10310,6 +10335,10 @@ static void new_game(void) {
     init_UIs();
 }
 
+ALLEGRO_BITMAP *get_global_bitmap(size_t n) {
+    return g.bitmaps[n];
+}
+
 int find_bitmap_index(ALLEGRO_BITMAP *searched) {
     size_t i = 0;
     for(auto&& bitmap : g.bitmaps) {
@@ -10318,10 +10347,6 @@ int find_bitmap_index(ALLEGRO_BITMAP *searched) {
         i++;
     }
     return -1;
-}
-
-ALLEGRO_BITMAP *get_global_bitmap(size_t n) {
-    return g.bitmaps[n];
 }
 
 void save_ItemInfo(void) {
@@ -10351,10 +10376,6 @@ void load_ItemInfo(void) {
         g.item_info.push_back(tmp);
     }
     in.close();
-}
-
-vector<ItemInfo>& get_global_iteminfo(void) {
-    return g.item_info;
 }
 
 void ai_state::save(ostream &os) {
