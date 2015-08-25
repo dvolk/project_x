@@ -28,6 +28,7 @@ struct Config {
     bool esc_menu_quits;
     bool log_to_file;
     bool native_dialogs;
+    bool auto_submit_choices;
 
     void save(const char *filename);
     void load(const char *filename);

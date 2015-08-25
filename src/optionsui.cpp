@@ -98,6 +98,10 @@ OptionsUI::OptionsUI() {
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Esc In Menu Exits Game", &config.esc_menu_quits);
     i++;
+    autoSubmitChoicesCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Auto Submit Choices", &config.auto_submit_choices);
+    i++;
     startNagCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Start Notifications", &config.start_nag);
@@ -172,6 +176,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(showFPSCB);
     checkboxes.push_back(logToFileCB);
     checkboxes.push_back(nativeSaveLoadDialogsCB);
+    checkboxes.push_back(autoSubmitChoicesCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
     widgets.push_back(musicVolumeSlider);

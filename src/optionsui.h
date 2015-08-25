@@ -26,14 +26,15 @@ struct OptionsUI : public UI {
     LabelledCheckBox *playUISoundsCB;
     LabelledCheckBox *showFPSCB;
     LabelledCheckBox *escMenuQuitsCB;
-    LabelledCheckBox *logToFileCB;
     LabelledCheckBox *nativeSaveLoadDialogsCB;
+    LabelledCheckBox *autoSubmitChoicesCB;
 
     Slider *musicVolumeSlider;
     Slider *uiSoundVolumeSlider;
 
     LabelledCheckBox *clipRectangleCB;
     LabelledCheckBox *playerInvulnerableCB;
+    LabelledCheckBox *logToFileCB;
 
     void reset_settings(void);
     void apply_settings(void);

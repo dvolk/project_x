@@ -3134,6 +3134,8 @@ struct GridSystem : public Widget {
     bool auto_move_to_ground;
     Grid *auto_target;
 
+    void (*auto_submit)(void);
+
     // when placing an item back if the dropped position is blocked, we need
     // to know if it was originally rotated
     bool was_rotated;
@@ -3189,6 +3191,7 @@ GridSystem::GridSystem(void) {
     auto_move_to_ground = false;
     just_picked_up_item = false;
     auto_target = NULL;
+    auto_submit = NULL;
     held = NULL;
     change = NULL;
     applied = NULL;
@@ -4251,6 +4254,11 @@ void GridSystem::gsMouseDownEvent() {
             } else {
                 if(auto_target != NULL) {
                     MouseAutoMoveItemToTarget();
+                }
+            }
+            if(config.auto_submit_choices == true) {
+                if(auto_submit != NULL) {
+                    auto_submit();
                 }
             }
         }
@@ -6417,6 +6425,8 @@ bool Encounter::isEncounterNPCdead(int n) {
     return false;
 }
 
+static void runEncounterStepCB(void);
+
 EncounterGridSystem::EncounterGridSystem() {
     options = new Grid (202, 340, 16, 10, NULL);
     selected = new Grid (495, 340, 16, 10, NULL);
@@ -6425,6 +6435,7 @@ EncounterGridSystem::EncounterGridSystem() {
     grids.push_back(selected);
 
     auto_target = selected;
+    auto_submit = runEncounterStepCB;
 }
 
 EncounterGridSystem::~EncounterGridSystem() {
@@ -7205,6 +7216,8 @@ InteractUI::~InteractUI() {
     delete button_confirm;
 }
 
+static void runInteractStepCB(void);
+
 InteractGridSystem::InteractGridSystem() {
     options = new Grid (97 + 105, InteractUI::top_off_y
                         + InteractUI::top_size + 5, 16, 10, NULL);
@@ -7213,12 +7226,11 @@ InteractGridSystem::InteractGridSystem() {
                          NULL);
 
     auto_target = selected;
+    auto_submit = runInteractStepCB;
 
     grids.push_back(options);
     grids.push_back(selected);
 }
-
-static void runInteractStepCB(void);
 
 InteractUI::InteractUI(void) {
     clear_to = colors.grey;

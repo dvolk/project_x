@@ -64,6 +64,8 @@ void Config::save(const char *filename) {
     al_set_config_value(cfg, NULL, "log-to-file", buf);
     snprintf(buf, sizeof(buf), "%d", native_dialogs);
     al_set_config_value(cfg, NULL, "native-save-load-dialogs", buf);
+    snprintf(buf, sizeof(buf), "%d", auto_submit_choices);
+    al_set_config_value(cfg, NULL, "auto-submit-choices", buf);
 
     al_save_config_file(filename, cfg);
     al_destroy_config(cfg);
@@ -155,6 +157,9 @@ void Config::load(const char *filename) {
 
     s = al_get_config_value(cfg, 0, "native-save-load-dialogs");
     native_dialogs = atoi(with_default(s, "0"));
+
+    s = al_get_config_value(cfg, 0, "auto-submit-choices");
+    auto_submit_choices = atoi(with_default(s, "1"));
 
     al_destroy_config(cfg);
 }
