@@ -5494,7 +5494,7 @@ void Encounter::updateVisibility(void) {
         c2->es.visible = true;
 
         bool cover_range =
-            range > detection_range / 2;//cur_tileinfo->encounter_cover;
+            range > detection_range / cur_tileinfo->encounter_cover;
 
         if(c1->es.in_cover == true && cover_range)
             c1->es.visible = false;
