@@ -1255,6 +1255,7 @@ struct encounter_state {
     int warned_other;
     bool in_cover;
     int stunned_for;
+    int robo_stamina;
 
     void reset(void);
     void wait(void);
@@ -5744,6 +5745,8 @@ static bool runPlayerEncounter(EncounterRecord r) {
     cout << "Running encounter at: " << r.c1->n << " with AI " << ai->name << endl;
 
     g.ui_Encounter->encounter.setup(player, ai);
+    ai->es.robo_stamina = 100 * ai->fatigue;
+
     g.ui_Encounter->setup();
 
     // show the message log if it's hidden
@@ -5803,6 +5806,9 @@ void Encounter::runAIEncounter(EncounterRecord r) {
     }
 
     setup(r.c1, r.c2);
+
+    c1->es.robo_stamina = c1->fatigue * 100;
+    c2->es.robo_stamina = c2->fatigue * 100;
 
     printf("Fight!\n");
     printf("%15s\t%15s\n", c1->name, c2->name);
@@ -5893,6 +5899,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     bool can_flee = hidden;
     int & stunned_for = _c2->es.stunned_for;
     int & enemy_stunned_for = _c1->es.stunned_for;
+    int no_stamina = _c2->es.robo_stamina <= 0;
 
     enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
 
@@ -5908,8 +5915,13 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
         goto act;
     }
 
-    if(samefaction == true) {
+    if(no_stamina == true) {
+        // prevent infinite loops with one AI advancing and the other
+        // retreating when the advancing AI has a weapon with range 1
+        goto force_attack;
+    }
 
+    if(samefaction == true) {
         if(said_hello == false) {
             action = WARN;
             goto act;
@@ -5924,6 +5936,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
         if(hasammo == false) {
             goto disengage;
         }
+    force_attack:
         if(inrange == false || hasammo == false || seesenemy == false) {
             action = ADVANCE;
             goto act;
@@ -6042,6 +6055,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
 
             puts(buf);
             retreat(n == 0 ? 1 : 0);
+            _c2->es.robo_stamina -= 1;
         }
         break;
 
@@ -6127,6 +6141,11 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
                 g.AddMessage(buf);
             }
             stunned_for = -1;
+        }
+        break;
+
+    case WAIT:
+        {
         }
         break;
 
