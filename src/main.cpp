@@ -462,7 +462,7 @@ float Item::get_warmth(void) {
 }
 
 float Item::get_weapon_damage(void) {
-    return g.item_info[info_index].weapon_damage;
+    return g.item_info[info_index].weapon_damage * max((float)0.5, condition);
 }
 
 int Item::get_weapon_range(void) {
@@ -2659,7 +2659,7 @@ enum WEAPON_USE_RESULT Character::useWeapon(Character *against) {
     }
 
     uniform_int_distribution<> cth_dist(0, 100);
-    int cth = weapon->condition * 100.0;
+    int cth = max((float)0.4, weapon->condition) * 100.0;
 
     if(cth < 0) cth = /* fist */ 75;
 
@@ -6006,7 +6006,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
             case WEAPON_USE_SUCCESS:
                 {
                     Item *weapon = _c2->getSelectedWeapon();
-                    float dmg = weapon->get_weapon_damage() * _c2->get_weapon_condition();
+                    float dmg = weapon->get_weapon_damage();
                     _c1->hurt(dmg);
 
                     if(involvesPlayer() == true)
@@ -6236,7 +6236,7 @@ void Encounter::runPlayerEncounterStep(void) {
             case WEAPON_USE_SUCCESS:
                 {
                     Item *weapon = c1->getSelectedWeapon();
-                    float dmg = weapon->get_weapon_damage() * c1->get_weapon_condition();
+                    float dmg = weapon->get_weapon_damage();
                     c2->hurt(dmg);
 
                     sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
