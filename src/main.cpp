@@ -241,6 +241,10 @@ vector<WeatherInfo> *get_global_weatherinfo(void) {
     return &g.weatherinfo;
 }
 
+ALLEGRO_DISPLAY *get_global_display(void) {
+    return g.display;
+}
+
 struct EncounterRecord {
     Character *c1;
     Character *c2;
@@ -1265,6 +1269,9 @@ struct Character {
     int n; // position by offset
     int x, y; // cache to avoid computations
 
+    // data for map movement animation
+    int old_x, old_y, old_n, move_dir;
+
     char *name;
 
     Grid *right_hand_hold;
@@ -1367,9 +1374,11 @@ struct Character {
 
     void draw(void);
     void drawOffset(int offset_x, int offset_y);
+    void drawOffsetAnimated(int offset_x, int offset_y, int map_move_frame);
 
     void setPos(int n);
     void setPos(int x, int y);
+    void clearOldPos(void);
 
     /*
       TODO why is this here
@@ -1412,6 +1421,13 @@ struct Character {
 
     Wound *random_wound(void);
 };
+
+void Character::clearOldPos(void) {
+    old_x = x;
+    old_y = y;
+    old_n = n;
+    move_dir = 0;
+}
 
 bool Character::wake_up(void) {
     return fatigue > 0.8;
@@ -1907,8 +1923,18 @@ struct TileMap : public Widget {
     int start;
     int mouse_n;
 
+
     // map from positions to characters on that position
     unordered_multimap<int, Character *> charsByPos;
+
+    // map movement animation stuff
+    int map_move_frame = -1;
+    int map_move_frame_max;
+    float move_anim_rate1;
+    float move_anim_rate2;
+    float move_anim_rate3;
+    unordered_multimap<int, Character *> oldCharsByPos;
+    unordered_multimap<int, Character *> *renderCharsByPos;
 
     vector<Character *> characters;
     Character *player;
@@ -2028,6 +2054,13 @@ void TileMap::update(void) {
     int d = 1000 * g.dt;
 
     weather.anim.update();
+
+    if(map_move_frame >= 0)
+        map_move_frame++;
+    if(map_move_frame >= map_move_frame_max / 2)
+        renderCharsByPos = &charsByPos;
+    if(map_move_frame >= map_move_frame_max)
+        map_move_frame = -1;
 
     // keyboard scrolling
     if(al_key_down(&g.keyboard_state, ALLEGRO_KEY_UP))
@@ -2255,6 +2288,14 @@ void Character::setPos(int x, int y) {
 }
 
 void Character::sleep(void) {
+    clearOldPos();
+    if(this == g.map->player) {
+        if(config.map_move_animations == true) {
+            g.map->oldCharsByPos = g.map->charsByPos;
+            g.map->renderCharsByPos = &g.map->oldCharsByPos;
+        }
+    }
+
     bool sufficiently_tired = fatigue < 0.4;
 
     if(sufficiently_tired == true)
@@ -2301,8 +2342,15 @@ void Character::sleep(void) {
 }
 
 void Character::wait(void) {
-    if(this == g.map->player)
+    clearOldPos();
+
+    if(this == g.map->player) {
         g.AddMessage("You play with yourself for a while...");
+        if(config.map_move_animations == true) {
+            g.map->oldCharsByPos = g.map->charsByPos;
+            g.map->renderCharsByPos = &g.map->oldCharsByPos;
+        }
+    }
     else {
         if(g.map->playerSees(this->n)) {
             char buf[128];
@@ -2974,6 +3022,25 @@ void Character::move(int new_n) {
 
     g.map->DeleteGroundIfEmpty(this->n);
 
+    old_x = x;
+    old_y = y;
+    old_n = n;
+
+    for(int dir = 1; dir <= 6; dir++) {
+        if(dir_transform(n, dir) == new_n) {
+            move_dir = dir;
+            break;
+        }
+    }
+    // printf("move_dir: %d\n", move_dir);
+
+    if(this == g.map->player) {
+        if(config.map_move_animations == true) {
+            g.map->oldCharsByPos = g.map->charsByPos;
+            g.map->renderCharsByPos = &g.map->oldCharsByPos;
+        }
+    }
+
     setPos(new_n);
     g.map->updateCharsByPos();
 
@@ -3426,6 +3493,18 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     bubble.radius = 200;
 
     eco.want_creatures = sqrt(bubble.radius);
+
+    renderCharsByPos = &charsByPos;
+
+    float anim_duration = 0.1;
+    // up/down
+    move_anim_rate1 = (float)TileMap::hex_step_y / (float)config.frame_rate / anim_duration;
+    // diagonal up/down
+    move_anim_rate2 = ((float)TileMap::hex_step_y / 2) / (float)config.frame_rate / anim_duration;
+    // diagonal left/right
+    move_anim_rate3 = (float)TileMap::hex_step_x / (float)config.frame_rate / anim_duration;
+    map_move_frame = -1;
+    map_move_frame_max = (float)config.frame_rate * anim_duration;
 }
 
 void TileMap::focusOnPlayer(void) {
@@ -3583,6 +3662,9 @@ void TileMap::mouseDown(void) {
             return;
             }
         }
+
+        if(map_move_frame >= 0)
+            return;
 
         for(int dir = 1; dir <= 6; dir++) {
             if(dir_transform(player_n, dir) == clicked_n) {
@@ -3845,6 +3927,80 @@ void Character::drawOffset(int offset_x, int offset_y) {
                    g.map->pos.y1 + off_y + offset_y, 0);
 }
 
+void Character::drawOffsetAnimated(int offset_x, int offset_y, int map_move_frame) {
+    assert(sprite != NULL);
+
+    // is it on the screen?
+    if(y >= g.map->view_y + g.map->rows ||
+       x >= g.map->view_x + g.map->cols ||
+       y < g.map->view_y ||
+       x < g.map->view_x) {
+        return;
+    }
+
+    float r_x = old_x - g.map->view_x;
+    float r_y = old_y - g.map->view_y;
+
+    float anim_off_x = 0;
+    float anim_off_y = 0;
+
+    const float & move_anim_rate1 = g.map->move_anim_rate1;
+    const float & move_anim_rate2 = g.map->move_anim_rate2;
+    const float & move_anim_rate3 = g.map->move_anim_rate3;
+
+    switch(move_dir)
+        {
+        case 0:
+            {
+                anim_off_y = 0;
+                anim_off_x = 0;
+            }
+            break;
+        case 1:
+            {
+                anim_off_y = - move_anim_rate1 * map_move_frame;
+            }
+            break;
+        case 2:
+            {
+                anim_off_y = - move_anim_rate2 * map_move_frame;
+                anim_off_x = move_anim_rate3 * map_move_frame;
+            }
+            break;
+        case 3:
+            {
+                anim_off_y = move_anim_rate2 * map_move_frame;
+                anim_off_x = move_anim_rate3 * map_move_frame;
+            }
+            break;
+        case 4:
+            {
+                anim_off_y = move_anim_rate1 * map_move_frame;
+            }
+            break;
+        case 5:
+            {
+                anim_off_y = move_anim_rate2 * map_move_frame;
+                anim_off_x = - move_anim_rate3 * map_move_frame;
+            }
+            break;
+        case 6:
+            {
+                anim_off_y = - move_anim_rate2 * map_move_frame;
+                anim_off_x = - move_anim_rate3 * map_move_frame;
+            }
+            break;
+        }
+
+    float off_x = 80 * r_x - g.map->res_px;
+    float off_y = old_n % 2 == 0 ? 0 : 20;
+    off_y += 40 * r_y - g.map->res_py;
+
+    al_draw_bitmap(sprite,
+                   g.map->pos.x1 + off_x + 25 + offset_x + anim_off_x,
+                   g.map->pos.y1 + off_y + offset_y + anim_off_y, 0);
+}
+
 static void toggleMsgLogVisibility(void) {
     if(g.log->visible) {
         g.log->visible = false;
@@ -4077,9 +4233,9 @@ void TileMap::drawTile(int i, int x, int y) {
         }
 
         // draw characters
-        int num_there = charsByPos.count(t);
+        int num_there = renderCharsByPos->count(t);
         if(num_there > 0) {
-            auto p = charsByPos.equal_range(t);
+            auto p = renderCharsByPos->equal_range(t);
             int offset_x = 0;
             int offset_y = 0;
             if(num_there > 1) {
@@ -4089,11 +4245,18 @@ void TileMap::drawTile(int i, int x, int y) {
                 offset_y = -2.5 * num_there;
             }
             for(auto& it = p.first; it != p.second; it++) {
-                // it->second->drawOffset(off_x, off_y);
-                al_draw_bitmap(it->second->sprite,
-                               pos.x1 + off_x + offset_x + 25.0,
-                               pos.y1 + off_y + offset_y,
-                               0);
+                if(it->second == player && map_move_frame % 5 == 0)
+                    printf("t: %p %d\n", (void*)renderCharsByPos, t);
+
+                if(map_move_frame >= 0) {
+                    it->second->drawOffsetAnimated(offset_x, offset_y, map_move_frame);
+                }
+                else {
+                    al_draw_bitmap(it->second->sprite,
+                                   pos.x1 + off_x + offset_x + 25.0,
+                                   pos.y1 + off_y + offset_y,
+                                   0);
+                }
                 offset_x -= 20;
                 offset_y += 10;
             }
@@ -4843,6 +5006,10 @@ static void removeEncounter(EncounterRecord r);
 
 static void end_turn() {
     Character *c;
+
+    if(config.map_move_animations) {
+        g.map->map_move_frame = 0;
+    }
 
  begin_again:
     // process characters until it's the player's turn again or we get
@@ -5732,7 +5899,6 @@ static bool runPlayerEncounter(EncounterRecord r) {
         removeEncounter(r);
         return false;
     }
-
     // we're in a valid encounter now...
 
     chInterruptsPlayer(r.c1 == g.map->player ? r.c2 : r.c1);
@@ -5828,6 +5994,15 @@ void Encounter::runAIEncounter(EncounterRecord r) {
 
     c1->es.in_encounter = false;
     c2->es.in_encounter = false;
+
+    c1->clearOldPos();
+    c2->clearOldPos();
+
+    if(config.map_move_animations == true) {
+        g.map->oldCharsByPos = g.map->charsByPos;
+        g.map->renderCharsByPos = &g.map->oldCharsByPos;
+    }
+
     c1->post_update();
     c2->post_update();
 
@@ -5840,10 +6015,20 @@ void Encounter::endEncounter(void) {
     info("Encounter::endEncounter()");
     running = false;
     removeEncounter(record);
+
+    g.ui_FadeTransition->takeScreenshot(g.ui_Encounter);
     switch_to_MainMap();
+    fade_to_UI(g.ui_Encounter, g.ui_MainMap);
 
     c1->es.in_encounter = false;
     c2->es.in_encounter = false;
+
+    c2->clearOldPos();
+
+    if(config.map_move_animations == true) {
+        g.map->oldCharsByPos = g.map->charsByPos;
+        g.map->renderCharsByPos = &g.map->oldCharsByPos;
+    }
 
     c2->post_update(); // this removes the npc if they're dead
 
@@ -5976,6 +6161,9 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
                 if(involvesPlayer() == true) {
                     sprintf(buf, "%s flees from you!", _c2->name);
                     g.AddMessage("Encounter ends.");
+                    if(config.map_move_animations) {
+                        g.map->map_move_frame = 0;
+                    }
                 }
                 else {
                     sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
@@ -6206,6 +6394,9 @@ void Encounter::runPlayerEncounterStep(void) {
                 c1->update();
                 g.AddMessage("You successfully flee from the encounter taking only minor injuries.");
                 g.AddMessage("Encounter ends.");
+                if(config.map_move_animations) {
+                    g.map->map_move_frame = 0;
+                }
             } else {
                 snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
                 g.AddMessage(msg);

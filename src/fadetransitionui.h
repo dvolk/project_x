@@ -14,11 +14,16 @@ struct FadeTransitionUI : public UI {
     int fade_frames = 30;
     int frame;
 
+    ALLEGRO_BITMAP *scr;
+
+    FadeTransitionUI() { scr = NULL; }
+
     void start(UI *f, UI *t);
 
     void draw(void) override;
     void updateFrame(void);
     void set_duration(float s);
+    void takeScreenshot(UI *ui);
 
     // a widget whose only purpose is to call FadeTransitionUI::updateFrame
     /*
@@ -31,4 +36,3 @@ struct FadeTransitionUI : public UI {
     };
     UpdateCaller upc;
 };
-

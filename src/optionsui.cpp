@@ -70,7 +70,7 @@ OptionsUI::OptionsUI() {
     };
 
     const float start_x = round((config.displayX - 485) / 2);
-    const float start_y = 100;
+    const float start_y = 75;
     const float step_y = 25;
     int i = 0;
 
@@ -89,6 +89,10 @@ OptionsUI::OptionsUI() {
     clipRectangleCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "16:9 Letterbox", &config.setClipRectangle);
+    i++;
+    mapMoveAnimationsCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Animated Map Moves", &config.map_move_animations);
     i++;
     sortingCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
@@ -177,6 +181,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(logToFileCB);
     checkboxes.push_back(nativeSaveLoadDialogsCB);
     checkboxes.push_back(autoSubmitChoicesCB);
+    checkboxes.push_back(mapMoveAnimationsCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
     widgets.push_back(musicVolumeSlider);
