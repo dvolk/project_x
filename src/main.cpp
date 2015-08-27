@@ -1984,6 +1984,7 @@ struct TileMap : public Widget {
     bool playerSees(int n);
 
     void updateCharsByPos(void);
+    void removeFromOldCharsByPos(Character *c);
     void removeCharacter(Character *to_kill);
     Character *addRandomCharacter(void);
     Character *addRandomCharacter(Faction fac);
@@ -2479,6 +2480,7 @@ void TileMap::removeCharacter(Character *to_kill) {
         if(character == to_kill) {
             g.map->characters.erase(g.map->characters.begin() + i);
             delete to_kill;
+            removeFromOldCharsByPos(to_kill);
             updateCharsByPos();
             return;
         }
@@ -2495,6 +2497,20 @@ void TileMap::updateCharsByPos(void) {
     for(auto& npc : characters) {
         assert(npc != NULL);
         charsByPos.emplace(npc->n, npc);
+    }
+}
+
+void TileMap::removeFromOldCharsByPos(Character *c) {
+    auto it = oldCharsByPos.begin();
+    for(; it != oldCharsByPos.end() ;) {
+        if(it->second == c) {
+            printf("TileMap::removeFromOldCharsByPos(): removing %p", (void*)c);
+            it = oldCharsByPos.erase(it);
+            return;
+        }
+        else {
+            ++it;
+        }
     }
 }
 
