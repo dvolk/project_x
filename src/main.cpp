@@ -361,7 +361,7 @@ bool Item::isTextItem(void) {
     return g.item_info[info_index].is_text_item;
 }
 
-static ALLEGRO_BITMAP *little_pink_bitmap(void);
+ALLEGRO_BITMAP *little_pink_bitmap(void);
 static void calc_iteminfo_params(ItemInfo & it);
 
 Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
@@ -2488,6 +2488,10 @@ void TileMap::removeCharacter(Character *to_kill) {
     }
 }
 
+/*
+  TODO: this doesn't need to clear it?
+  just esase + insert new?
+ */
 void TileMap::updateCharsByPos(void) {
     // cout << "updateCharsByPos" << endl;
     charsByPos.clear();
@@ -9336,7 +9340,7 @@ static void press_Help_back(void) {
     runMainMenu();
 }
 
-static ALLEGRO_BITMAP *little_pink_bitmap(void) {
+ALLEGRO_BITMAP *little_pink_bitmap(void) {
     ALLEGRO_BITMAP *b = al_create_bitmap(32, 32);
     al_set_target_bitmap(b);
     al_clear_to_color(al_color_name("pink"));

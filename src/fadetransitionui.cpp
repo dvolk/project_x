@@ -27,6 +27,7 @@ void FadeTransitionUI::start(UI *f, UI *t) {
     widgets.push_back(&upc);
 }
 
+ALLEGRO_BITMAP *little_pink_bitmap(void);
 ALLEGRO_DISPLAY *get_global_display(void);
 
 void FadeTransitionUI::takeScreenshot(UI *ui) {
@@ -41,6 +42,9 @@ void FadeTransitionUI::takeScreenshot(UI *ui) {
         al_clear_to_color(ui->clear_to);
         ui->draw();
         al_set_target_backbuffer(get_global_display());
+    }
+    if(scr == NULL) {
+        scr = little_pink_bitmap();
     }
 }
 
