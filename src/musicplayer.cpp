@@ -5,7 +5,6 @@
 
 #include <stdio.h>
 
-#include <string>
 #include <array>
 
 #include <allegro5/allegro.h>
@@ -38,9 +37,7 @@ void music_player_set_volume(float vol) {
     if(stream == NULL)
         return;
 
-    char buf[100];
-    snprintf(buf, sizeof(buf), "music_player: changing volume to %f", vol);
-    info(buf);
+    info("music_player: changing volume to %f", vol);
     al_set_audio_stream_gain(stream, vol);
 }
 void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
@@ -67,7 +64,7 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
 
         stream = al_load_audio_stream(tracks.at(current_track), 3, 1024);
         if(stream == NULL) {
-            info("music_player(): couldn't load " + std::string(tracks.at(current_track)));
+            info("music_player(): couldn't load %s", tracks.at(current_track));
             return NULL;
         }
 
@@ -92,7 +89,7 @@ void *music_player(ALLEGRO_THREAD *thrd, void *arg) {
             return NULL;
         }
 
-        info("music_player(): playing " + std::string(tracks.at(current_track)));
+        info("music_player(): playing %s", tracks.at(current_track));
 
         while(running == true &&
               config.playMusic == true &&

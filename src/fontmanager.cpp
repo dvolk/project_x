@@ -13,9 +13,9 @@ extern ALLEGRO_FONT *g_font;
 void font_load(const char *filepath, int height) {
     g_font = al_load_font(filepath, height, 0);
     if(g_font == NULL)
-        errorQuit("failed to load font: " + std::string(filepath));
+        errorQuit("failed to load font: %s", filepath);
     else
-        info("Loaded font: " + std::string(filepath));
+        info("Loaded font: %s", filepath);
 }
 
 void font_unload(void) {

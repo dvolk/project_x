@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
+#include <cstdarg>
 
 using namespace std;
 
@@ -31,17 +32,29 @@ void stop_logging(void) {
         logstream.close();
 }
 
-void errorQuit(string str) {
+void errorQuit(const char *format_string, ...) {
+    char str[1024];
+    va_list args;
+    va_start(args, format_string);
+    vsnprintf(str, sizeof(str), format_string, args);
+    va_end(args);
+
     cout << "Error: " << str << endl;
     if(logstream.is_open() == true)
         logstream << "Error: " << str << endl;
     exit(1);
 }
 
-void info(string str) {
-    cout << "Info: " << str << endl;
+void info(const char *format_string, ...) {
+    char str[1024];
+    va_list args;
+    va_start(args, format_string);
+    vsnprintf(str, sizeof(str), format_string, args);
+    va_end(args);
+
     if(logstream.is_open() == true)
         logstream << "Info: " << str << endl;
+    cout << "Info: " << str << endl;
 }
 
 __attribute__ ((const))

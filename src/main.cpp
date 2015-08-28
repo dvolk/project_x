@@ -228,7 +228,7 @@ struct Game {
     double dt;
 
     // add a message to the message log
-    void AddMessage(string str);
+    void AddMessage(const char *format_string, ...);
 };
 
 static Game g;
@@ -905,9 +905,7 @@ int Item::index_from_name(const char *item_name) {
         i++;
     }
 
-    char buf[75];
-    snprintf(buf, sizeof(buf), "Unknown item: \"%s\"", item_name);
-    errorQuit(buf);
+    errorQuit("Unknown item: \"%s\"", item_name);
     return -1;
 }
 
@@ -1044,9 +1042,11 @@ Item *Grid::PlaceItem(Item *to_place) {
         }
         AddItem(to_place);
         to_place->setHpDims();
-        // printf("Adding item %s at %f,%f, size: %f x %f\n",
-        //        to_place->getName(), to_place->pos.x1, to_place->pos.y1,
-        //        to_place->pos.x2, to_place->pos.y2);
+
+        // info("Grid::PlaceItem(): Adding item %s at %f, %f, size: %f x %f\n",
+        //      to_place->getName(), to_place->pos.x1, to_place->pos.y1,
+        //      to_place->pos.x2, to_place->pos.y2);
+
         return NULL;
     }
     else {
@@ -1526,7 +1526,7 @@ Wound * Character::random_wound(void) {
 }
 
 void Character::hurt(float amount) {
-    printf("%s hurt for %f\n", name, amount);
+    info("%s hurt for %f", name, amount);
     health -= min(health, amount);
 
     int wounds_num = amount / 0.03;
@@ -2147,7 +2147,11 @@ void TileMap::runWeather() {
       change the weather
      */
     weather.duration += g.map->player->dt;
-    printf("*** weather: %d %d %d\n", weather.idx, weather.duration, g.weatherinfo[weather.idx].duration);
+
+    info("TileMap::runWeather(): index: %d time: %d duration: %d",
+         weather.idx,
+         weather.duration,
+         g.weatherinfo[weather.idx].duration);
 
     if(weather.duration > g.weatherinfo[weather.idx].duration)
         {
@@ -2177,11 +2181,11 @@ void TileMap::runEcology() {
     // add more characters if there's too few nearby
     if((int)characters.size() < eco.want_creatures) {
         Character *c = addRandomCharacterNearPlayer();
-        printf("runEcology(): added character %s at %d\n", c->name, c->n);
+        info("runEcology(): added character %s at %d", c->name, c->n);
         added++;
     }
 
-    printf("runEcology(): removed/added %d/%d characters\n", removed, added);
+    info("runEcology(): removed/added %d/%d characters", removed, added);
 }
 
 bool TileMap::blocks_movement(int n) {
@@ -2312,9 +2316,7 @@ void Character::sleep(void) {
                     g.AddMessage("You lay down and go to sleep...");
                 else {
                     if(g.map->playerSees(this->n)) {
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "%s appears to be getting ready for bed...", name);
-                        g.AddMessage(buf);
+                        g.AddMessage("%s appears to be getting ready for bed...", name);
                     }
                 }
             }
@@ -2325,9 +2327,7 @@ void Character::sleep(void) {
                     g.AddMessage("You try to sleep but can't...");
                 else {
                     if(g.map->playerSees(this->n)) {
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "%s lays down and stares at the heavens.", name);
-                        g.AddMessage(buf);
+                        g.AddMessage("%s lays down and stares at the heavens.", name);
                     }
                 }
             }
@@ -2354,9 +2354,7 @@ void Character::wait(void) {
     }
     else {
         if(g.map->playerSees(this->n)) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "%s plays around with themself for a while...", name);
-            g.AddMessage(buf);
+            g.AddMessage("%s plays around with themself for a while...", name);
         }
     }
     activity = ACTIVITY_WAIT;
@@ -2508,7 +2506,7 @@ void TileMap::removeFromOldCharsByPos(Character *c) {
     auto it = oldCharsByPos.begin();
     for(; it != oldCharsByPos.end() ;) {
         if(it->second == c) {
-            printf("TileMap::removeFromOldCharsByPos(): removing %p", (void*)c);
+            info("TileMap::removeFromOldCharsByPos(): removing %p", (void*)c);
             it = oldCharsByPos.erase(it);
             return;
         }
@@ -2683,13 +2681,13 @@ void Character::abuseItem(Item *item, float amount) {
     item->condition -= amount;
 
     if(item->condition < 0.01) {
-        cout << name << " destroyed " << item->getName() << " at " << n << endl;
+        info("Character::abuseItem(): %s destroyed %s at %d",
+             name, item->getName(), n);
+
         // items is destroyed
         if(this == g.map->player) {
             // add message if character is player
-            char buf[70];
-            sprintf(buf, "Your %s is destroyed!", item->getName());
-            g.AddMessage(buf);
+            g.AddMessage("Your %s is destroyed!", item->getName());
         }
         if(item->storage != NULL) {
             // dump the contained items on the ground
@@ -2704,7 +2702,8 @@ void Character::abuseItem(Item *item, float amount) {
             /*
               TODO: wtf?
              */
-            cout << name << "'s " << item->getName() << " has NULL parent" << endl;
+            info("Character::abuseItem(): %s from %s has no parent",
+                 item->getName(), name);
 
             delete item;
             return;
@@ -2780,7 +2779,8 @@ void Character::recomputeCarryWeight(void) {
             carry_weight += item->get_weight();
         }
     }
-    cout << "playing is carrying " << carry_weight << 'g' << endl;
+    info("Character::recomputeCarryWeight(): %s is carrying %d g",
+         name, carry_weight);
 
     burden = 1.0 - (float)carry_weight / maxBurden;
 }
@@ -2916,15 +2916,14 @@ void Character::update(void) {
     }
 
     if(sleeping == true && wake_up() == false) {
-        printf("sleeping again... %f\n", fatigue);
+        info("Character::update(): sleeping again... %f", fatigue);
         activity = ACTIVITY_SLEEP;
     }
 }
 
 void Character::print_stats(void) {
-    cout << " H: " << health << " P: " << pain << " F: " << fatigue
-         << " Hy: " << hydration << " S: " << satiety << " B: " << burden
-         << endl;
+    info("Character::print_stats(): %s/%d - H: %d P: %d F: %d Hy: %d S: %d B: %d",
+         name, n, health, pain, fatigue, hydration, satiety, burden);
 }
 
 void Character::randomMove(void) {
@@ -2945,15 +2944,18 @@ static bool runPlayerEncounter(EncounterRecord r);
 static void chInterruptsPlayer(Character *c1) {
     int playersNewDt = g.map->player->nextMove - c1->nextMove;
 
-    cout << c1 << " interrupted player! nextMove: "
-         << g.map->player->nextMove << " -> " << c1->nextMove << " dt: "
-         << g.map->player->dt << " -> " << playersNewDt << endl;
+    info("chInterruptsPlayer(): %s interrupted player! nextMove: %d -> %d, dt: %d -> %d",
+         c1->name,
+         g.map->player->nextMove,
+         c1->nextMove,
+         g.map->player->dt,
+         playersNewDt);
 
     /*
       TODO: this fails
     */
     if(playersNewDt < 0)
-        printf("chInterruptsPlayer(): player's dt is negative: %d\n", playersNewDt);
+        info("chInterruptsPlayer(): player's dt is negative: %d", playersNewDt);
 
     g.map->player->dt = playersNewDt;
     g.map->player->nextMove = c1->nextMove;
@@ -3004,7 +3006,10 @@ void TileMap::removeTempItems(int n) {
         vector<Item *>::iterator it;
         for(it = g->items.begin(); it != g->items.end() ;) {
             if((*it)->hasFlag(CRAFTING_ONLY) == true) {
-                printf("deleting %s\n", (*it)->getName());
+
+                info("TileMap::removeTempItems(): deleting %s",
+                     (*it)->getName());
+
                 delete *it;
                 it = g->items.erase(it);
             }
@@ -3075,7 +3080,10 @@ void Character::move(int new_n) {
         auto p = g.map->charsByPos.equal_range(new_n);
         for(auto&& it = p.first; it != p.second; it++) {
             if(it->second != this) {
-                printf("**** adding: %s vs %s\n", this->name, it->second->name);
+
+                info("Character::move(): Adding: %s vs %s",
+                     this->name, it->second->name);
+
                 encounters.emplace_back(EncounterRecord(this, it->second));
             }
         }
@@ -3088,14 +3096,15 @@ void Character::move(int new_n) {
 }
 
 void Character::die(void) {
-    cout << "Died: " << name << endl;
+    info("Character::die(): %s at %d", name, n);
     g.map->removeCharacter(this);
 }
 
 static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
 
 void Character::drop_all_items(void) {
-    cout << this << " drop_all_items at " << this->n << endl;
+    info("Character::drop_all_items(): %s at %d", name, n);
+
     vector<Grid *> *ground = ground_at_character(this);
     for(auto& hardpoint : inventory_hardpoints) {
         for(auto& item : hardpoint->items) {
@@ -3187,7 +3196,6 @@ static int get_time_zone(void) {
 
 void TimeDisplay::calculate_tod(void) {
     tod = g.map->player->nextMove % 24000;
-    printf("TOD: %d\n", tod);
     int i = -1;
 
     if(     tod >  6000 && tod <=  9000) i = 0;
@@ -3196,6 +3204,8 @@ void TimeDisplay::calculate_tod(void) {
     else i = 3;
 
     time_zone = i;
+
+    info("TimeDisplay::calculate_tod(): tod = %d, tz = %d", tod, i);
 
     if(i == -1) {
         current_time_string = "";
@@ -3418,7 +3428,7 @@ void GridSystem::countTotalItems(void) {
         g++;
         i += grid->items.size();
     }
-    cout << "GridSystem: " << g << " grids " << i << " items." << endl;
+    info("GridSystem: %d grids, %d items: %d", g, i);
 }
 
 void GridSystem::hoverOver(void) {
@@ -3667,7 +3677,7 @@ void TileMap::mouseDown(void) {
     int player_n = player->n;
     int clicked_nearby = -1;
 
-    printf("clicked on n=%d m=(%d, %d) p=((%f, %f) (%f, %f))\n",
+    info("clicked on n=%d m=(%d, %d) p=((%f, %f) (%f, %f))",
            clicked_n, mouse_x, mouse_y,
            pos.x1, pos.y1, pos.x2, pos.y2);
 
@@ -3818,7 +3828,7 @@ void Character::update_visibility(void) {
             currently_seeing.push_back(n4);
             g.map->tiles[n4].visible = true;
         }
-        cout << "update_visibility(): Added " << (int)currently_seeing.size() << " tiles" << endl;
+        info("update_visibility(): Added %d tiles.", (int)currently_seeing.size());
         return;
     }
 }
@@ -4042,11 +4052,7 @@ void TileMap::keyDown(void) {
         end_turn();
     }
 
-    char buf[35];
-    snprintf(buf, sizeof(buf),
-             "Tile map view: x = %d, y = %d", view_x, view_y);
-    cout << buf << endl;
-    // g.AddMessage(buf);
+    info("Tile map view: x = %d, y = %d", view_x, view_y);
 }
 
 void UI::addIndicatorWidgets(void) {
@@ -4138,11 +4144,19 @@ static vector<string> word_wrap(const char *text, int line_length_px) {
     return ret;
 }
 
-void Game::AddMessage(string str) {
+void Game::AddMessage(const char *format_string, ...) {
     if(log == NULL)
         return;
 
-    for(auto&& line : word_wrap(str.c_str(), 790))
+    char str[1024];
+    va_list args;
+    va_start(args, format_string);
+    vsnprintf(str, sizeof(str), format_string, args);
+    va_end(args);
+
+    cout << "Message: " << str << endl;
+
+    for(auto&& line : word_wrap(str, 790))
         log->lines.push_back(line);
 }
 
@@ -4265,8 +4279,8 @@ void TileMap::drawTile(int i, int x, int y) {
                 offset_y = -2.5 * num_there;
             }
             for(auto& it = p.first; it != p.second; it++) {
-                if(it->second == player && map_move_frame % 5 == 0)
-                    printf("t: %p %d\n", (void*)renderCharsByPos, t);
+                // if(it->second == player && map_move_frame % 5 == 0)
+                //     printf("t: %p %d\n", (void*)renderCharsByPos, t);
 
                 if(map_move_frame >= 0) {
                     it->second->drawOffsetAnimated(offset_x, offset_y, map_move_frame);
@@ -4500,7 +4514,7 @@ void GridSystem::GrabItem() {
     just_picked_up_item = true;
     was_rotated = i->rotated;
     i->resetDims();
-    cout << was_rotated << endl;
+
     g.hold_off_x =
         mouse_x - (i->parent->pos.x1 + i->pos.x1 * Grid::grid_px_x);
     g.hold_off_y =
@@ -4702,11 +4716,10 @@ bool GridSystem::placeItemAtMouse() {
             held->setHpDims();
             addStorageGrid();
 
-            char b[60];
-            snprintf(b, sizeof(b), "Moved %s onto grid %d at %d, %d",
-                     g.item_info[held->info_index].name, i, drop_x, drop_y);
-            puts(b);
-            // g.AddMessage(b);
+            info("Moved %s onto grid %d at %d, %d",
+                 g.item_info[held->info_index].name,
+                 i, drop_x, drop_y);
+
             // the item is placed. we're done
             held = NULL;
             return true;
@@ -4721,9 +4734,7 @@ bool GridSystem::placeItemAtMouse() {
     else {
         returnHeldToSender();
 
-        char b[40];
-        snprintf(b, sizeof(b), "Blocked on grid %d", i);
-        cout << b;
+        info("Blocked on grid %d", i);
         return false;
     }
 
@@ -4963,16 +4974,11 @@ static Character *next(void) {
         return g.map->player;
 }
 
-// static void chr_debug_print(Character *c) {
-//     cout << "AI " << c << " (" << c->nextMove << ") " << c->n << endl;
-// }
-
 static void end_turn_debug_print(void) {
-    printf("turn ends (%d) with %d characters. encounters: %lu\n",
-           g.map->player->nextMove,
-           (int)g.map->characters.size(),
-           encounters.size()
-           );
+    info("turn ends (%d) with %d characters. encounters: %lu",
+         g.map->player->nextMove,
+         (int)g.map->characters.size(),
+         encounters.size());
 
     // g.map->player->print_stats();
 }
@@ -5075,7 +5081,7 @@ static void end_turn() {
     int tz_after = g.time_display->time_zone;
 
     if(tz_after != tz_before)
-        g.AddMessage("It is now " + string(g.time_display->current_time_string_lcase));
+        g.AddMessage("It is now %s", g.time_display->current_time_string_lcase);
 
     g.map->updateColors();
 
@@ -5202,7 +5208,7 @@ static int countItemsOfType(Grid* grid, int searching_for) {
             c += item->cur_stack;
         }
     }
-    cout << searching_for << " " << c << endl;
+    info("countItemsOfType(): searching_for: %d", c);
     return c;
 }
 
@@ -5354,7 +5360,7 @@ CraftingGridSystem::~CraftingGridSystem() {
 static void runCrafting(void);
 
 static void updateCraftingOutput(void) {
-    cout << "something changed! maybe" << endl;
+    info("updateCraftingOutput() called");
 
     Grid *results = g.ui_Crafting->craftGrids->results;
 
@@ -5400,12 +5406,12 @@ static void updateCraftingOutput(void) {
 }
 
 static void craftingNextRecipe(void) {
-    cout << g.ui_Crafting->current_recipe++ << endl;
+    g.ui_Crafting->current_recipe++;
     updateCraftingOutput();
 }
 
 static void craftingPrevRecipe(void) {
-    cout << g.ui_Crafting->current_recipe-- << endl;
+    g.ui_Crafting->current_recipe--;
     updateCraftingOutput();
 }
 
@@ -5500,9 +5506,7 @@ static void runCrafting(void) {
     if(!rs.empty()) {
         create_results(rs.at(selected_recipe));
 
-        char buf[100];
-        snprintf(buf, sizeof(buf), "Crafted %s", rs.at(selected_recipe)->name);
-        g.AddMessage(buf);
+        g.AddMessage("Crafted %s", rs.at(selected_recipe)->name);
     }
 
     updateCraftingOutput();
@@ -5776,7 +5780,9 @@ bool Encounter::isRunning(void) { return running; }
 
 int Encounter::getRange(void) { return range; }
 
-bool Encounter::involvesPlayer(void) { return c1 == g.map->player; }
+bool Encounter::involvesPlayer(void) {
+    return c1 == g.map->player;
+}
 
 bool Encounter::npcRelocated(void) {
     return c1->n != c2->n;
@@ -5797,7 +5803,7 @@ float Encounter::getMobility(int n) {
     if(getChar(n)->es.in_cover == true)
         s /= 2;
 
-    printf("Encounter::getMobility(): %s -> %d\n", getChar(n)->name, s);
+    info("Encounter::getMobility(): %s -> %d", getChar(n)->name, s);
 
     return max(1, s);
 }
@@ -5928,7 +5934,8 @@ static bool runPlayerEncounter(EncounterRecord r) {
     Character *player = r.c1 == g.map->player ? r.c1 : r.c2;
     Character *ai     = r.c1 == g.map->player ? r.c2 : r.c1;
 
-    cout << "Running encounter at: " << r.c1->n << " with AI " << ai->name << endl;
+    info("runPlayerEncounter(): Running encounter at: %d with AI %s",
+         player->n, ai->name);
 
     g.ui_Encounter->encounter.setup(player, ai);
     ai->es.robo_stamina = 100 * ai->fatigue;
@@ -5957,7 +5964,7 @@ static void removeEncounter(EncounterRecord r) {
     vector<EncounterRecord>::iterator it;
     for(it = encounters.begin(); it != encounters.end();) {
         if(it->c1 == r.c1 && it->c2 == r.c2) {
-            printf("removing record %p %p\n", (void*)r.c1, (void*)r.c2);
+            info("removing record %p %p", (void*)r.c1, (void*)r.c2);
             it = encounters.erase(it);
         }
         else {
@@ -5996,8 +6003,8 @@ void Encounter::runAIEncounter(EncounterRecord r) {
     c1->es.robo_stamina = c1->fatigue * 100;
     c2->es.robo_stamina = c2->fatigue * 100;
 
-    printf("Fight!\n");
-    printf("%15s\t%15s\n", c1->name, c2->name);
+    info("Encounter::runAIEncounter(): Fight!");
+    info("%15s\t%15s", c1->name, c2->name);
 
     while(true) {
         npcEncounterStep(0);
@@ -6008,7 +6015,7 @@ void Encounter::runAIEncounter(EncounterRecord r) {
 
         if(isEncounterNPCdead(1) == true || npcRelocated() == true || ignoring_eachother() == true) break;
 
-        printf("%15f\t%15f\n", c1->health, c2->health);
+        info("%15f\t%15f", c1->health, c2->health);
 
     }
 
@@ -6073,8 +6080,6 @@ void Encounter::npcEncounterStep(void) {
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusing
-    char buf[100];
-
     // info("Encounter::npcEncounterStep()");
 
     updateVisibility();
@@ -6179,15 +6184,15 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
 
             if(successfully_fled == true) {
                 if(involvesPlayer() == true) {
-                    sprintf(buf, "%s flees from you!", _c2->name);
+                    g.AddMessage("%s flees from you!", _c2->name);
                     g.AddMessage("Encounter ends.");
                     if(config.map_move_animations) {
                         g.map->map_move_frame = 0;
                     }
                 }
                 else {
-                    sprintf(buf, "%s flees from %s!", _c2->name, _c1->name);
-                    cout << _c2 << " fled successfully" << endl;
+                    if(g.map->playerSees(_c1->n))
+                        g.AddMessage("%s flees from %s!", _c2->name, _c1->name);
                 }
                 _c2->ai.fleeing = 2;
                 _c2->randomMove();
@@ -6195,13 +6200,11 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
             }
             else {
                 if(involvesPlayer() == true)
-                    sprintf(buf, "%s tries to flee but can't!", _c2->name);
+                    g.AddMessage("%s tries to flee but can't!", _c2->name);
                 else
-                    sprintf(buf, "%s tries to flee from %s but can't!", _c2->name, _c1->name);
+                    if(g.map->playerSees(_c1->n))
+                        g.AddMessage("%s tries to flee from %s but can't!", _c2->name, _c1->name);
             }
-
-            if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
         }
         break;
 
@@ -6218,9 +6221,10 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
                     _c1->hurt(dmg);
 
                     if(involvesPlayer() == true)
-                        sprintf(buf, "%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                        g.AddMessage("%s hits you with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
                     else
-                        sprintf(buf, "%s hits %s with their %s!", _c2->name, _c1->name, _c2->getSelectedWeapon()->getName());
+                        if(g.map->playerSees(_c1->n))
+                            g.AddMessage("%s hits %s with their %s!", _c2->name, _c1->name, weapon->getName());
 
                     uniform_int_distribution<> stunned_dist(0, 100);
                     int stunned_val = stunned_dist(*g.rng);
@@ -6236,32 +6240,29 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
 
             case WEAPON_USE_MISS:
                 {
-                    sprintf(buf, "%s missed with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
+                    if(g.map->playerSees(_c1->n))
+                        g.AddMessage("%s missed with their %s!", _c2->name, _c2->getSelectedWeapon()->getName());
                 }
                 break;
 
             case WEAPON_USE_OUT_OF_AMMO:
                 {
-                    sprintf(buf, "%s tried to use %s but didn't have any ammo!", _c2->name, _c2->getSelectedWeapon()->getName());
+                    if(g.map->playerSees(_c1->n))
+                        g.AddMessage("%s tried to use %s but didn't have any ammo!", _c2->name, _c2->getSelectedWeapon()->getName());
                 }
                 break;
             }
-            if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
         }
         break;
 
     case RETREAT:
         {
             if(involvesPlayer() == true)
-                sprintf(buf, "%s retreats from you!", _c2->name);
+                g.AddMessage("%s retreats from you!", _c2->name);
             else
-                sprintf(buf, "%s retreats from %s!", _c2->name, _c1->name);
+                if(g.map->playerSees(_c1->n))
+                    g.AddMessage("%s retreats from %s!", _c2->name, _c1->name);
 
-            if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
-
-            puts(buf);
             retreat(n == 0 ? 1 : 0);
             _c2->es.robo_stamina -= 1;
         }
@@ -6270,22 +6271,19 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     case ADVANCE:
         {
             if(involvesPlayer() == true)
-                sprintf(buf, "%s advances on your position!", _c2->name);
+                g.AddMessage("%s advances on your position!", _c2->name);
             else
-                sprintf(buf, "%s advances toward %s!", _c2->name, _c1->name);
-
-            if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
-
-            puts(buf);
+                if(g.map->playerSees(_c1->n))
+                    g.AddMessage("%s advances toward %s!", _c2->name, _c1->name);
             advance(n == 0 ? 1 : 0);
 
             if(_c1->es.in_cover && range <= 3) {
                 if(involvesPlayer() == true)
-                    sprintf(buf, "Your cover is broken!");
+                    g.AddMessage("Your cover is broken!");
                 else
-                    sprintf(buf, "%s's cover is broken!", _c2->name);
-                g.AddMessage(buf);
+                    if(g.map->playerSees(_c1->n))
+                        g.AddMessage("%s's cover is broken!", _c2->name);
+
                 _c1->es.in_cover = false;
             }
         }
@@ -6293,12 +6291,10 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     case WARN:
         {
             if(involvesPlayer() == true)
-                sprintf(buf, "%s says \"hello there!\"", _c2->name);
+                g.AddMessage("%s says \"hello there!\"", _c2->name);
             else
-                sprintf(buf, "%s greets %s.", _c2->name, _c1->name);
-
-            if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
+                if(g.map->playerSees(_c1->n))
+                    g.AddMessage("%s greets %s.", _c2->name, _c1->name);
 
             _c2->es.warned_other++;
         }
@@ -6307,17 +6303,15 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     case LEAVE:
         {
             if(involvesPlayer() == true) {
-                sprintf(buf, "%s has no more business with you.", _c2->name);
+                g.AddMessage("%s has no more business with you.", _c2->name);
             }
             else {
-                sprintf(buf, "%s has no more business with %s.", _c2->name, _c1->name);
+                if(g.map->playerSees(_c1->n))
+                    g.AddMessage("%s has no more business with %s.", _c2->name, _c1->name);
             }
 
             _c2->ai.ignoring = _c1;
             _c1->ai.ignoring = _c2;
-
-            if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
         }
         break;
 
@@ -6335,19 +6329,17 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
 
     case STUNNED:
         {
-            sprintf(buf, "%s is stunned!", _c2->name);
             if(g.map->playerSees(_c1->n))
-                g.AddMessage(buf);
+                g.AddMessage("%s is stunned!", _c2->name);
+
             stunned_for--;
         }
         break;
 
     case RECOVERED_FROM_STUN:
         {
-            sprintf(buf, "%s recovers!", _c2->name);
-            if(g.map->playerSees(_c1->n)) {
-                g.AddMessage(buf);
-            }
+            if(g.map->playerSees(_c1->n))
+                g.AddMessage("%s recovers!", _c2->name);
             stunned_for = -1;
         }
         break;
@@ -6381,10 +6373,9 @@ void Encounter::runPlayerEncounterStep(void) {
         return;
     }
 
-    char msg[100];
     enum ENCOUNTER_ACTION action1 = string_to_action(actions->front()->getName());
 
-    printf("Encounter::runPlayerEncounterStep() npc name %s\n", c2->name);
+    info("Encounter::runPlayerEncounterStep() npc name %s", c2->name);
 
     c1->es.last_move = item_from_action(action1);
 
@@ -6418,8 +6409,7 @@ void Encounter::runPlayerEncounterStep(void) {
                     g.map->map_move_frame = 0;
                 }
             } else {
-                snprintf(msg, sizeof(msg), "You try to run away but %s prevents you!", c2->name);
-                g.AddMessage(msg);
+                g.AddMessage("You try to run away but %s prevents you!", c2->name);
             }
         }
         break;
@@ -6428,12 +6418,10 @@ void Encounter::runPlayerEncounterStep(void) {
         {
             advance(0);
 
-            snprintf(msg, sizeof(msg), "You advance toward %s!", c2->name);
-            g.AddMessage(msg);
+            g.AddMessage("You advance toward %s!", c2->name);
 
             if(c2->es.in_cover && range <= 3) {
-                sprintf(msg, "%s's cover is broken!", c2->name);
-                g.AddMessage(msg);
+                g.AddMessage("%s's cover is broken!", c2->name);
                 c2->es.in_cover = false;
             }
         }
@@ -6450,8 +6438,7 @@ void Encounter::runPlayerEncounterStep(void) {
                     float dmg = weapon->get_weapon_damage();
                     c2->hurt(dmg);
 
-                    sprintf(msg, "You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
-                    g.AddMessage(msg);
+                    g.AddMessage("You hit %s with the %s!", c2->name, c1->getSelectedWeapon()->getName());
 
                     int & enemy_stunned_for = c2->es.stunned_for;
 
@@ -6469,15 +6456,13 @@ void Encounter::runPlayerEncounterStep(void) {
 
             case WEAPON_USE_MISS:
                 {
-                    sprintf(msg, "You miss with the %s!", c1->getSelectedWeapon()->getName());
-                    g.AddMessage(msg);
+                    g.AddMessage("You miss with the %s!", c1->getSelectedWeapon()->getName());
                 }
                 break;
 
             case WEAPON_USE_OUT_OF_AMMO:
                 {
-                    sprintf(msg, "The %s is out of ammo!", c1->getSelectedWeapon()->getName());
-                    g.AddMessage(msg);
+                    g.AddMessage("The %s is out of ammo!", c1->getSelectedWeapon()->getName());
                 }
                 break;
             }
@@ -6489,8 +6474,7 @@ void Encounter::runPlayerEncounterStep(void) {
         {
             retreat(0);
 
-            snprintf(msg, sizeof(msg), "You retreat from %s!", c2->name);
-            g.AddMessage(msg);
+            g.AddMessage("You retreat from %s!", c2->name);
         }
         break;
 
@@ -6634,8 +6618,8 @@ bool Encounter::isEncounterNPCdead(int n) {
             break;
         }
     }
-    if(alive == false) {
-        printf("isEncounterNPCdead(): gotcha %p\n", (void*)c);
+    if(alive == false) { // TODO: this should never be true now?
+        info("isEncounterNPCdead(): gotcha %p", (void*)c);
         return true;
     }
 
@@ -6646,9 +6630,7 @@ bool Encounter::isEncounterNPCdead(int n) {
             g.AddMessage("Encounter ends.");
             // g.map->updateCharsByPos();
        } else if(g.map->playerSees(c->n)) {
-            char buf[100];
-            sprintf(buf, "%s dies!", c->name);
-            g.AddMessage(buf);
+            g.AddMessage("%s dies!", c->name);
         }
         return true;
     }
@@ -6963,7 +6945,7 @@ void ScavengeUI::calcScavengeValues(void) {
     safety = max((float)0.0, min((float)1.0, safety));
     sneak = max((float)0.0, min((float)1.0, sneak));
 
-    printf("calcScavengeValues(): lo:%f sa:%f sn:%f\n", loot, safety, sneak);
+    info("calcScavengeValues(): lo:%f sa:%f sn:%f", loot, safety, sneak);
 }
 
 void ScavengeUI::draw(void) {
@@ -7074,7 +7056,7 @@ static bool runRandomScavengingEvents(void) {
     int roll = d100(*g.rng);
     int prob = g.ui_Scavenge->safety * 100;
 
-    printf("runRandomScavengingEvents(): %d %d\n", roll, prob);
+    info("runRandomScavengingEvents(): %d %d", roll, prob);
 
     if(roll > prob) {
         runInteract("fall_down");
@@ -7084,7 +7066,7 @@ static bool runRandomScavengingEvents(void) {
 }
 
 void ScavengeUI::commit_stage2(void) {
-    printf("commit_stage2()\n");
+    info("ScavengeUI::commit_stage2()");
     addLootedItems();
     resetLastLooted();
     player->activity = ACTIVITY_SCAVENGE;
@@ -7098,7 +7080,7 @@ void ScavengeUI::commit_stage2(void) {
 }
 
 void ScavengeUI::runScavengeStep(void) {
-    cout << "runScavenging() stage: " << current_stage << endl;
+    info("runScavenging() stage: %d", current_stage);
 
     vector<Item *> *selected = &gridsystem->selected->items;
 
@@ -7125,8 +7107,10 @@ void ScavengeUI::runScavengeStep(void) {
             g.map->player->abuseItem(inventory_item, 0.01);
 
             // debug stuff
-            printf("selected tool: %p %s\n", (void*)item, item->getName());
-            printf("it was cloned from %p\n", (void*)inventory_item);
+            info("selected tool: %p %s cloned from %p",
+                 (void*)item,
+                 item->getName(),
+                 (void*)inventory_item);
         }
         // take location and options, generate items scavenged
         scavengeLocation();
@@ -7220,13 +7204,13 @@ void ScavengeUI::delete_grid_items(void) {
     */
     for(auto&& item : gridsystem->options->items) {
         item->storage = NULL;
-        printf("Deleting %p (%s)\n", (void*)item, item->getName());
+        info("ScavengeUI::delete_grid_items(): Deleting %p (%s)", (void*)item, item->getName());
         delete item;
     }
     gridsystem->options->items.clear();
     for(auto&& item : gridsystem->selected->items) {
         item->storage = NULL;
-        printf("Deleting %p (%s)\n", (void*)item, item->getName());
+        info("ScavengeUI::delete_grid_items(): Deleting %p (%s)", (void*)item, item->getName());
         delete item;
     }
     gridsystem->selected->items.clear();
@@ -7292,11 +7276,11 @@ void ScavengeUI::setup(void) {
                 */
                 Item *clone = new Item(*item);
                 if(gridsystem->options->PlaceItem(clone) != NULL) {
-                    printf("Couldn't place: %s\n", clone->getName());
+                    info("Couldn't place: %s", clone->getName());
                     clone->storage = NULL;
                     delete clone;
                 } else {
-                    printf("Adding %p -> %p (%s)\n", (void*)item, (void*)clone, item->getName());
+                    info("Adding %p -> %p (%s)", (void*)item, (void*)clone, item->getName());
                     tool_clone_map.emplace(clone, item);
                 }
             }
@@ -7596,7 +7580,7 @@ static void runInteract(const char *story_name) {
             x = s.second;
 
     if(x == NULL) {
-        errorQuit("Couldn't find story with name: " + string(story_name));
+        errorQuit("Couldn't find story with name: ", story_name);
     }
 
     int start_page = 0;
@@ -7649,7 +7633,7 @@ static void runInteractStepCB(void) {
 
     if(g.ui_Interact->gridsystem->selected->items.empty()) {
         // if the player hasn't selected anything
-        cout << "runInteractStepCB: nothing selected" << endl;
+        info("runInteractStepCB(): nothing selected");
         if(g.ui_Interact->gridsystem->options->items.size() > 1) {
             // if there's more than one option, don't choose for the player
             return;
@@ -7674,7 +7658,7 @@ static void runInteractStepCB(void) {
             break;
         }
     }
-    cout << "Switching to interact page " << new_page << endl;
+    info("Switching to interact page: %d", new_page);
     // switch page to new page
     g.ui_Interact->setup();
 
@@ -8108,6 +8092,8 @@ void ConditionUI::draw(void) {
     al_draw_bitmap(g.bitmaps[112], 680, 195, 0); // right hand hold
     al_draw_bitmap(g.bitmaps[113], 680, 380, 0); // left hand hold
 
+    al_draw_text(g_font, colors.white, 538, 40, 0, "Wounds:");
+
     UI::draw();
 }
 
@@ -8343,7 +8329,7 @@ static void appliedCB(void) {
     Grid *applied_to = g.ui_Condition->gridsystem->applied_params.first;
     Item *was_applied = g.ui_Condition->gridsystem->applied_params.second;
 
-    printf("Applied %s to %p",
+    info("appliedCB(): Applied %s to %p",
            was_applied->getName(),
            (void*)applied_to);
 
@@ -8999,8 +8985,7 @@ void NotificationUI::go() {
         below->draw();
         al_set_target_backbuffer(g.display);
     }
-    if(!bg)
-        printf("??\n");
+    assert(bg != NULL);
 
  alreadyThere:
     // center text
@@ -9970,7 +9955,7 @@ static void init_tileinfo(void) {
     int rows = g.display_y / TileMap::hex_step_y + 3;
     if(cols % 2 == 1) cols++;
     if(rows % 2 == 1) rows++;
-    printf("cols, rows: %d %d\n", cols, rows);
+    info("init_tileinfo(): cols, rows: %d %d", cols, rows);
     g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, cols, rows);
 
     TileInfo i;
@@ -10192,7 +10177,7 @@ static void init_characters(void) {
 
     const int n_start_npcs = g.map->eco.want_creatures;
 
-    cout << "Spawning " << n_start_npcs << " NPCs" << endl;
+    info("Spawning %d NPCs", n_start_npcs);
 
     for(int i = 0; i < n_start_npcs; i++) {
         g.map->addRandomCharacterNearPlayer();
@@ -10314,7 +10299,7 @@ static void allegro_init(void) {
             g.tx = max(0.0, (sx - g.display_x * g.scale) / 2.0) / g.scale;
             g.ty = max(0.0, (sy - g.display_y * g.scale) / 2.0) / g.scale;
             // TODO: what ^
-            printf("scale: %f, tx, ty: %d %d\n", g.scale, g.tx, g.ty);
+            info("Scale: %f, tx, ty: %d %d", g.scale, g.tx, g.ty);
             al_translate_transform(&g.trans, g.tx, g.ty);
             al_scale_transform(&g.trans, g.scale, g.scale);
 
@@ -10387,7 +10372,7 @@ static void load_fonts(void) {
 
 static void init_rng(int seed) {
     if(seed != -1) {
-        info("Using seed: " + to_string(seed));
+        info("Using seed: %s", seed);
         g.rng = new mt19937(seed);
     }
     else {
@@ -10458,7 +10443,7 @@ struct PerfTimer {
         start_time = al_current_time();
     }
     ~PerfTimer() {
-        printf("%s elapsed time: %fs\n", name, al_current_time() - start_time);
+        info("%s elapsed time: %fs", name, al_current_time() - start_time);
     }
 };
 
@@ -11000,8 +10985,7 @@ static bool save_game(ofstream &out) {
         return false;
 
     if(out.fail() == true) {
-        info("Error: Couldn't open save file for writing");
-        cout << strerror(errno) << endl;
+        info("Error: Couldn't open save file for writing: %s", strerror(errno));
         return false;
     }
 
@@ -11030,8 +11014,7 @@ static bool load_game(ifstream &in) {
     PerfTimer t("Load game");
 
     if(in.fail() == true) {
-        info("Error: Couldn't open load file for reading");
-        cout << strerror(errno) << endl;
+        info("Error: Couldn't open load file for reading: %s", strerror(errno));
         return false;
     }
 
@@ -11041,16 +11024,14 @@ static bool load_game(ifstream &in) {
         char str[10] = { '\0' };
         in.read(&str[0], 9);
         if(strcmp(str, "project_x") != 0) {
-            info("Error: Invalid save game file: wrong starting string");
-            cout << "got: \"" << str << "\" expected: \"project_x\"" << endl;
+            info("Error: Invalid save game file: wrong starting string: got %s expected \"project_x\"", str);
             in.close();
             return false;
         }
         int loaded_version;
         in >> loaded_version;
         if(loaded_version != COMPILED_VERSION) {
-            info("Error: Wrong save game file version");
-            cout << "got: " << loaded_version << " expected: " << COMPILED_VERSION << endl;
+            info("Error: Wrong save game file version, got %d expected %d", loaded_version, COMPILED_VERSION);
             in.close();
             return false;
         }
@@ -11326,7 +11307,7 @@ int main(int argc, char **argv) {
     else if(load_filename != NULL) {
         bool ok = load_game(load_filename);
         if(ok == false)
-            errorQuit("Couldn't load game: " + string(load_filename));
+            errorQuit("Couldn't load game: %s", load_filename);
         switch_to_MainMap();
     }
     else {
@@ -11418,7 +11399,7 @@ int main(int argc, char **argv) {
         frame_time += g.dt;
         if(frame_time >= 10.0) {
             if(config.showFPS == true)
-                printf("FPS: %f\n", frame_counter / 10.0);
+                info("FPS: %f", frame_counter / 10.0);
             frame_time = 0;
             frame_counter = 0;
         }
