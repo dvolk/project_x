@@ -515,6 +515,9 @@ struct MessageLog : public Widget {
     ALLEGRO_BITMAP *background;
     ALLEGRO_FONT *font;
     vector<string> lines;
+    int offset;
+    const int display_lines = 9;
+    const float line_height = 14.0;
 
     void save(ostream &os);
     void load(istream &is);
@@ -4153,7 +4156,7 @@ void Game::AddMessage(const char *format_string, ...) {
     vsnprintf(str, sizeof(str), format_string, args);
     va_end(args);
 
-    cout << "Game: " << str;
+    cout << "Game: " << str << endl;
 
     for(auto&& line : word_wrap(str, 790))
         log->lines.push_back(line);
@@ -4164,12 +4167,15 @@ void MessageLog::draw(void) {
         al_draw_bitmap(background, pos.x1, pos.y1, 0);
     }
 
-    int off_y = 8;
+    float off_y = 8;
+
     int lines_n = lines.size();
-    int start = max(0, lines_n - 9);
-    for(int i = start; i < lines_n; i++) {
+    int start = min(lines_n, max(0, lines_n - display_lines - offset));
+    int to = min(lines_n, start + display_lines);
+
+    for(int i = start; i < to; i++) {
         al_draw_text(font, colors.grey3, pos.x1 + 8, pos.y1 + off_y, 0, lines[i].c_str());
-        off_y = off_y + 14;
+        off_y = off_y + line_height;
     }
 
     // ...
@@ -6828,6 +6834,15 @@ void MessageLog::mouseDown(void) {
         // ...
         if(g.ui == g.ui_Encounter)
             g.ui_Encounter->setup();
+    }
+    else if(mouse_x < g.weapon_switcher->pos.x1) {
+        if(mouse_y >= pos.y1 + pos.y2 / 2) {
+            offset -= display_lines;
+        }
+        else if(mouse_y < pos.y1 + pos.y2 / 2) {
+            offset += display_lines;
+        }
+        offset = max(0, min((int)lines.size() - display_lines, offset));
     }
 }
 
@@ -9934,6 +9949,7 @@ static void init_messagelog(void) {
     g.log->pos.y1 = g.display_y - g.log->pos.y2;
     g.log->background = g.bitmaps[16];
     g.log->font = g_font;
+    g.log->offset = 0;
 }
 
 enum TileKind {
