@@ -29,6 +29,7 @@ struct OptionsUI : public UI {
     LabelledCheckBox *nativeSaveLoadDialogsCB;
     LabelledCheckBox *autoSubmitChoicesCB;
     LabelledCheckBox *mapMoveAnimationsCB;
+    LabelledCheckBox *diagnosticMessagesCB;
 
     Slider *musicVolumeSlider;
     Slider *uiSoundVolumeSlider;

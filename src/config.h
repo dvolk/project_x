@@ -30,6 +30,7 @@ struct Config {
     bool native_dialogs;
     bool auto_submit_choices;
     bool map_move_animations;
+    bool debug_output;
 
     void save(const char *filename);
     void load(const char *filename);

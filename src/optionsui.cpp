@@ -160,6 +160,10 @@ OptionsUI::OptionsUI() {
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Player Invulnerable", &config.playerInvulnerable);
     i++;
+    diagnosticMessagesCB
+        = new LabelledCheckBox(start_x, start_y + i * step_y,
+                               "Diagnostic Messages", &config.debug_output);
+    i++;
     logToFileCB
         = new LabelledCheckBox(start_x, start_y + i * step_y,
                                "Write Log To File", &config.log_to_file);
@@ -182,6 +186,7 @@ OptionsUI::OptionsUI() {
     checkboxes.push_back(nativeSaveLoadDialogsCB);
     checkboxes.push_back(autoSubmitChoicesCB);
     checkboxes.push_back(mapMoveAnimationsCB);
+    checkboxes.push_back(diagnosticMessagesCB);
 
     for(auto&& cb : checkboxes) widgets.push_back(cb);
     widgets.push_back(musicVolumeSlider);

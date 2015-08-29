@@ -13,7 +13,7 @@ extern ALLEGRO_FONT *g_font;
 void font_load(const char *filepath, int height) {
     g_font = al_load_font(filepath, height, 0);
     if(g_font == NULL)
-        errorQuit("failed to load font: %s", filepath);
+        fatal_error("failed to load font: %s", filepath);
     else
         info("Loaded font: %s", filepath);
 }

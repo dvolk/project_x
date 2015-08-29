@@ -8,22 +8,22 @@
 using namespace std;
 
 #include "./config.h"
+#include "./util.h"
 
 extern Config config;
 
-fstream logstream;
+static fstream logstream;
 
 void init_logging(void) {
     if(config.log_to_file == false)
         return;
 
-    const char *filename = "projectx.log";
+    const char *filename = "./projectx.log";
 
-    logstream.open("projectx.log", fstream::app);
+    logstream.open(filename, fstream::app);
 
     if(logstream.is_open() == false) {
-        cout << "Couldn't open " << filename << " for write/append" << endl;
-        exit(1);
+        fatal_error("Couldn't open log file %s for write/append", filename);
     }
 }
 
@@ -32,29 +32,68 @@ void stop_logging(void) {
         logstream.close();
 }
 
-void errorQuit(const char *format_string, ...) {
-    char str[1024];
-    va_list args;
-    va_start(args, format_string);
-    vsnprintf(str, sizeof(str), format_string, args);
-    va_end(args);
+enum MESSAGE_LEVEL {
+    MESSAGE_FATAL_ERROR,
+    MESSAGE_ERROR,
+    MESSAGE_INFO,
+    MESSAGE_DEBUG,
+};
 
-    cout << "Error: " << str << endl;
-    if(logstream.is_open() == true)
-        logstream << "Error: " << str << endl;
-    exit(1);
+static inline void log(enum MESSAGE_LEVEL msgl, const char *format_string, va_list argp) {
+    char str[1024];
+    const char *prefix;
+
+    vsnprintf(str, sizeof(str), format_string, argp);
+
+    switch(msgl)
+        {
+        case MESSAGE_FATAL_ERROR: { prefix = "Fatal error: "; } break;
+        case MESSAGE_ERROR:       { prefix = "Error: "; } break;
+        case MESSAGE_INFO:        { prefix = "Info: "; } break;
+        case MESSAGE_DEBUG:       { prefix = "Debug: "; } break;
+        default: { } break;
+        }
+
+    cout << prefix << str << endl;
+
+    if(logstream.is_open() == true) {
+        logstream << prefix << str << endl;
+    }
+
+    if(msgl == MESSAGE_FATAL_ERROR) {
+        exit(1);
+    }
 }
 
 void info(const char *format_string, ...) {
-    char str[1024];
     va_list args;
     va_start(args, format_string);
-    vsnprintf(str, sizeof(str), format_string, args);
+    log(MESSAGE_INFO, format_string, args);
     va_end(args);
+}
 
-    if(logstream.is_open() == true)
-        logstream << "Info: " << str << endl;
-    cout << "Info: " << str << endl;
+void error(const char *format_string, ...) {
+    va_list args;
+    va_start(args, format_string);
+    log(MESSAGE_ERROR, format_string, args);
+    va_end(args);
+}
+
+void fatal_error(const char *format_string, ...) {
+    va_list args;
+    va_start(args, format_string);
+    log(MESSAGE_FATAL_ERROR, format_string, args);
+    va_end(args);
+}
+
+void debug(const char *format_string, ...) {
+    if(config.debug_output == false)
+        return;
+
+    va_list args;
+    va_start(args, format_string);
+    log(MESSAGE_DEBUG, format_string, args);
+    va_end(args);
 }
 
 __attribute__ ((const))

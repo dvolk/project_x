@@ -376,7 +376,7 @@ Item *make_text_item(const char *text, ALLEGRO_COLOR bg_col) {
         }
     }
     if(item_size_x == 0)
-        errorQuit("make_text_item(): supplied text is too long");
+        fatal_error("make_text_item(): supplied text is too long");
 
     // center text
     float offset_x = round((item_size_x - text_len) / 2);
@@ -725,7 +725,7 @@ Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h) {
 }
 
 Grid::~Grid() {
-    // info("~Grid()");
+    // debug("~Grid()");
     // a grid owns its items
     delete gsb;
     for(auto &item : items) {
@@ -905,7 +905,7 @@ int Item::index_from_name(const char *item_name) {
         i++;
     }
 
-    errorQuit("Unknown item: \"%s\"", item_name);
+    fatal_error("Unknown item: \"%s\"", item_name);
     return -1;
 }
 
@@ -1043,7 +1043,7 @@ Item *Grid::PlaceItem(Item *to_place) {
         AddItem(to_place);
         to_place->setHpDims();
 
-        // info("Grid::PlaceItem(): Adding item %s at %f, %f, size: %f x %f\n",
+        // debug("Grid::PlaceItem(): Adding item %s at %f, %f, size: %f x %f\n",
         //      to_place->getName(), to_place->pos.x1, to_place->pos.y1,
         //      to_place->pos.x2, to_place->pos.y2);
 
@@ -1130,7 +1130,7 @@ Item::~Item() {
         al_destroy_bitmap(g.item_info[info_index].sprite);
         g.item_info[info_index].sprite = NULL;
     }
-    //    info("~Item()");
+    //    debug("~Item()");
 }
 
 void Item::resetHardpointPos(void) {
@@ -1144,7 +1144,7 @@ void Item::resetHardpointPos(void) {
         if(storage->gsb != NULL)
             storage->gsb->reset();
     } else {
-        info("WARNING: no item parent");
+        error("Item::resetHardpointPos(): %s: no item parent", getName());
     }
 }
 
@@ -1517,7 +1517,7 @@ Character::~Character() {
     delete medical_right_lower_arm;
 
     delete vehicle;
-    // info("~Character()");
+    // debug("~Character()");
 }
 
 Wound * Character::random_wound(void) {
@@ -1526,7 +1526,7 @@ Wound * Character::random_wound(void) {
 }
 
 void Character::hurt(float amount) {
-    info("%s hurt for %f", name, amount);
+    debug("Character::hurt(): %s hurt for %f", name, amount);
     health -= min(health, amount);
 
     int wounds_num = amount / 0.03;
@@ -1683,7 +1683,7 @@ Character::Character(void) {
 
     es.reset();
     es.in_encounter = false;
-    // info("Character()");
+    // debug("Character()");
 }
 
 static int dir_transform(int n, int dir);
@@ -2038,7 +2038,7 @@ int TileMap::index_from_chr(Character *c) {
             return n + 1;
         n++;
     }
-    info("index_from_chr(): couldn't find character");
+    error("TileMap::index_from_chr(): couldn't find character");
     return -1;
 }
 
@@ -2148,10 +2148,10 @@ void TileMap::runWeather() {
      */
     weather.duration += g.map->player->dt;
 
-    info("TileMap::runWeather(): index: %d time: %d duration: %d",
-         weather.idx,
-         weather.duration,
-         g.weatherinfo[weather.idx].duration);
+    debug("TileMap::runWeather(): index: %d time: %d duration: %d",
+          weather.idx,
+          weather.duration,
+          g.weatherinfo[weather.idx].duration);
 
     if(weather.duration > g.weatherinfo[weather.idx].duration)
         {
@@ -2181,11 +2181,11 @@ void TileMap::runEcology() {
     // add more characters if there's too few nearby
     if((int)characters.size() < eco.want_creatures) {
         Character *c = addRandomCharacterNearPlayer();
-        info("runEcology(): added character %s at %d", c->name, c->n);
+        debug("runEcology(): added character %s at %d", c->name, c->n);
         added++;
     }
 
-    info("runEcology(): removed/added %d/%d characters", removed, added);
+    debug("runEcology(): removed/added %d/%d characters", removed, added);
 }
 
 bool TileMap::blocks_movement(int n) {
@@ -2506,7 +2506,7 @@ void TileMap::removeFromOldCharsByPos(Character *c) {
     auto it = oldCharsByPos.begin();
     for(; it != oldCharsByPos.end() ;) {
         if(it->second == c) {
-            info("TileMap::removeFromOldCharsByPos(): removing %p", (void*)c);
+            debug("TileMap::removeFromOldCharsByPos(): removing %p", (void*)c);
             it = oldCharsByPos.erase(it);
             return;
         }
@@ -2681,7 +2681,7 @@ void Character::abuseItem(Item *item, float amount) {
     item->condition -= amount;
 
     if(item->condition < 0.01) {
-        info("Character::abuseItem(): %s destroyed %s at %d",
+        debug("Character::abuseItem(): %s destroyed %s at %d",
              name, item->getName(), n);
 
         // items is destroyed
@@ -2702,7 +2702,7 @@ void Character::abuseItem(Item *item, float amount) {
             /*
               TODO: wtf?
              */
-            info("Character::abuseItem(): %s from %s has no parent",
+            debug("Character::abuseItem(): %s from %s has no parent",
                  item->getName(), name);
 
             delete item;
@@ -2779,7 +2779,7 @@ void Character::recomputeCarryWeight(void) {
             carry_weight += item->get_weight();
         }
     }
-    info("Character::recomputeCarryWeight(): %s is carrying %d g",
+    debug("Character::recomputeCarryWeight(): %s is carrying %d g",
          name, carry_weight);
 
     burden = 1.0 - (float)carry_weight / maxBurden;
@@ -2916,13 +2916,13 @@ void Character::update(void) {
     }
 
     if(sleeping == true && wake_up() == false) {
-        info("Character::update(): sleeping again... %f", fatigue);
+        debug("Character::update(): sleeping again... %f", fatigue);
         activity = ACTIVITY_SLEEP;
     }
 }
 
 void Character::print_stats(void) {
-    info("Character::print_stats(): %s/%d - H: %d P: %d F: %d Hy: %d S: %d B: %d",
+    debug("Character::print_stats(): %s/%d - H: %d P: %d F: %d Hy: %d S: %d B: %d",
          name, n, health, pain, fatigue, hydration, satiety, burden);
 }
 
@@ -2944,7 +2944,7 @@ static bool runPlayerEncounter(EncounterRecord r);
 static void chInterruptsPlayer(Character *c1) {
     int playersNewDt = g.map->player->nextMove - c1->nextMove;
 
-    info("chInterruptsPlayer(): %s interrupted player! nextMove: %d -> %d, dt: %d -> %d",
+    debug("chInterruptsPlayer(): %s interrupted player! nextMove: %d -> %d, dt: %d -> %d",
          c1->name,
          g.map->player->nextMove,
          c1->nextMove,
@@ -2955,7 +2955,7 @@ static void chInterruptsPlayer(Character *c1) {
       TODO: this fails
     */
     if(playersNewDt < 0)
-        info("chInterruptsPlayer(): player's dt is negative: %d", playersNewDt);
+        error("chInterruptsPlayer(): player's dt is negative: %d", playersNewDt);
 
     g.map->player->dt = playersNewDt;
     g.map->player->nextMove = c1->nextMove;
@@ -3007,7 +3007,7 @@ void TileMap::removeTempItems(int n) {
         for(it = g->items.begin(); it != g->items.end() ;) {
             if((*it)->hasFlag(CRAFTING_ONLY) == true) {
 
-                info("TileMap::removeTempItems(): deleting %s",
+                debug("TileMap::removeTempItems(): deleting %s",
                      (*it)->getName());
 
                 delete *it;
@@ -3041,7 +3041,7 @@ void TileMap::DeleteGroundIfEmpty(int n) {
 
 void Character::move(int new_n) {
     if(good_index(new_n) == false) {
-        info("WARNING: tried to Character::move() to invalid index");
+        debug("Character::move(): tried to to invalid index");
         return;
     }
 
@@ -3081,7 +3081,7 @@ void Character::move(int new_n) {
         for(auto&& it = p.first; it != p.second; it++) {
             if(it->second != this) {
 
-                info("Character::move(): Adding: %s vs %s",
+                debug("Character::move(): Adding: %s vs %s",
                      this->name, it->second->name);
 
                 encounters.emplace_back(EncounterRecord(this, it->second));
@@ -3096,14 +3096,14 @@ void Character::move(int new_n) {
 }
 
 void Character::die(void) {
-    info("Character::die(): %s at %d", name, n);
+    debug("Character::die(): %s at %d", name, n);
     g.map->removeCharacter(this);
 }
 
 static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item);
 
 void Character::drop_all_items(void) {
-    info("Character::drop_all_items(): %s at %d", name, n);
+    debug("Character::drop_all_items(): %s at %d", name, n);
 
     vector<Grid *> *ground = ground_at_character(this);
     for(auto& hardpoint : inventory_hardpoints) {
@@ -3205,7 +3205,7 @@ void TimeDisplay::calculate_tod(void) {
 
     time_zone = i;
 
-    info("TimeDisplay::calculate_tod(): tod = %d, tz = %d", tod, i);
+    debug("TimeDisplay::calculate_tod(): tod = %d, tz = %d", tod, i);
 
     if(i == -1) {
         current_time_string = "";
@@ -3298,7 +3298,7 @@ GridSystem::GridSystem(void) {
 
 GridSystem::~GridSystem(void) {
     delete held;
-    // info("~GridSystem()");
+    // debug("~GridSystem()");
 }
 
 void GridSystem::reset(void) {
@@ -3428,7 +3428,7 @@ void GridSystem::countTotalItems(void) {
         g++;
         i += grid->items.size();
     }
-    info("GridSystem: %d grids, %d items: %d", g, i);
+    debug("GridSystem::countTotalItems(): GridSystem: %d grids, %d items: %d", g, i);
 }
 
 void GridSystem::hoverOver(void) {
@@ -3471,7 +3471,7 @@ Character *TileMap::characterAt(int n) {
 }
 
 TileMap::~TileMap() {
-    // info("~TileMap");
+    // debug("~TileMap");
     // tilemap owns characters
     delete player;
     for(auto& character : characters) {
@@ -3496,11 +3496,11 @@ TileMap::~TileMap() {
 
 TileMap::TileMap(int sx, int sy, int c, int r) {
     if(sx % 2 != 0) {
-        info("WARNING: TileMap dimensions must be even.");
+        error("TileMap::TileMap(): TileMap dimensions must be even.");
         sx += 1;
     }
     if(sy % 2 != 0) {
-        info("WARNING: TileMap dimensions must be even.");
+        error("TileMap::TileMap(): TileMap dimensions must be even.");
         sy += 1;
     }
 
@@ -3593,7 +3593,7 @@ MiniMap::MiniMap() {
 
 MiniMap::~MiniMap() {
     al_destroy_bitmap(buf);
-    // info("~MiniMap()");
+    // debug("~MiniMap()");
 }
 
 static void notify(const char *text);
@@ -3677,7 +3677,7 @@ void TileMap::mouseDown(void) {
     int player_n = player->n;
     int clicked_nearby = -1;
 
-    info("clicked on n=%d m=(%d, %d) p=((%f, %f) (%f, %f))",
+    debug("TileMap::mouseDown(): clicked on n=%d m=(%d, %d) p=((%f, %f) (%f, %f))",
            clicked_n, mouse_x, mouse_y,
            pos.x1, pos.y1, pos.x2, pos.y2);
 
@@ -3828,7 +3828,7 @@ void Character::update_visibility(void) {
             currently_seeing.push_back(n4);
             g.map->tiles[n4].visible = true;
         }
-        info("update_visibility(): Added %d tiles.", (int)currently_seeing.size());
+        debug("Character::update_visibility(): Added %d tiles.", (int)currently_seeing.size());
         return;
     }
 }
@@ -4044,6 +4044,7 @@ static void toggleMsgLogVisibility(void) {
 }
 
 void TileMap::keyDown(void) {
+    // TODO these should be global?
     if(g.key == ALLEGRO_KEY_C) {
         g.map->focusOnPlayer();
     }
@@ -4051,8 +4052,6 @@ void TileMap::keyDown(void) {
         player->wait();
         end_turn();
     }
-
-    info("Tile map view: x = %d, y = %d", view_x, view_y);
 }
 
 void UI::addIndicatorWidgets(void) {
@@ -4154,7 +4153,7 @@ void Game::AddMessage(const char *format_string, ...) {
     vsnprintf(str, sizeof(str), format_string, args);
     va_end(args);
 
-    cout << "Message: " << str << endl;
+    cout << "Game: " << str;
 
     for(auto&& line : word_wrap(str, 790))
         log->lines.push_back(line);
@@ -4209,7 +4208,7 @@ void TileMap::generate(void) {
     }
     // mkRingM(4 * size_x + 5, 1);
     // mkRingM(5 * size_x + 3, 3);
-    info("Finished generating map");
+    debug("TileMap::generate(): Finished generating map");
 }
 
 bool TileMap::playerSees(int n) {
@@ -4716,7 +4715,7 @@ bool GridSystem::placeItemAtMouse() {
             held->setHpDims();
             addStorageGrid();
 
-            info("Moved %s onto grid %d at %d, %d",
+            debug("GridSystem::placeItemAtMouse(): Moved %s onto grid %d at %d, %d",
                  g.item_info[held->info_index].name,
                  i, drop_x, drop_y);
 
@@ -4732,9 +4731,8 @@ bool GridSystem::placeItemAtMouse() {
         return false;
     }
     else {
+        debug("GridSystem::placeItemAtMouse(): %s blocked on grid %d", held->getName(), i);
         returnHeldToSender();
-
-        info("Blocked on grid %d", i);
         return false;
     }
 
@@ -4975,7 +4973,7 @@ static Character *next(void) {
 }
 
 static void end_turn_debug_print(void) {
-    info("turn ends (%d) with %d characters. encounters: %lu",
+    debug("end_turn_debug_print(): turn ends (%d) with %d characters. encounters: %lu",
          g.map->player->nextMove,
          (int)g.map->characters.size(),
          encounters.size());
@@ -5208,7 +5206,7 @@ static int countItemsOfType(Grid* grid, int searching_for) {
             c += item->cur_stack;
         }
     }
-    info("countItemsOfType(): searching_for: %d", c);
+    debug("countItemsOfType(): searching_for: %d", c);
     return c;
 }
 
@@ -5352,7 +5350,7 @@ CraftingGridSystem::CraftingGridSystem() {
 }
 
 CraftingGridSystem::~CraftingGridSystem() {
-    // info("~CraftingGridSystem()");
+    // debug("~CraftingGridSystem()");
     delete ingredients;
     delete results;
 }
@@ -5360,7 +5358,7 @@ CraftingGridSystem::~CraftingGridSystem() {
 static void runCrafting(void);
 
 static void updateCraftingOutput(void) {
-    info("updateCraftingOutput() called");
+    debug("updateCraftingOutput()");
 
     Grid *results = g.ui_Crafting->craftGrids->results;
 
@@ -5513,7 +5511,7 @@ static void runCrafting(void) {
 }
 
 void encounter_state::wait(void) {
-    info("encounter_state::wait()");
+    debug("encounter_state::wait()");
 }
 
 void encounter_state::reset(void) {
@@ -5803,7 +5801,7 @@ float Encounter::getMobility(int n) {
     if(getChar(n)->es.in_cover == true)
         s /= 2;
 
-    info("Encounter::getMobility(): %s -> %d", getChar(n)->name, s);
+    debug("Encounter::getMobility(): %s -> %d", getChar(n)->name, s);
 
     return max(1, s);
 }
@@ -5887,7 +5885,7 @@ void Encounter::set_start_range(void) {
 }
 
 void Encounter::setup(Character *c1, Character *c2) {
-    info("Encounter::setup()");
+    debug("Encounter::setup()");
     this->c1 = c1;
     this->c2 = c2;
     c1->es.reset();
@@ -5898,11 +5896,11 @@ void Encounter::setup(Character *c1, Character *c2) {
     ignoring = false;
     running = true;
 
-    info("Encounter::setup() exit");
+    debug("Encounter::setup() exit");
 }
 
 static bool runPlayerEncounter(EncounterRecord r) {
-    info("runPlayerEncounter()");
+    debug("runPlayerEncounter()");
 
     bool c1alive = false;
     bool c2alive = false;
@@ -5914,14 +5912,14 @@ static bool runPlayerEncounter(EncounterRecord r) {
     if(r.c2 == g.map->player) c2alive = true;
 
     if(c1alive == false || c2alive == false || r.c1->n != r.c2->n) {
-        info("runPlayerEncounter(): stale EncounterRecord");
+        debug("runPlayerEncounter(): stale EncounterRecord");
         removeEncounter(r);
         return false;
     }
 
     bool ignoring = r.c1->ai.ignoring == r.c2 && r.c2->ai.ignoring == r.c1;
     if(ignoring == true) {
-        info("runPlayerEncounter(): characters are ignoring each other");
+        debug("runPlayerEncounter(): characters are ignoring each other");
         removeEncounter(r);
         return false;
     }
@@ -5934,7 +5932,7 @@ static bool runPlayerEncounter(EncounterRecord r) {
     Character *player = r.c1 == g.map->player ? r.c1 : r.c2;
     Character *ai     = r.c1 == g.map->player ? r.c2 : r.c1;
 
-    info("runPlayerEncounter(): Running encounter at: %d with AI %s",
+    debug("runPlayerEncounter(): Running encounter at: %d with AI %s",
          player->n, ai->name);
 
     g.ui_Encounter->encounter.setup(player, ai);
@@ -5949,7 +5947,7 @@ static bool runPlayerEncounter(EncounterRecord r) {
     g.ui = g.ui_Encounter;
     fade_to_UI(prev_ui, (UI*)g.ui_Encounter);
 
-    info("runPlayerEncounter() exit");
+    debug("runPlayerEncounter() exit");
     return true;
 }
 
@@ -5964,7 +5962,7 @@ static void removeEncounter(EncounterRecord r) {
     vector<EncounterRecord>::iterator it;
     for(it = encounters.begin(); it != encounters.end();) {
         if(it->c1 == r.c1 && it->c2 == r.c2) {
-            info("removing record %p %p", (void*)r.c1, (void*)r.c2);
+            debug("removing record %p %p", (void*)r.c1, (void*)r.c2);
             it = encounters.erase(it);
         }
         else {
@@ -5975,7 +5973,7 @@ static void removeEncounter(EncounterRecord r) {
 
 // resolve all AI encounters at pos n
 void Encounter::runAIEncounter(EncounterRecord r) {
-    info("Encounter::runAIEncounter()");
+    debug("Encounter::runAIEncounter()");
 
     bool c1alive = false;
     bool c2alive = false;
@@ -5984,7 +5982,7 @@ void Encounter::runAIEncounter(EncounterRecord r) {
         if(c == r.c2) c2alive = true;
     }
     if(c1alive == false || c2alive == false || r.c1->n != r.c2->n) {
-        info("runAIEncounter(): stale EncounterRecord");
+        debug("runAIEncounter(): stale EncounterRecord");
         return;
     }
 
@@ -5993,7 +5991,7 @@ void Encounter::runAIEncounter(EncounterRecord r) {
         r.c2->ai.ignoring == r.c1;
 
     if(ignoring == true) {
-        info("runAIEncounter(): characters are ignoring each other");
+        debug("runAIEncounter(): characters are ignoring each other");
         removeEncounter(r);
         return;
     }
@@ -6003,8 +6001,8 @@ void Encounter::runAIEncounter(EncounterRecord r) {
     c1->es.robo_stamina = c1->fatigue * 100;
     c2->es.robo_stamina = c2->fatigue * 100;
 
-    info("Encounter::runAIEncounter(): Fight!");
-    info("%15s\t%15s", c1->name, c2->name);
+    debug("Encounter::runAIEncounter(): Fight!");
+    debug("%15s\t%15s", c1->name, c2->name);
 
     while(true) {
         npcEncounterStep(0);
@@ -6015,7 +6013,7 @@ void Encounter::runAIEncounter(EncounterRecord r) {
 
         if(isEncounterNPCdead(1) == true || npcRelocated() == true || ignoring_eachother() == true) break;
 
-        info("%15f\t%15f", c1->health, c2->health);
+        debug("%15f\t%15f", c1->health, c2->health);
 
     }
 
@@ -6033,13 +6031,13 @@ void Encounter::runAIEncounter(EncounterRecord r) {
     c1->post_update();
     c2->post_update();
 
-    info("Encounter::runAIEncounter() exit");
+    debug("Encounter::runAIEncounter() exit");
 }
 
 static void switch_to_MainMap(void);
 
 void Encounter::endEncounter(void) {
-    info("Encounter::endEncounter()");
+    debug("Encounter::endEncounter()");
     running = false;
     removeEncounter(record);
 
@@ -6059,7 +6057,7 @@ void Encounter::endEncounter(void) {
 
     c2->post_update(); // this removes the npc if they're dead
 
-    info("Encounter::endEncounter() exit");
+    debug("Encounter::endEncounter() exit");
 }
 
 void Encounter::do_encounter_messages(void) {
@@ -6080,7 +6078,7 @@ void Encounter::npcEncounterStep(void) {
 // c2 acts against c1 (n == 0)
 // c1 acts against c2 (n == 1)
 void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusing
-    // info("Encounter::npcEncounterStep()");
+    // debug("Encounter::npcEncounterStep()");
 
     updateVisibility();
 
@@ -6359,13 +6357,13 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     if(involvesPlayer() == true && _c1->health < 0.01)
         g.map->removeCharacter(g.map->player);
 
-    // info("Encounter::npcEncounterStep() exit");
+    // debug("Encounter::npcEncounterStep() exit");
 }
 
 // runs one step of the encounter after the player pressed the
 // confirm button. Could in theory accept multiple actions
 void Encounter::runPlayerEncounterStep(void) {
-    info("Encounter::runPlayerEncounterStep()");
+    debug("Encounter::runPlayerEncounterStep()");
     vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
 
     if(actions->empty()) {
@@ -6374,8 +6372,6 @@ void Encounter::runPlayerEncounterStep(void) {
     }
 
     enum ENCOUNTER_ACTION action1 = string_to_action(actions->front()->getName());
-
-    info("Encounter::runPlayerEncounterStep() npc name %s", c2->name);
 
     c1->es.last_move = item_from_action(action1);
 
@@ -6537,7 +6533,7 @@ void Encounter::runPlayerEncounterStep(void) {
     }
 
     if(isEncounterNPCdead() == true || npcRelocated() == true || ignoring == true) {
-        info("Encounter::runPlayerEncounterStep() npc died 1");
+        debug("Encounter::runPlayerEncounterStep() npc exit 1");
         endEncounter();
         return;
     }
@@ -6545,13 +6541,13 @@ void Encounter::runPlayerEncounterStep(void) {
     npcEncounterStep();
 
     if(isEncounterNPCdead() == true || npcRelocated() == true || ignoring == true) {
-        info("Encounter::runPlayerEncounterStep() npc died 2");
+        debug("Encounter::runPlayerEncounterStep() npc exit 2");
         endEncounter();
         return;
     }
 
     g.ui_Encounter->setup();
-    info("Encounter::runPlayerEncounterStep() exit");
+    debug("Encounter::runPlayerEncounterStep() exit");
 }
 
 void EncounterUI::addPlayerOptions(void) {
@@ -6581,7 +6577,7 @@ void EncounterUI::addPlayerOptions(void) {
 }
 
 void EncounterUI::setup(void) {
-    info("EncounterUI::setup()");
+    debug("EncounterUI::setup()");
 
     widgets.clear();
     widgets.push_back(button_confirm);
@@ -6598,7 +6594,7 @@ void EncounterUI::setup(void) {
     encounter.updateVisibility();
     addPlayerOptions();
 
-    info("EncounterUI::setup() exit");
+    debug("EncounterUI::setup() exit");
 }
 
 bool Encounter::isEncounterNPCdead(void) {
@@ -6619,7 +6615,7 @@ bool Encounter::isEncounterNPCdead(int n) {
         }
     }
     if(alive == false) { // TODO: this should never be true now?
-        info("isEncounterNPCdead(): gotcha %p", (void*)c);
+        debug("isEncounterNPCdead(): gotcha %p", (void*)c);
         return true;
     }
 
@@ -6651,7 +6647,7 @@ EncounterGridSystem::EncounterGridSystem() {
 }
 
 EncounterGridSystem::~EncounterGridSystem() {
-    // info("~EncounterGridSystem()");
+    // debug("~EncounterGridSystem()");
     options->items.clear(); // deleted by EncounterUI
     selected->items.clear();
     delete options;
@@ -6659,9 +6655,9 @@ EncounterGridSystem::~EncounterGridSystem() {
 }
 
 static void runEncounterStepCB(void) {
-    info("runEncounterStepCB()");
+    debug("runEncounterStepCB()");
     g.ui_Encounter->encounter.runPlayerEncounterStep();
-    info("runEncounterStepCB() exit");
+    debug("runEncounterStepCB() exit");
 }
 
 EncounterUI::EncounterUI() {
@@ -6945,7 +6941,7 @@ void ScavengeUI::calcScavengeValues(void) {
     safety = max((float)0.0, min((float)1.0, safety));
     sneak = max((float)0.0, min((float)1.0, sneak));
 
-    info("calcScavengeValues(): lo:%f sa:%f sn:%f", loot, safety, sneak);
+    debug("calcScavengeValues(): lo:%f sa:%f sn:%f", loot, safety, sneak);
 }
 
 void ScavengeUI::draw(void) {
@@ -7056,7 +7052,7 @@ static bool runRandomScavengingEvents(void) {
     int roll = d100(*g.rng);
     int prob = g.ui_Scavenge->safety * 100;
 
-    info("runRandomScavengingEvents(): %d %d", roll, prob);
+    debug("runRandomScavengingEvents(): %d %d", roll, prob);
 
     if(roll > prob) {
         runInteract("fall_down");
@@ -7066,7 +7062,7 @@ static bool runRandomScavengingEvents(void) {
 }
 
 void ScavengeUI::commit_stage2(void) {
-    info("ScavengeUI::commit_stage2()");
+    debug("ScavengeUI::commit_stage2()");
     addLootedItems();
     resetLastLooted();
     player->activity = ACTIVITY_SCAVENGE;
@@ -7080,7 +7076,7 @@ void ScavengeUI::commit_stage2(void) {
 }
 
 void ScavengeUI::runScavengeStep(void) {
-    info("runScavenging() stage: %d", current_stage);
+    debug("ScavengeUI::runScavengeStep() stage: %d", current_stage);
 
     vector<Item *> *selected = &gridsystem->selected->items;
 
@@ -7107,10 +7103,10 @@ void ScavengeUI::runScavengeStep(void) {
             g.map->player->abuseItem(inventory_item, 0.01);
 
             // debug stuff
-            info("selected tool: %p %s cloned from %p",
-                 (void*)item,
-                 item->getName(),
-                 (void*)inventory_item);
+            debug("ScavengeUI::runScavengeStep(): selected tool: %p %s cloned from %p",
+                  (void*)item,
+                  item->getName(),
+                  (void*)inventory_item);
         }
         // take location and options, generate items scavenged
         scavengeLocation();
@@ -7120,7 +7116,7 @@ void ScavengeUI::runScavengeStep(void) {
         commit_stage2();
         return;
     } else {
-        errorQuit("invalid scavenge step");
+        fatal_error("invalid scavenge step");
     }
     current_stage++;
     setup();
@@ -7189,7 +7185,7 @@ ScavengeUI::~ScavengeUI() {
 static vector<Location *> *locations_at_character(Character *character);
 
 void ScavengeUI::abort_exit(void) {
-    info("ScavengeUI::abort_exit()");
+    debug("ScavengeUI::abort_exit()");
     if(current_stage == 2) {
         current_stage = 0; // prevent infinite loop
         commit_stage2();
@@ -7204,13 +7200,13 @@ void ScavengeUI::delete_grid_items(void) {
     */
     for(auto&& item : gridsystem->options->items) {
         item->storage = NULL;
-        info("ScavengeUI::delete_grid_items(): Deleting %p (%s)", (void*)item, item->getName());
+        debug("ScavengeUI::delete_grid_items(): Deleting %p (%s)", (void*)item, item->getName());
         delete item;
     }
     gridsystem->options->items.clear();
     for(auto&& item : gridsystem->selected->items) {
         item->storage = NULL;
-        info("ScavengeUI::delete_grid_items(): Deleting %p (%s)", (void*)item, item->getName());
+        debug("ScavengeUI::delete_grid_items(): Deleting %p (%s)", (void*)item, item->getName());
         delete item;
     }
     gridsystem->selected->items.clear();
@@ -7276,11 +7272,11 @@ void ScavengeUI::setup(void) {
                 */
                 Item *clone = new Item(*item);
                 if(gridsystem->options->PlaceItem(clone) != NULL) {
-                    info("Couldn't place: %s", clone->getName());
+                    debug("ScavengeUI::setup(): Couldn't place: %s", clone->getName());
                     clone->storage = NULL;
                     delete clone;
                 } else {
-                    info("Adding %p -> %p (%s)", (void*)item, (void*)clone, item->getName());
+                    debug("ScavengeUI::setup(): Adding %p -> %p (%s)", (void*)item, (void*)clone, item->getName());
                     tool_clone_map.emplace(clone, item);
                 }
             }
@@ -7505,11 +7501,11 @@ void InteractPage::switch_to(void) {
         left = al_create_bitmap(555, InteractUI::top_size);
         al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
         if(left == NULL) {
-            info("Couldn't create InteractPage bitmap: left");
-            info("Sending text here instead ---");
+            debug("InteractPage::switch_to(): Couldn't create InteractPage bitmap: left");
+            debug("InteractPage::switch_to(): Sending text here instead ---");
             for(auto&& line : description)
                 cout << line << endl;
-            info("--- End of text");
+            debug("InteractPage::switch_to(): End of text");
             return;
         }
     }
@@ -7580,7 +7576,7 @@ static void runInteract(const char *story_name) {
             x = s.second;
 
     if(x == NULL) {
-        errorQuit("Couldn't find story with name: ", story_name);
+        fatal_error("Couldn't find story with name: ", story_name);
     }
 
     int start_page = 0;
@@ -7633,7 +7629,7 @@ static void runInteractStepCB(void) {
 
     if(g.ui_Interact->gridsystem->selected->items.empty()) {
         // if the player hasn't selected anything
-        info("runInteractStepCB(): nothing selected");
+        debug("runInteractStepCB(): nothing selected");
         if(g.ui_Interact->gridsystem->options->items.size() > 1) {
             // if there's more than one option, don't choose for the player
             return;
@@ -7658,7 +7654,7 @@ static void runInteractStepCB(void) {
             break;
         }
     }
-    info("Switching to interact page: %d", new_page);
+    debug("runInteractStepCB(): switching to interact page: %d", new_page);
     // switch page to new page
     g.ui_Interact->setup();
 
@@ -7677,7 +7673,7 @@ static void runInteractStepCB(void) {
         g.map = NULL;
         switchToMainMenu();
     } else {
-        info("Interact Error: couldn't find new interact page index");
+        debug("runInteractStepCB(): Interact Error: couldn't find new interact page index");
         switchToMainMenu();
      }
 }
@@ -8116,7 +8112,7 @@ struct VehicleGridSystem : public GridSystem {
     };
 
     ~VehicleGridSystem() {
-        // info("~VehicleGridSystem()");
+        // debug("~VehicleGridSystem()");
     };
 
     void reset(void);
@@ -8149,7 +8145,7 @@ struct CampGridSystem : public GridSystem {
     ~CampGridSystem() {
         delete current_campsite;
         delete available_campsites;
-        // info("~CampGridSystem()");
+        // debug("~CampGridSystem()");
     };
 
     void reset(void);
@@ -8202,7 +8198,7 @@ struct InventoryGridSystem : public GridSystem {
 
     InventoryGridSystem();
     ~InventoryGridSystem() {
-        // info("~InventoryGridSystem()");
+        // debug("~InventoryGridSystem()");
     };
 
     void reset(void);
@@ -8229,7 +8225,7 @@ struct ConditionGridSystem : public GridSystem {
 };
 
 ConditionGridSystem::~ConditionGridSystem() {
-    // info("~ConditionGridSystem()");
+    // debug("~ConditionGridSystem()");
 }
 
 void ConditionGridSystem::draw(void) {
@@ -8329,9 +8325,9 @@ static void appliedCB(void) {
     Grid *applied_to = g.ui_Condition->gridsystem->applied_params.first;
     Item *was_applied = g.ui_Condition->gridsystem->applied_params.second;
 
-    info("appliedCB(): Applied %s to %p",
-           was_applied->getName(),
-           (void*)applied_to);
+    debug("appliedCB(): Applied %s to %p",
+          was_applied->getName(),
+          (void*)applied_to);
 
     return;
 }
@@ -8493,14 +8489,14 @@ VehicleUI::~VehicleUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    // info("~VehicleUI()");
+    // debug("~VehicleUI()");
 }
 
 CampUI::~CampUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    // info("~CampUI()");
+    // debug("~CampUI()");
 }
 
 static void InventoryChangeCallback(void) {
@@ -8571,14 +8567,14 @@ ItemsUI::~ItemsUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    // info("~ItemsUI()");
+    // debug("~ItemsUI()");
 }
 
 ConditionUI::~ConditionUI() {
     delete gridsystem;
     delete ground_next_page;
     delete ground_prev_page;
-    // info("~ConditionUI()");
+    // debug("~ConditionUI()");
 }
 
 struct SkillsGridSystem : public GridSystem {
@@ -8598,7 +8594,7 @@ struct SkillsGridSystem : public GridSystem {
         good->items.clear();
         delete good;
         delete bad;
-        // info("~SkillsGridSystem()");
+        // debug("~SkillsGridSystem()");
     };
 
     void reset(void);
@@ -8671,7 +8667,7 @@ SkillsUI::SkillsUI() {
 
 SkillsUI::~SkillsUI() {
     delete skillsGrid;
-    // info("~SkillsUI()");
+    // debug("~SkillsUI()");
 }
 
 static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
@@ -8688,7 +8684,7 @@ static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
 
     if(new_grid == NULL) {
         // if we can't allocate any more grids
-        info("WARNING: Couldn't allocate grid");
+        error("PlaceItemOnMultiGrid(): WARNING: Couldn't allocate grid");
         delete item;
         return;
     }
@@ -8700,7 +8696,7 @@ static void PlaceItemOnMultiGrid(vector<Grid *> *multigrid, Item *item) {
         assert(item->parent);
         item->parent->AddItem(returned);
         delete new_grid;
-        info("WARNING: Item too big for empty ground");
+        error("PlaceItemOnMultiGrid(): WARNING: Item too big for empty ground");
     }
     // add a new grid to the multigrid
     (*multigrid).push_back(new_grid);
@@ -8772,7 +8768,7 @@ static void PlaceStartingGroundItems(__attribute__ ((unused)) Grid *ground, int 
     } else if(strcmp(name, "Dirt") == 0) {
     } else if(strcmp(name, "Cracked ground") == 0) {
     } else {
-        info("PlaceStartingGroundItems(): invalid tile name");
+        error("PlaceStartingGroundItems(): invalid tile name");
     }
 }
 
@@ -9208,7 +9204,7 @@ void MainMenuUI::handlePress(const char *name) {
     } else if(strcmp(name, "Help") == 0) {
         button_Help_press();
     } else {
-        errorQuit("Unknown menu option selected");
+        fatal_error("Unknown menu option selected");
     }
 }
 
@@ -9331,7 +9327,7 @@ ALLEGRO_BITMAP *little_pink_bitmap(void) {
     al_clear_to_color(al_color_name("pink"));
     al_set_target_backbuffer(g.display);
     if(b == NULL)
-        errorQuit("Couldn't create placeholder 32x32 bitmap");
+        fatal_error("Couldn't create placeholder 32x32 bitmap");
     return b;
 }
 
@@ -9342,7 +9338,7 @@ HelpUI::HelpUI() {
     button_back->onMouseDown = press_Help_back;
     background = al_load_bitmap("media/backgrounds/help.png");
     if(background == NULL) {
-        info("Error: Couldn't load media/backgrounds/help.png");
+        error("HelpUI::HelpUI(): Error: Couldn't load media/backgrounds/help.png");
         background = little_pink_bitmap();
     }
     widgets.push_back(button_back);
@@ -9398,7 +9394,7 @@ void runMainMenu(void) {
        g.ui == ui_Options) {
         switchToMainMenu();
     } else {
-        info("You can't go to the menu from this UI");
+        error("runMainMenu(): You can't go to the menu from this UI");
     }
 }
 
@@ -9955,7 +9951,7 @@ static void init_tileinfo(void) {
     int rows = g.display_y / TileMap::hex_step_y + 3;
     if(cols % 2 == 1) cols++;
     if(rows % 2 == 1) rows++;
-    info("init_tileinfo(): cols, rows: %d %d", cols, rows);
+    debug("init_tileinfo(): cols, rows: %d %d", cols, rows);
     g.map = new TileMap (g.tilemap_sx, g.tilemap_sy, cols, rows);
 
     TileInfo i;
@@ -10050,7 +10046,7 @@ MiniMapUI::MiniMapUI(void) {
 }
 
 MiniMapUI::~MiniMapUI(void) {
-    // info("~MiniMapUI()");
+    // debug("~MiniMapUI()");
 }
 
 static void init_map_stories(void) {
@@ -10177,7 +10173,7 @@ static void init_characters(void) {
 
     const int n_start_npcs = g.map->eco.want_creatures;
 
-    info("Spawning %d NPCs", n_start_npcs);
+    debug("init_characters(): Spawning %d NPCs", n_start_npcs);
 
     for(int i = 0; i < n_start_npcs; i++) {
         g.map->addRandomCharacterNearPlayer();
@@ -10199,7 +10195,7 @@ MainMapUI::MainMapUI() {
 }
 
 MainMapUI::~MainMapUI(void) {
-    // info("~MainMapUI()");
+    // debug("~MainMapUI()");
 }
 
 static void init_misc(void) {
@@ -10211,7 +10207,7 @@ static void allegro_init(void) {
 
     al_init(); // no return value
     if(al_is_system_installed() == false)
-        errorQuit("Failed to initialize core allegro library.");
+        fatal_error("Failed to initialize core allegro library.");
     else
         info("Initialized core allegro library.");
 
@@ -10229,13 +10225,13 @@ static void allegro_init(void) {
 
     ret = al_init_primitives_addon();
     if(ret == false)
-        errorQuit("Failed to initialize allegro addon: primitives.");
+        fatal_error("Failed to initialize allegro addon: primitives.");
     else
         info("Initialized allegro addon: primitives.");
 
     ret = al_init_image_addon();
     if(ret == false)
-        errorQuit("Failed to initialize allegro addon: image.");
+        fatal_error("Failed to initialize allegro addon: image.");
     else
         info("Initialized allegro addon: image.");
 
@@ -10244,13 +10240,13 @@ static void allegro_init(void) {
 
     ret = al_init_ttf_addon();
     if(ret == false)
-        errorQuit("Failed to initialize allegro addon: ttf.");
+        fatal_error("Failed to initialize allegro addon: ttf.");
     else
         info("Initialized allegro addon: ttf.");
 
     ret = al_init_native_dialog_addon();
     if(ret == false)
-        errorQuit("Failed to initialize allegro addon: native dialogs.");
+        fatal_error("Failed to initialize allegro addon: native dialogs.");
     else
         info("Initialized allegro addon: native dialogs.");
 
@@ -10263,10 +10259,10 @@ static void allegro_init(void) {
                                                       ALLEGRO_FILECHOOSER_FILE_MUST_EXIST);
 
     if(g.save_filechooser == NULL)
-        errorQuit("Failed to initialize save game filechooser");
+        fatal_error("Failed to initialize save game filechooser");
 
     if(g.load_filechooser == NULL)
-        errorQuit("Failed to initialize load game filechooser");
+        fatal_error("Failed to initialize load game filechooser");
 
     g.display_x = config.displayX;
     g.display_y = config.displayY;
@@ -10328,7 +10324,7 @@ static void allegro_init(void) {
     al_set_new_bitmap_flags(ALLEGRO_MIN_LINEAR | ALLEGRO_MAG_LINEAR);
 
     if(g.display == NULL)
-        errorQuit("Failed to create display.");
+        fatal_error("Failed to create display.");
     else
         info("Created display.");
 
@@ -10336,13 +10332,13 @@ static void allegro_init(void) {
 
     ret = al_install_keyboard();
     if(ret == false)
-        errorQuit("Failed to initialize keyboard.");
+        fatal_error("Failed to initialize keyboard.");
     else
         info("Initialized keyboard.");
 
     ret = al_install_mouse();
     if(ret == false)
-        errorQuit("Failed to initialize mouse.");
+        fatal_error("Failed to initialize mouse.");
     else
         info("Initialized mouse.");
 
@@ -10350,17 +10346,17 @@ static void allegro_init(void) {
         ALLEGRO_BITMAP *cursor_bitmap = al_load_bitmap("media/cursor.png");
 
         if(cursor_bitmap == NULL)
-            errorQuit("Couldn't load cursor bitmap: media/cursor.png");
+            fatal_error("Couldn't load cursor bitmap: media/cursor.png");
 
         ALLEGRO_MOUSE_CURSOR *cursor = al_create_mouse_cursor(cursor_bitmap, 0, 0);
 
         if(cursor == NULL)
-            errorQuit("Couldn't create cursor");
+            fatal_error("Couldn't create cursor");
 
         bool ret = al_set_mouse_cursor(g.display, cursor);
 
         if(ret == false)
-            errorQuit("Couldn't set cursor");
+            fatal_error("Couldn't set cursor");
 
         al_destroy_bitmap(cursor_bitmap);
     }
@@ -10381,7 +10377,7 @@ static void init_rng(int seed) {
     }
 
     if(g.rng == NULL)
-        errorQuit("Failed to initialize random number generator");
+        fatal_error("Failed to initialize random number generator");
 }
 
 #include <getopt.h>
@@ -10579,7 +10575,7 @@ int find_bitmap_index(ALLEGRO_BITMAP *searched) {
 void save_ItemInfo(void) {
     ofstream out("data/item_info.txt", ios::out);
     if(out.fail() == true)
-        errorQuit("failed to open data/item_info.txt for writing");
+        fatal_error("failed to open data/item_info.txt for writing");
 
     out << g.item_info.size() - 1 << endl;
 
@@ -10592,7 +10588,7 @@ void save_ItemInfo(void) {
 void load_ItemInfo(void) {
     ifstream in("data/item_info.txt", ios::in);
     if(in.fail() == true)
-        errorQuit("failed to open data/item_info.txt for reading");
+        fatal_error("failed to open data/item_info.txt for reading");
 
     int item_info_size;
     in >> item_info_size;
@@ -10985,7 +10981,7 @@ static bool save_game(ofstream &out) {
         return false;
 
     if(out.fail() == true) {
-        info("Error: Couldn't open save file for writing: %s", strerror(errno));
+        error("Couldn't open save file for writing: %s", strerror(errno));
         return false;
     }
 
@@ -11014,7 +11010,7 @@ static bool load_game(ifstream &in) {
     PerfTimer t("Load game");
 
     if(in.fail() == true) {
-        info("Error: Couldn't open load file for reading: %s", strerror(errno));
+        error("Couldn't open load file for reading: %s", strerror(errno));
         return false;
     }
 
@@ -11024,14 +11020,14 @@ static bool load_game(ifstream &in) {
         char str[10] = { '\0' };
         in.read(&str[0], 9);
         if(strcmp(str, "project_x") != 0) {
-            info("Error: Invalid save game file: wrong starting string: got %s expected \"project_x\"", str);
+            error("Invalid save game file: wrong starting string: got %s expected \"project_x\"", str);
             in.close();
             return false;
         }
         int loaded_version;
         in >> loaded_version;
         if(loaded_version != COMPILED_VERSION) {
-            info("Error: Wrong save game file version, got %d expected %d", loaded_version, COMPILED_VERSION);
+            error("Wrong save game file version, got %d expected %d", loaded_version, COMPILED_VERSION);
             in.close();
             return false;
         }
@@ -11213,13 +11209,13 @@ void load(void) {
 
     event_queue = al_create_event_queue();
     if(event_queue == NULL)
-        errorQuit("Failed to create event queue.");
+        fatal_error("Failed to create event queue.");
     else
         info("Created event queue.");
 
     timer = al_create_timer(1.0 / config.frame_rate);
     if(timer == NULL)
-        errorQuit("Error: failed to create timer.");
+        fatal_error("Error: failed to create timer.");
     else
         info("Created timer.");
 
@@ -11307,7 +11303,7 @@ int main(int argc, char **argv) {
     else if(load_filename != NULL) {
         bool ok = load_game(load_filename);
         if(ok == false)
-            errorQuit("Couldn't load game: %s", load_filename);
+            fatal_error("Couldn't load game: %s", load_filename);
         switch_to_MainMap();
     }
     else {
@@ -11405,7 +11401,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    info("Exiting");
+    debug("Exiting");
 
     if(restart == true)
         if(is_game_loaded() == true)
