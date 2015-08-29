@@ -70,7 +70,7 @@ OptionsUI::OptionsUI() {
     };
 
     const float start_x = round((config.displayX - 485) / 2);
-    const float start_y = 75;
+    const float start_y = 60;
     const float step_y = 25;
     int i = 0;
 

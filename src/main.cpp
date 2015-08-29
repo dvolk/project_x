@@ -511,11 +511,20 @@ void Item::rotate(void) {
     swap(pos.x2, pos.y2);
 }
 
+// TODO the message log entries should also have timestamps and colors
+// something like
+/*
+  struct message {
+  int time;
+  vector<string> lines;
+  ALLEGRO_COLOR *col;
+  }
+*/
 struct MessageLog : public Widget {
     ALLEGRO_BITMAP *background;
     ALLEGRO_FONT *font;
     vector<string> lines;
-    int offset;
+    int offset; // from the bottom
     const int display_lines = 9;
     const float line_height = 14.0;
 
@@ -4170,6 +4179,8 @@ void Game::AddMessage(const char *format_string, ...) {
 
     for(auto&& line : word_wrap(str, 790))
         log->lines.push_back(line);
+
+    log->offset = 0;
 }
 
 void MessageLog::draw(void) {
@@ -6839,21 +6850,32 @@ void EncounterUI::draw(void) {
 }
 
 void MessageLog::mouseDown(void) {
-    if(mouse_x > g.weapon_switcher->pos.x1) {
-        g.map->player->switchWeaponHand();
+    if(g.mouse_button == 1) {
+        // switch active weapon between right and left hand by
+        // clicking on the weapon switcher
+        if(mouse_x > g.weapon_switcher->pos.x1) {
+            g.map->player->switchWeaponHand();
 
-        // ...
-        if(g.ui == g.ui_Encounter)
-            g.ui_Encounter->setup();
+            // ...
+            if(g.ui == g.ui_Encounter)
+                g.ui_Encounter->setup();
+        }
+        // scroll the message log by clicking top or bottom half
+        else if(mouse_x < g.weapon_switcher->pos.x1) {
+            if(mouse_y >= pos.y1 + pos.y2 / 2) {
+                offset -= display_lines;
+            }
+            else if(mouse_y < pos.y1 + pos.y2 / 2) {
+                offset += display_lines;
+            }
+            offset = max(0, min((int)lines.size() - display_lines, offset));
+        }
     }
-    else if(mouse_x < g.weapon_switcher->pos.x1) {
-        if(mouse_y >= pos.y1 + pos.y2 / 2) {
-            offset -= display_lines;
+    else if(g.mouse_button == 2) {
+        // reset message log with a right click
+        if(mouse_x <= g.weapon_switcher->pos.x1) {
+            offset = 0;
         }
-        else if(mouse_y < pos.y1 + pos.y2 / 2) {
-            offset += display_lines;
-        }
-        offset = max(0, min((int)lines.size() - display_lines, offset));
     }
 }
 
