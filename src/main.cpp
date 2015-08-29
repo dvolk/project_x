@@ -1528,8 +1528,18 @@ Wound * Character::random_wound(void) {
     return &wounds[wounds_dist(*g.rng)];
 }
 
+static inline bool is_player(Character *c);
+
 void Character::hurt(float amount) {
     debug("Character::hurt(): %s hurt for %f", name, amount);
+
+    activity = ACTIVITY_COMBAT;
+    spendTime(0);
+
+    if(is_player(this) == true)
+        if(config.playerInvulnerable == true)
+            return;
+
     health -= min(health, amount);
 
     int wounds_num = amount / 0.03;
@@ -1542,8 +1552,6 @@ void Character::hurt(float amount) {
     }
 
     pain -= min(pain, amount * 3);
-    activity = ACTIVITY_COMBAT;
-    spendTime(0);
 }
 
 void Character::spendTime(int _dt) {
@@ -2019,6 +2027,8 @@ struct TileMap : public Widget {
     Character *chr_by_index(int n);
     int index_from_chr(Character *c);
 };
+
+static inline bool is_player(Character *c) { return c == g.map->player; }
 
 Character *TileMap::chr_by_index(int n) {
     if(n < 0) return NULL;
@@ -5072,6 +5082,9 @@ static void end_turn() {
 
     g.map->player->update();
 
+    if(config.playerInvulnerable == true)
+        g.map->player->health = 1.0;
+
     ActivityKind next = g.map->player->activity;
 
     g.map->runEcology();
@@ -5089,10 +5102,8 @@ static void end_turn() {
 
     g.map->updateColors();
 
-    if(config.playerInvulnerable == false) {
-        if(g.map->player->health < 0.01) {
-            g.map->removeCharacter(g.map->player);
-        }
+    if(g.map->player->health < 0.01) {
+        g.map->removeCharacter(g.map->player);
     }
 
     if(g.map->player->es.in_encounter == true) {
