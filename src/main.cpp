@@ -10262,6 +10262,8 @@ static void allegro_init(void) {
 
     config.load("game.conf");
 
+    init_logging();
+
     if(al_install_audio() == true) {
         info("Initialized allegro addon: audio.");
         if(al_init_acodec_addon() == true) {
@@ -11251,6 +11253,8 @@ void unload(void) {
 
     al_destroy_event_queue(event_queue);
     al_destroy_timer(timer);
+
+    stop_logging();
 }
 
 void load(void) {
@@ -11321,7 +11325,6 @@ bool restart = false;
 int main(int argc, char **argv) {
 
     logo();
-    init_logging();
 
     int seed;
     char *load_filename = NULL;
@@ -11470,8 +11473,6 @@ int main(int argc, char **argv) {
     delete g.rng;
 
     info("Bye");
-
-    stop_logging();
 
     return 0;
 }
