@@ -970,5 +970,24 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
     get_global_iteminfo().push_back(tmp);
+
+    // 45
+    tmp.name = "Access inventory";
+    tmp.grid_size_x = 2;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = -1;
+    tmp.sprite = get_global_bitmap(123);
+    tmp.sprite_on_hp = NULL;
+    tmp.isContainer = false;
+    tmp.isEncounterAction = true;
+    tmp.container_size_x = 0;
+    tmp.container_size_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.slot = SLOT_NONE;
+    get_global_iteminfo().push_back(tmp);
 }
 #endif

@@ -5564,6 +5564,8 @@ enum ENCOUNTER_ACTION {
     LEAVE_COVER,
     STUNNED, /* This could just be part of WAIT */
     RECOVERED_FROM_STUN,
+    ACCESS_INVENTORY,
+    ACCESSED_INVENTORY,
     ENCOUNTER_ACTION_MAX,
 };
 
@@ -5590,6 +5592,10 @@ enum ENCOUNTER_ACTION string_to_action(const char *str) {
         return WAIT;
     if(strcmp(str, "Recovered from stun") == 0)
         return WAIT;
+    if(strcmp(str, "Access inventory") == 0)
+        return ACCESS_INVENTORY;
+    if(strcmp(str, "Accessed inventory") == 0)
+        return ACCESS_INVENTORY;
     assert(false);
 }
 
@@ -5747,6 +5753,7 @@ struct EncounterUI : public UI {
     Item *leave;
     Item *enter_cover;
     Item *leave_cover;
+    Item *access_inventory;
 
     const float l_pane_x = 202;
     const float l_pane_y = 65;
@@ -5766,6 +5773,8 @@ struct EncounterUI : public UI {
     void setup(void);
 
     void addPlayerOptions(void);
+
+    void switch_to_inventory(void);
 };
 
 Item *item_from_action(enum ENCOUNTER_ACTION action) {
@@ -5791,6 +5800,10 @@ Item *item_from_action(enum ENCOUNTER_ACTION action) {
         return g.ui_Encounter->wait;
     if(action == RECOVERED_FROM_STUN)
         return g.ui_Encounter->wait;
+    if(action == ACCESS_INVENTORY)
+        return g.ui_Encounter->access_inventory;
+    if(action == ACCESSED_INVENTORY)
+        return g.ui_Encounter->access_inventory;
     assert(false);
 }
 
@@ -6388,20 +6401,29 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     // debug("Encounter::npcEncounterStep() exit");
 }
 
+inline static bool & inventory_from_encounter(void);
+
 // runs one step of the encounter after the player pressed the
 // confirm button. Could in theory accept multiple actions
 void Encounter::runPlayerEncounterStep(void) {
     debug("Encounter::runPlayerEncounterStep()");
+
+    enum ENCOUNTER_ACTION action1;
+    bool goto_inventory = false;
     vector<Item *> *actions = &g.ui_Encounter->encounterGrids->selected->items;
+
+    if(inventory_from_encounter() == true) {
+        inventory_from_encounter() = false;
+        action1 = ACCESSED_INVENTORY;
+        goto act;
+    }
 
     if(actions->empty()) {
         g.AddMessage("Ah! The old human nightmare: endless varieties of stupidity, endless varieties of suffering, endless varieties of banality.");
         return;
     }
 
-    enum ENCOUNTER_ACTION action1 = string_to_action(actions->front()->getName());
-
-    c1->es.last_move = item_from_action(action1);
+    action1 = string_to_action(actions->front()->getName());
 
     if(c1->es.stunned_for >= 0) {
         if(c1->es.stunned_for == 0) {
@@ -6413,6 +6435,8 @@ void Encounter::runPlayerEncounterStep(void) {
     }
 
  act:
+    c1->es.last_move = item_from_action(action1);
+
     switch(action1) {
 
     case FLEE:
@@ -6553,11 +6577,29 @@ void Encounter::runPlayerEncounterStep(void) {
         }
         break;
 
+    case ACCESS_INVENTORY:
+        {
+            goto_inventory = true;
+        }
+        break;
+
+    case ACCESSED_INVENTORY:
+        {
+            g.AddMessage("You fiddle with your stuff.");
+        }
+        break;
+
     default:
         {
             assert(false);
         }
         break;
+
+    }
+
+    if(goto_inventory == true) {
+        g.ui_Encounter->switch_to_inventory();
+        return;
     }
 
     if(isEncounterNPCdead() == true || npcRelocated() == true || ignoring == true) {
@@ -6600,6 +6642,7 @@ void EncounterUI::addPlayerOptions(void) {
             encounterGrids->options->PlaceItem(leave);
         }
     }
+    encounterGrids->options->PlaceItem(access_inventory);
     encounterGrids->options->PlaceItem(retreat);
     encounterGrids->options->PlaceItem(advance);
 }
@@ -6621,6 +6664,11 @@ void EncounterUI::setup(void) {
 
     encounter.updateVisibility();
     addPlayerOptions();
+
+    if(inventory_from_encounter() == true) {
+        debug("void EncounterUI::setup() coming from inventory, running runPlayerEncounterStep()");
+        encounter.runPlayerEncounterStep();
+    }
 
     debug("EncounterUI::setup() exit");
 }
@@ -6700,6 +6748,7 @@ EncounterUI::EncounterUI() {
     leave = new Item ("Leave");
     enter_cover = new Item("Enter cover");
     leave_cover = new Item("Leave cover");
+    access_inventory = new Item("Access inventory");
 
     unknown_character_sprite = g.bitmaps[83];
 
@@ -8088,11 +8137,19 @@ struct ItemsUI : public UI {
     Button *ground_next_page;
     Button *ground_prev_page;
 
+    bool from_encounter;
+
     ItemsUI();
     ~ItemsUI();
 
     void draw(void) override;
+
+    void setup(void);
 };
+
+inline static bool & inventory_from_encounter(void) {
+    return g.ui_Items->from_encounter;
+}
 
 void ItemsUI::draw(void) {
     const int off_x = 555; // from Character::Character()
@@ -8575,11 +8632,48 @@ ItemsUI::ItemsUI() {
     ground_prev_page->down = NULL;
     ground_prev_page->onMouseDown = InventoryPrevGroundPage;
 
-    addLogAndButtons();
-    addIndicatorWidgets();
+    from_encounter = false;
+
+    setup();
+}
+
+void EncounterUI::switch_to_inventory(void) {
+    debug("EncounterUI::switch_to_inventory()");
+    g.ui_Items->gridsystem->reset();
+    g.ui_Items->from_encounter = true;
+    g.ui_Items->setup();
+    g.button_Items->pressed = true;
+    g.ui = g.ui_Items;
+}
+
+void ItemsUI::setup(void) {
+    widgets.clear();
+
     widgets.push_back(ground_next_page);
     widgets.push_back(ground_prev_page);
     widgets.push_back(gridsystem);
+
+    widgets.push_back(g.log);
+
+    // if we're accessing the inventory from an encounter,
+    // then hide the other buttons
+    if(from_encounter == false) {
+        widgets.push_back(g.button_MainMap);
+        widgets.push_back(g.button_MiniMap);
+        widgets.push_back(g.button_Skills);
+        widgets.push_back(g.button_Crafting);
+        widgets.push_back(g.button_Condition);
+        widgets.push_back(g.button_Camp);
+        widgets.push_back(g.button_Vehicle);
+        widgets.push_back(g.button_scavenge);
+        widgets.push_back(g.button_endturn);
+        widgets.push_back(g.button_sleep);
+    }
+
+    widgets.push_back(g.button_Items);
+
+    // addLogAndButtons();
+    addIndicatorWidgets();
 }
 
 ConditionUI::ConditionUI() {
@@ -9496,7 +9590,23 @@ static void button_MainMap_press(void) {
     }
 }
 
+static void inventory_to_encounter(void) {
+    exitUIs();
+    g.ui_Encounter->setup();
+    g.ui = g.ui_Encounter;
+    g.ui_Items->from_encounter = false;
+    main_buttons_update();
+}
+
 static void button_Items_press(void) {
+    // pressing the items button if we've come from an encounter
+    // exits the inventory and returns to the encounter
+    if(g.ui == g.ui_Items and g.ui_Items->from_encounter == true) {
+        debug("button_Items_press(): going back to encounter");
+        inventory_to_encounter();
+        return;
+    }
+
     if(g.ui != g.ui_Items) {
         exitUIs();
 
@@ -9723,6 +9833,7 @@ static void load_bitmaps(void) {
     /* 120 */ filenames.push_back("media/items/abstract/enter_cover.png");
     /* 121 */ filenames.push_back("media/items/abstract/leave_cover.png");
     /* 122 */ filenames.push_back("media/tile/fog.png");
+    /* 123 */ filenames.push_back("media/items/abstract/access_inventory.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -11125,6 +11236,10 @@ static void logo(void) {
 void pressEscape() {
     exitUIs();
 
+    if(g.ui_Items->from_encounter == true) {
+        inventory_to_encounter();
+        return;
+    }
     // can't get out of encounter or stories with escape
     if(g.ui == g.ui_Encounter ||
        g.ui == g.ui_Interact ||
