@@ -1272,6 +1272,7 @@ struct encounter_state {
     bool in_cover;
     int stunned_for;
     int robo_stamina;
+    int was_attacked;
 
     void reset(void);
     void wait(void);
@@ -5550,6 +5551,7 @@ void encounter_state::reset(void) {
     warned = 0;
     in_cover = false;
     stunned_for = -1;
+    was_attacked = 0;
 }
 
 enum ENCOUNTER_ACTION {
@@ -6125,8 +6127,6 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
 
     Character *_c1 = n == 0 ? c1 : c2;
     Character *_c2 = n == 0 ? c2 : c1;
-    // encounter_state *_ec1 = n == 0 ? &ec1 : &ec2;
-    // encounter_state *c2->es_ec2 = n == 0 ? &ec2 : &ec1;
 
     int warned = _c2->es.warned;
     bool is_wild = _c2->faction == FACTION_WILD;
@@ -6148,7 +6148,8 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     bool can_flee = hidden;
     int & stunned_for = _c2->es.stunned_for;
     int & enemy_stunned_for = _c1->es.stunned_for;
-    int no_stamina = _c2->es.robo_stamina <= 0;
+    bool no_stamina = _c2->es.robo_stamina <= 0;
+    bool was_attacked = _c2->es.was_attacked > 0;
 
     enum ENCOUNTER_ACTION action = ENCOUNTER_ACTION_MAX;
 
@@ -6170,7 +6171,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
         goto force_attack;
     }
 
-    if(samefaction == true) {
+    if(samefaction == true and not was_attacked) {
         if(said_hello == false) {
             action = WARN;
             goto act;
@@ -6249,6 +6250,8 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
 
     case ATTACK:
         {
+            _c1->es.was_attacked++;
+
             // we're in range, see the opponent and have enough ammo
             enum WEAPON_USE_RESULT used_result = _c2->useWeapon(_c1);
             switch(used_result) {
@@ -6477,6 +6480,8 @@ void Encounter::runPlayerEncounterStep(void) {
 
     case ATTACK:
         {
+            c2->es.was_attacked++;
+
             enum WEAPON_USE_RESULT used_result = c1->useWeapon(c2);
             switch(used_result) {
 
