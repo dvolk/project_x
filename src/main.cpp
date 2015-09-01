@@ -9600,6 +9600,7 @@ static void inventory_to_encounter(void) {
     g.ui_Encounter->setup();
     g.ui = g.ui_Encounter;
     g.ui_Items->from_encounter = false;
+    g.ui_Items->setup();
     main_buttons_update();
 }
 
