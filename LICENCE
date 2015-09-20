@@ -2,7 +2,7 @@ The source code in this repo is licenced under the GPL 3
 
 https://gnu.org/licenses/gpl-3.0.txt
 
-The following graphics files are released under Creative Commons Attribution 4.0 International (CC BY 4.0) by Electra T.:
+The following graphics files are released under Creative Commons Attribution 4.0 International (CC BY 4.0) by Electra Thornburg:
 
 test_character.png
 city.png
@@ -24,6 +24,8 @@ arrow.png
 char1.png
 char2.png
 char3.png
+char4.png
+char5.png
 moldy_bread
 left_hand_glove.png
 right_hand_glove.png
@@ -33,8 +35,12 @@ wild_berries.png
 rope.png
 matches.png
 gas_can.png
+water_bottle.png
 wood_log.png
 cooking_pot.png
+meat_chunk.png
+unknown.png
+knife.png
 fire.png
 
 
