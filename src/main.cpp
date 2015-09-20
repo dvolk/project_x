@@ -7949,6 +7949,14 @@ static void init_interactions(void) {
                     drop_item_at_player("clean rag");
                     drop_item_at_player("clean rag");
                     drop_item_at_player("clean rag");
+                    drop_item_at_player("clean rag");
+                    drop_item_at_player("meat chunk");
+                    drop_item_at_player("meat chunk");
+                    drop_item_at_player("meat chunk");
+                    drop_item_at_player("meat chunk");
+                    drop_item_at_player("meat chunk");
+                    drop_item_at_player("hunting knife");
+                    drop_item_at_player("hunting knife");
                     drop_item_at_player("arrow");
                     drop_item_at_player("crowbar");
                     drop_item_at_player("wild berries");
@@ -9840,6 +9848,10 @@ static void load_bitmaps(void) {
     /* 121 */ filenames.push_back("media/items/abstract/leave_cover.png");
     /* 122 */ filenames.push_back("media/tile/fog.png");
     /* 123 */ filenames.push_back("media/items/abstract/access_inventory.png");
+    /* 124 */ filenames.push_back("media/characters/char4.png");
+    /* 125 */ filenames.push_back("media/characters/char5.png");
+    /* 126 */ filenames.push_back("media/items/knife.png");
+    /* 127 */ filenames.push_back("media/items/meat_chunk.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {

@@ -989,5 +989,56 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.slot = SLOT_NONE;
     get_global_iteminfo().push_back(tmp);
+
+    // 46
+    tmp.name = "hunting knife";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 2;
+    tmp.maxStack = 1;
+    tmp.weight = 350;
+    tmp.sprite = get_global_bitmap(126);
+    tmp.sprite_on_hp = NULL;
+    tmp.isLiquid = false;
+    tmp.isContainer = false;
+    tmp.container_size_x = -1;
+    tmp.container_size_y = -1;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = false;
+    tmp.improves_hydration = 0.0;
+    tmp.improves_satiety = 0.0;
+    tmp.slot = SLOT_NONE;
+    tmp.weapon_damage = 0.2;
+    tmp.weapon_range = 1;
+    tmp.flags = { };
+    get_global_iteminfo().push_back(tmp);
+
+    // 47
+    tmp.name = "meat chunk";
+    tmp.grid_size_x = 1;
+    tmp.grid_size_y = 1;
+    tmp.maxStack = 1;
+    tmp.weight = 100;
+    tmp.sprite_on_hp = NULL;
+    tmp.sprite = get_global_bitmap(127);
+    tmp.isContainer = false;
+    tmp.container_size_x = -1;
+    tmp.container_size_y = -1;
+    tmp.container_offset_x = 0;
+    tmp.container_offset_y = 0;
+    tmp.isSkill = false;
+    tmp.apply_to_body = false;
+    tmp.consumed_on_application = false;
+    tmp.consumed_on_use = true;
+    tmp.improves_hydration = 0.005;
+    tmp.improves_satiety = 0.15;
+    tmp.canBeDamaged = true;
+    tmp.slot = SLOT_NONE;
+    tmp.flags = { };
+    tmp.warmth = 0.0;
+    tmp.weapon_damage = 0.0001;
+    tmp.weapon_range = 1;
+    get_global_iteminfo().push_back(tmp);
 }
 #endif
