@@ -19,6 +19,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 #include "./version.h"
 #include "./util.h"
@@ -102,7 +103,7 @@ struct Game {
     ALLEGRO_FILECHOOSER *load_filechooser;
 
     // global random number god
-    mt19937 *rng;
+    mt19937 rng;
 
     Button *button_MainMap;
     Button *button_MiniMap;
@@ -827,7 +828,7 @@ void Item::init(int16_t info_index) {
     }
 
     uniform_real_distribution<> cond_dist(0.02,1);
-    this->condition = cond_dist(*g.rng);
+    this->condition = cond_dist(g.rng);
 
     if(g.item_info[info_index].canBeDamaged == false ||
        g.item_info[info_index].maxStack != 1 ||
@@ -1535,7 +1536,7 @@ Character::~Character() {
 
 Wound * Character::random_wound(void) {
     uniform_int_distribution<> wounds_dist(0, wounds.size() - 1);
-    return &wounds[wounds_dist(*g.rng)];
+    return &wounds[wounds_dist(g.rng)];
 }
 
 static inline bool is_player(Character *c);
@@ -2181,7 +2182,7 @@ void TileMap::runWeather() {
             uniform_int_distribution<>
                 next_weather_dist(0, g.weatherinfo.size() - 1);
 
-            weather.idx = next_weather_dist(*g.rng);
+            weather.idx = next_weather_dist(g.rng);
             weather.duration = 0;
 
             weather.anim.setup(&g.weatherinfo[weather.idx].bmaps,
@@ -2257,8 +2258,8 @@ int TileMap::random_uninhabited_position_in_rect(int x1, int y1, int x2, int y2)
     // find a position away from all the other characters
     do {
         ok = true;
-        x = position_dist_x(*g.rng);
-        y = position_dist_y(*g.rng);
+        x = position_dist_x(g.rng);
+        y = position_dist_y(g.rng);
         new_n = size_x * y + x;
         if(distance(new_n, player->n) < 10)
             ok = false;
@@ -2286,7 +2287,7 @@ int TileMap::random_uninhabited_position(void) {
     // find a position away from all the other characters
     do {
         ok = true;
-        new_n = position_dist(*g.rng);
+        new_n = position_dist(g.rng);
         if(distance(new_n, player->n) < 10)
             ok = false;
         for(auto&& c : characters) {
@@ -2413,7 +2414,7 @@ Character *TileMap::addRandomCharacter(void) {
 
         uniform_int_distribution<>
             faction_dist(0, faction_options.size() - 1);
-        fac = (Faction)faction_options.at(faction_dist(*g.rng));
+        fac = (Faction)faction_options.at(faction_dist(g.rng));
     }
 
     return addRandomCharacter(fac);
@@ -2426,11 +2427,27 @@ Character *TileMap::addRandomCharacter(Faction fac) {
     for(auto&& fac_rep : new_char->faction_reps) fac_rep = -1;
     new_char->faction_reps[fac] = 1;
 
+    uniform_int_distribution<> wild_type_dist(0, 2);
+    int wild_type = wild_type_dist(g.rng);
     // pick name
-    if(fac == FACTION_WILD)
-        new_char->name = strdup("dog");
-    else
+    if(fac == FACTION_WILD) {
+        switch(wild_type)
+            {
+        case 0:
+            new_char->name = strdup("dog");
+            break;
+        case 1:
+            new_char->name = strdup("abomination");
+            break;
+        case 2:
+            new_char->name = strdup("abomination");
+            break;
+        default:
+            assert(false);
+            }
+    } else {
         new_char->name = random_human_NPC_name();
+    }
 
     // pick sprite
     if(fac == FACTION_NONE) {
@@ -2438,7 +2455,7 @@ Character *TileMap::addRandomCharacter(Faction fac) {
         uniform_int_distribution<>
             sprite_dist(0, human_sprite_map.size() - 1);
         new_char->sprite =
-            g.bitmaps[human_sprite_map[sprite_dist(*g.rng)]];
+            g.bitmaps[human_sprite_map[sprite_dist(g.rng)]];
     }
     else if(fac == FACTION_SCIENTISTS)
         new_char->sprite = g.bitmaps[91];
@@ -2446,21 +2463,35 @@ Character *TileMap::addRandomCharacter(Faction fac) {
         new_char->sprite = g.bitmaps[21];
     else if(fac == FACTION_BANDITS)
         new_char->sprite = g.bitmaps[94];
-    else if(fac == FACTION_WILD)
-        new_char->sprite = g.bitmaps[90];
-    else if(fac == FACTION_PLAYER)
+    else if(fac == FACTION_WILD) {
+        switch(wild_type)
+            {
+        case 0:
+            new_char->sprite = g.bitmaps[90];
+            break;
+        case 1:
+            new_char->sprite = g.bitmaps[124];
+            break;
+        case 2:
+            new_char->sprite = g.bitmaps[125];
+            break;
+        default:
+            assert(false);
+            }
+    } else if(fac == FACTION_PLAYER) {
         new_char->sprite = g.bitmaps[21];
+    }
 
     // position
     new_char->setPos(random_uninhabited_position());
 
     // // starting health
     // uniform_real_distribution<> health_dist(0.1, 1);
-    // new_char->health = health_dist(*g.rng);
+    // new_char->health = health_dist(g.rng);
 
     // starting delay
     uniform_int_distribution<> delay_dist(0, 500);
-    new_char->nextMove = g.map->player->nextMove + delay_dist(*g.rng);
+    new_char->nextMove = g.map->player->nextMove + delay_dist(g.rng);
 
     // add starting inventory, unless it's an animal
     if(fac != FACTION_WILD) {
@@ -2569,7 +2600,7 @@ void Character::ai_avoid(void) {
                 ocs[dir - 1] = new_n;
     }
 
-    shuffle(ocs.begin(), ocs.end(), *g.rng);
+    shuffle(ocs.begin(), ocs.end(), g.rng);
 
     for(auto&& oc : ocs) {
         if(oc != -1) {
@@ -2760,7 +2791,7 @@ enum WEAPON_USE_RESULT Character::useWeapon(Character *against) {
 
     cth = min(85, cth);
 
-    if(cth_dist(*g.rng) > cth)
+    if(cth_dist(g.rng) > cth)
         return WEAPON_USE_MISS;
 
     // TODO ranged weapons should be abused even if they miss...
@@ -2954,7 +2985,7 @@ void Character::randomMove(void) {
     uniform_int_distribution<> dist(1, 6);
 
     do {
-        new_n = dir_transform(n, dist(*g.rng));
+        new_n = dir_transform(n, dist(g.rng));
     } while(good_index(new_n) == false ||
             g.map->blocks_movement(new_n) == true);
 
@@ -2987,7 +3018,7 @@ static void chInterruptsPlayer(Character *c1) {
 
 static void runRandomMoveEvents(void) {
     uniform_int_distribution<> d100(0, 100);
-    int roll = d100(*g.rng);
+    int roll = d100(g.rng);
 
     if(roll == 0) {
         g.AddMessage("You disturb a flock of birds and they fly away loudly.");
@@ -4230,7 +4261,7 @@ void TileMap::generate(void) {
 
     for(int i = 0; i <= max_t; i++) {
         tiles[i].visible = false;
-        tiles[i].info_index = options.at(tile_type_dist(*g.rng));
+        tiles[i].info_index = options.at(tile_type_dist(g.rng));
         tiles[i].ground_items = NULL;
         tiles[i].locations = NULL;
     }
@@ -6220,7 +6251,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
     case FLEE:
         {
             uniform_int_distribution<> fled_dist(0, 2);
-            bool successfully_fled = fled_dist(*g.rng) > 0;
+            bool successfully_fled = fled_dist(g.rng) > 0;
 
             if(successfully_fled == true) {
                 if(involvesPlayer() == true) {
@@ -6269,7 +6300,7 @@ void Encounter::npcEncounterStep(int n) { // TODO these n arguments are confusin
                             g.AddMessage("%s hits %s with their %s!", _c2->name, _c1->name, weapon->getName());
 
                     uniform_int_distribution<> stunned_dist(0, 100);
-                    int stunned_val = stunned_dist(*g.rng);
+                    int stunned_val = stunned_dist(g.rng);
                     if(stunned_val > 75) {
                         enemy_stunned_for = max(0, enemy_stunned_for);
                         enemy_stunned_for += 1;
@@ -6445,7 +6476,7 @@ void Encounter::runPlayerEncounterStep(void) {
     case FLEE:
         {
             uniform_int_distribution<> fled_dist(0, 2);
-            bool successfully_fled = fled_dist(*g.rng) > 0;
+            bool successfully_fled = fled_dist(g.rng) > 0;
 
             if(successfully_fled == true) {
                 if(c2->useWeapon(c1) == true)
@@ -6496,7 +6527,7 @@ void Encounter::runPlayerEncounterStep(void) {
                     int & enemy_stunned_for = c2->es.stunned_for;
 
                     uniform_int_distribution<> stunned_dist(0, 100);
-                    int stunned_val = stunned_dist(*g.rng);
+                    int stunned_val = stunned_dist(g.rng);
                     if(stunned_val > 75) {
                         enemy_stunned_for = max(0, enemy_stunned_for);
                         enemy_stunned_for += 1;
@@ -7128,7 +7159,7 @@ void ScavengeUI::scavengeLocation(void) {
 
         int loot_item_index = loot_entry.second;
         float loot_probability = loot_entry.first * this->loot;
-        float roll = prob(*g.rng);
+        float roll = prob(g.rng);
 
         if(roll < loot_probability) {
             scavenged_items.push_back(new Item (loot_item_index));
@@ -7151,7 +7182,7 @@ void ScavengeUI::addLootedItems(void) {
 // return true if there was an event
 static bool runRandomScavengingEvents(void) {
     uniform_int_distribution<> d100(0, 100);
-    int roll = d100(*g.rng);
+    int roll = d100(g.rng);
     int prob = g.ui_Scavenge->safety * 100;
 
     debug("runRandomScavengingEvents(): %d %d", roll, prob);
@@ -7792,10 +7823,10 @@ struct test_interact_data {
             uniform_real_distribution<> gy(50.0, 670.0);
             uniform_real_distribution<> gr(0.0, max_size - 2.0);
             uniform_real_distribution<> gs(1, 2);
-            x = gx(*g.rng);
-            y = gy(*g.rng);
-            r = gr(*g.rng);
-            s = gs(*g.rng);
+            x = gx(g.rng);
+            y = gy(g.rng);
+            r = gr(g.rng);
+            s = gs(g.rng);
         }
         void draw(void) { al_draw_filled_circle(x, y, r, colors.white); }
         void update(void) {
@@ -8054,7 +8085,7 @@ static void init_interactions(void) {
             page()->pre = []()
                 {
                     uniform_real_distribution<> hurt_dist(0.01, 0.1);
-                    g.map->player->hurt(hurt_dist(*g.rng));
+                    g.map->player->hurt(hurt_dist(g.rng));
                 };
         }
     }
@@ -10336,8 +10367,8 @@ static char *random_human_NPC_name(void) {
 
     char buf[128];
     snprintf(buf, sizeof(buf), "%s %s",
-             first_names.at(fnd(*g.rng)),
-             last_names.at(lnd(*g.rng)));
+             first_names.at(fnd(g.rng)),
+             last_names.at(lnd(g.rng)));
 
     return strdup(buf);
 }
@@ -10549,15 +10580,21 @@ static void load_fonts(void) {
 static void init_rng(int seed) {
     if(seed != -1) {
         info("Using seed: %s", seed);
-        g.rng = new mt19937(seed);
+        g.rng = mt19937(seed);
     }
     else {
-        random_device rd;
-        g.rng = new mt19937(rd());
+        try {
+            random_device rd;
+            g.rng = mt19937(rd());
+        }
+        catch(exception &e) {
+            auto _seed = chrono::system_clock::now().time_since_epoch().count();
+            g.rng = mt19937(_seed);
+        }
     }
 
-    if(g.rng == NULL)
-        fatal_error("Failed to initialize random number generator");
+    // if(g.rng == NULL)
+    //     fatal_error("Failed to initialize random number generator");
 }
 
 #include <getopt.h>
@@ -11603,7 +11640,7 @@ int main(int argc, char **argv) {
         goto restart;
     }
 
-    delete g.rng;
+    // delete g.rng;
 
     info("Bye");
 
