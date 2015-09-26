@@ -719,7 +719,14 @@ struct Grid {
     void unstack_item(int x, int y); // unstack item at screen position
 
     bool item_compatible(Item *i);
+    Item *getItem(void);
 };
+
+Item *Grid::getItem(void) {
+    if(items.empty())
+        return NULL;
+    return items.front();
+}
 
 Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h) {
     if(h != NULL)
@@ -1378,7 +1385,7 @@ struct Character {
     ~Character();
 
     void save(ostream &os);
-    void load(istream &is, DeferredCharacterLoadingData& data);
+    void load(istream &is, DeferredCharacterLoadingData& data, bool is_player);
     void load(DeferredCharacterLoadingData& data);
 
     void ai_avoid(void);
@@ -1434,7 +1441,45 @@ struct Character {
     void recomputeWarmth(void);
 
     Wound *random_wound(void);
+
+    void generate_map_sprite(void);
 };
+
+/*
+  Generate the character's map sprite based on what they're wearing
+ */
+void Character::generate_map_sprite(void) {
+    ALLEGRO_COLOR nein = al_map_rgba(0,0,0,0);
+
+    al_set_target_bitmap(sprite);
+    al_clear_to_color(nein);
+    // naked
+    al_draw_bitmap(g.bitmaps[128], 0, 0, 0);
+
+    Item *torso_clothing = torso->getItem();
+    Item *legs_clothing = legs->getItem();
+    Item *right_hand = right_hand_hold->getItem();
+    // Item *left_hand = left_hand_hold->getItem();
+
+    if(torso_clothing != NULL) {
+        al_draw_bitmap(g.bitmaps[129], 0, 0, 0);
+    }
+
+    if(legs_clothing != NULL) {
+        al_draw_bitmap(g.bitmaps[130], 0, 0, 0);
+    }
+
+    if(right_hand != NULL) {
+        if(strcmp(right_hand->getName(), "makeshift wood bow") == 0) {
+            al_draw_bitmap(g.bitmaps[132], 0, 0, 0);
+        }
+        if(strcmp(right_hand->getName(), "hunting knife") == 0) {
+            al_draw_bitmap(g.bitmaps[131], 0, 0, 0);
+        }
+    }
+
+    al_set_target_backbuffer(g.display);
+}
 
 void Character::clearOldPos(void) {
     old_x = x;
@@ -2742,6 +2787,7 @@ void Character::abuseItem(Item *item, float amount) {
         if(this == g.map->player) {
             // add message if character is player
             g.AddMessage("Your %s is destroyed!", item->getName());
+            generate_map_sprite();
         }
         if(item->storage != NULL) {
             // dump the contained items on the ground
@@ -3527,6 +3573,7 @@ Character *TileMap::characterAt(int n) {
 TileMap::~TileMap() {
     // debug("~TileMap");
     // tilemap owns characters
+    al_destroy_bitmap(player->sprite);
     delete player;
     for(auto& character : characters) {
         delete character;
@@ -3546,6 +3593,7 @@ TileMap::~TileMap() {
     }
     for(auto&& label : labels)
         free((char*)label.text);
+
 }
 
 TileMap::TileMap(int sx, int sy, int c, int r) {
@@ -6810,6 +6858,7 @@ EncounterUI::~EncounterUI() {
     delete leave;
     delete enter_cover;
     delete leave_cover;
+    delete access_inventory;
 }
 
 Item *Encounter::getLastMove(int n) {
@@ -8651,6 +8700,7 @@ CampUI::~CampUI() {
 static void InventoryChangeCallback(void) {
     g.map->player->recomputeCarryWeight();
     g.map->player->recomputeWarmth();
+    g.map->player->generate_map_sprite();
 }
 
 ItemsUI::ItemsUI() {
@@ -9883,6 +9933,11 @@ static void load_bitmaps(void) {
     /* 125 */ filenames.push_back("media/characters/char5.png");
     /* 126 */ filenames.push_back("media/items/knife.png");
     /* 127 */ filenames.push_back("media/items/meat_chunk.png");
+    /* 128 */ filenames.push_back("media/characters/test_character_bare.png");
+    /* 129 */ filenames.push_back("media/characters/hoodie.png");
+    /* 130 */ filenames.push_back("media/characters/pants.png");
+    /* 131 */ filenames.push_back("media/characters/small_knife.png");
+    /* 132 */ filenames.push_back("media/characters/small_bow.png");
 
     cout << "Loading bitmaps: ";
     for(auto& filename : filenames) {
@@ -10320,8 +10375,6 @@ static void init_player(void) {
     // start the player in the upper left
     c->setPos(g.map->size_x * (g.map->size_y / 5) + (g.map->size_x / 4));
 
-    c->sprite = g.bitmaps[21];
-
     // start the player with clothing
     c->torso->PlaceItem(new Item ("red hoodie"));
     c->legs->PlaceItem(new Item ("blue jeans"));
@@ -10350,6 +10403,9 @@ static void init_player(void) {
         {
         g.map->tiles[p].info_index = TILE_DIRT;
         }
+
+    c->sprite = al_create_bitmap(50, 60);
+    c->generate_map_sprite();
 }
 
 static char *random_human_NPC_name(void) {
@@ -10967,7 +11023,9 @@ void Character::save(ostream &os) {
     ai.save(os);
 }
 
-void Character::load(istream &is, DeferredCharacterLoadingData& data) {
+void Character::load(istream &is,
+                     DeferredCharacterLoadingData& data,
+                     bool is_player) {
     int name_len;
     is >> name_len;
     char *name = (char *)malloc(name_len + 1);
@@ -10977,7 +11035,10 @@ void Character::load(istream &is, DeferredCharacterLoadingData& data) {
     this->name = name;
     size_t sprite_index;
     is >> n >> sprite_index;
-    sprite = g.bitmaps[sprite_index];
+    if(not is_player) {
+        // the player has a dynamically generated sprite
+        sprite = g.bitmaps[sprite_index];
+    }
 
     setPos(n);
 
@@ -11132,7 +11193,9 @@ void TileMap::load(istream &is) {
     }
     player = new Character;
     DeferredCharacterLoadingData p_data;
-    player->load(is, p_data);
+    player->load(is, p_data, true);
+    player->sprite = al_create_bitmap(50, 60);
+    player->generate_map_sprite();
 
     is >> n;
     characters.resize(n);
@@ -11142,7 +11205,7 @@ void TileMap::load(istream &is) {
     int i = 0;
     for(auto&& ch : characters) {
         ch = new Character;
-        ch->load(is, ch_data.at(i));
+        ch->load(is, ch_data.at(i), false);
         i++;
     }
 
