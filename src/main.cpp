@@ -3212,9 +3212,21 @@ void Character::drop_all_items(void) {
             PlaceItemOnMultiGrid(ground, item);
         }
     }
+
     for(auto& item : vehicle->items) {
         vehicle->RemoveItem(item);
         PlaceItemOnMultiGrid(ground, item);
+    }
+
+    /*
+      temporarily drop some meat in place of a corpse
+     */
+    int max_meats = weight / 3000;
+    uniform_int_distribution<> meats_dist(0, max_meats);
+    int meats = meats_dist(g.rng);
+
+    for(int i = 0; i < meats; i++) {
+        PlaceItemOnMultiGrid(ground, new Item("meat chunk"));
     }
 }
 
