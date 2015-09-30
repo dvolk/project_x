@@ -43,6 +43,7 @@ enum ItemFlag {
     PUT_ON_SHOULDER,
     PUT_ON_NECK,
     WEAPON_WITH_AMMO,
+    DECAYS,
 };
 
 struct ItemInfo {

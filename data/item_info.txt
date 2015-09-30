@@ -1579,7 +1579,7 @@ name 13 hunting knife
 	isSkill 0
 	isLocation 0
 	isLiquid 0
-	isEncounterAction 1
+	isEncounterAction 0
 	canBeDamaged 1
 	apply_to_body 0
 	consumed_on_application 0
@@ -1613,7 +1613,7 @@ name 10 meat chunk
 	isSkill 0
 	isLocation 0
 	isLiquid 0
-	isEncounterAction 1
+	isEncounterAction 0
 	canBeDamaged 1
 	apply_to_body 0
 	consumed_on_application 0
@@ -1630,4 +1630,4 @@ name 10 meat chunk
 	scavenge_sneak_mult 0
 	sprite 127
 	sprite_on_hp -1
-	flags: 0
+	flags: 1 17

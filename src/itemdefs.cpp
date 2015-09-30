@@ -6,7 +6,7 @@
 std::vector<ItemInfo>& get_global_iteminfo(void);
 ALLEGRO_BITMAP *get_global_bitmap(size_t n);
 
-//#define REWRITE_ITEMDEFS
+#define REWRITE_ITEMDEFS
 #ifdef REWRITE_ITEMDEFS
 void init_iteminfo(void) {
     ItemInfo tmp;
@@ -1000,6 +1000,7 @@ void init_iteminfo(void) {
     tmp.sprite_on_hp = NULL;
     tmp.isLiquid = false;
     tmp.isContainer = false;
+    tmp.isEncounterAction = false;
     tmp.container_size_x = -1;
     tmp.container_size_y = -1;
     tmp.isSkill = false;
@@ -1008,6 +1009,7 @@ void init_iteminfo(void) {
     tmp.consumed_on_use = false;
     tmp.improves_hydration = 0.0;
     tmp.improves_satiety = 0.0;
+    tmp.canBeDamaged = true;
     tmp.slot = SLOT_NONE;
     tmp.weapon_damage = 0.2;
     tmp.weapon_range = 1;
@@ -1035,7 +1037,7 @@ void init_iteminfo(void) {
     tmp.improves_satiety = 0.15;
     tmp.canBeDamaged = true;
     tmp.slot = SLOT_NONE;
-    tmp.flags = { };
+    tmp.flags = { DECAYS };
     tmp.warmth = 0.0;
     tmp.weapon_damage = 0.0001;
     tmp.weapon_range = 1;

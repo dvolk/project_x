@@ -46,7 +46,7 @@
 #include "./iteminfo.h"
 #include "./itemdefs.h"
 
-const int COMPILED_VERSION = 14; // save game version
+const int COMPILED_VERSION = 15; // save game version
 
 using namespace std;
 
@@ -259,6 +259,17 @@ struct EncounterRecord {
 
 vector<EncounterRecord> encounters;
 
+template<typename T>
+class maybeVecIterator {
+    bool ok;
+    typename vector<T>::iterator it;
+public:
+    maybeVecIterator() { ok = false; }
+    maybeVecIterator(typename vector<T>::iterator it) { this->it = it; ok = true; }
+    bool is_just(void) { return ok; }
+    typename vector<T>::iterator get() { return it; }
+};
+
 // an item is something that lives on the grid
 struct Item {
     // position and size of the item on the grid
@@ -283,6 +294,7 @@ struct Item {
     // should be checked at the end of the turn, and individual items
     // when they're used float condition;
     float condition;
+    int last_updated;
 
     Item() { }
     Item(const Item& i);
@@ -329,9 +341,15 @@ struct Item {
     float getScavengeSafetyMult(void);
     float getScavengeSneakMult(void);
     bool is_weapon_with_ammo(void);
+    bool decays_with_time(void);
 
     bool hasFlag(enum ItemFlag _flag) const;
+    maybeVecIterator<Item *>  update(int current_time);
 };
+
+bool Item::decays_with_time(void) {
+    return hasFlag(DECAYS);
+}
 
 bool Item::hasFlag(const enum ItemFlag _flag) const {
     for(auto&& flag : g.item_info[info_index].flags) {
@@ -708,7 +726,7 @@ struct Grid {
     void drawAt(float x, float y);
 
     void AddItem(Item *item);
-    void RemoveItem(Item *item);
+    vector<Item *>::iterator RemoveItem(Item *item);
     Item *PlaceItem(Item *to_place);
     void Sort(void);
     void Sort(bool (*comp)(Item *l, Item *r));
@@ -726,6 +744,39 @@ Item *Grid::getItem(void) {
     if(items.empty())
         return NULL;
     return items.front();
+}
+
+maybeVecIterator<Item *> Item::update(int current_time) {
+    // DFS
+    if(storage != NULL) {
+        vector<Item *>::iterator it;
+        for(it = storage->items.begin(); it != storage->items.end(); ) {
+            maybeVecIterator<Item *> ret = (*it)->update(current_time);
+            if(ret.is_just() == true) {
+                it = ret.get();
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    if(condition < -0.5)
+        return maybeVecIterator<Item *>();
+    if(decays_with_time() == false)
+        return maybeVecIterator<Item *>();
+
+    int dt = current_time - last_updated;
+    assert(dt > 0);
+    float change = dt / (1000.0 * 10.0);
+    condition -= change;
+    last_updated = current_time;
+
+    if(condition < 0.01) {
+        maybeVecIterator<Item *> it = maybeVecIterator<Item *>(parent->RemoveItem(this));
+        delete this;
+        return it;
+    }
+    return maybeVecIterator<Item *>();
 }
 
 Grid::Grid(int w_pos_x, int w_pos_y, int size_x, int size_y, GridInfo *h) {
@@ -808,6 +859,8 @@ void Grid::Sort(bool (*comp)(Item *l, Item *r)) {
     assert((int)items.size() == num_items);
 }
 
+static int get_current_time(void);
+
 void Item::init(int16_t info_index) {
     pos.x1 = 0;
     pos.y1 = 0;
@@ -816,6 +869,8 @@ void Item::init(int16_t info_index) {
     parent = NULL;
     cur_stack = 1;
     storage = NULL;
+    // TODO
+    last_updated = get_current_time();
     this->rotated = false;
     this->info_index = info_index;
     if(g.item_info[info_index].isContainer == true) {
@@ -949,7 +1004,7 @@ void Grid::AddItem(Item *item) {
     items.push_back(item);
 }
 
-void Grid::RemoveItem(Item *to_remove) {
+vector<Item *>::iterator Grid::RemoveItem(Item *to_remove) {
     bool found = false;
     int c = 0;
     for(auto& item: items) {
@@ -960,7 +1015,7 @@ void Grid::RemoveItem(Item *to_remove) {
         c++;
     }
     assert(found == true);
-    items.erase(items.begin() + c);
+    return items.erase(items.begin() + c);
 }
 
 /*
@@ -1286,6 +1341,11 @@ struct encounter_state {
     void wait(void);
 };
 
+enum class CharFlag {
+    Human,
+    Animal
+};
+
 struct Character {
     int n; // position by offset
     int x, y; // cache to avoid computations
@@ -1321,6 +1381,7 @@ struct Character {
     Grid *medical_left_lower_arm;
     Grid *medical_right_lower_arm;
 
+    int weight; // body weight
     int carry_weight;
 
     /*
@@ -1340,6 +1401,8 @@ struct Character {
     vector<Wound> wounds;
 
     vector<Disease> diseases;
+
+    vector<enum CharFlag> flags;
 
     // allowed range: 0 - 1
     float health;
@@ -1430,7 +1493,7 @@ struct Character {
     void wait(void);
 
     enum WEAPON_USE_RESULT useWeapon(Character *against);
-    void abuseItem(Item *item, float dt);
+    maybeVecIterator<Item *> abuseItem(Item *item, float dt);
     void switchWeaponHand(void);
     Item *getSelectedWeapon(void);
     bool hasAmmoForWeapon(void);
@@ -2530,6 +2593,22 @@ Character *TileMap::addRandomCharacter(Faction fac) {
     // position
     new_char->setPos(random_uninhabited_position());
 
+    /*
+      set character weight
+     */
+    if(fac == FACTION_WILD) {
+        if(wild_type == 0) {
+            // wild dog
+            new_char->weight = 30000;
+        } else {
+            // abominations
+            new_char->weight = 100000;
+        }
+    } else {
+        // humans
+        new_char->weight = 70000;
+    }
+
     // // starting health
     // uniform_real_distribution<> health_dist(0.1, 1);
     // new_char->health = health_dist(g.rng);
@@ -2772,10 +2851,10 @@ void Character::do_map_AI(void) {
 static vector<Grid *> *ground_at_character(Character *character);
 
 // decrease item's condition and destroy it if its condition is too low
-void Character::abuseItem(Item *item, float amount) {
+maybeVecIterator<Item *> Character::abuseItem(Item *item, float amount) {
     if(item->condition < -0.5)
         // some items like the fist can't be damaged
-        return;
+        return maybeVecIterator<Item *>();
 
     item->condition -= amount;
 
@@ -2806,14 +2885,16 @@ void Character::abuseItem(Item *item, float amount) {
                  item->getName(), name);
 
             delete item;
-            return;
+            return maybeVecIterator<Item *>();
         }
 
         assert(item->parent != NULL);
-        item->parent->RemoveItem(item);
+        vector<Item *>::iterator it = item->parent->RemoveItem(item);
 
         delete item;
+        return maybeVecIterator<Item *>(it);
     }
+    return maybeVecIterator<Item *>();
 }
 
 enum WEAPON_USE_RESULT Character::useWeapon(Character *against) {
@@ -2947,7 +3028,7 @@ void Character::update(void) {
         // increase it's severity
         }
         else if(wounds[i].severity > 0) {
-            // start healing after 5 hours
+            // start healing after 3 hours
             if(wounds[i].age > 3000) {
                 if(wounds[i].severity >= 0.004) {
                     wounds[i].modify_severity(-0.002 * dt * 0.001);
@@ -2969,18 +3050,6 @@ void Character::update(void) {
         bleed_damage += (float)w.bleeding;
     }
     health = max((float)0.0, health - bleed_damage);
-
-    if(activity == ACTIVITY_MOVE) {
-        /*
-          decrease condition of items that the player is carrying
-          on inventory hardpoints
-        */
-        for(auto& hp : inventory_hardpoints) {
-            for(auto& item : hp->items) {
-                abuseItem(item, dt * 0.002 * 0.001);
-            }
-        }
-    }
 
     /*
       update diseases
@@ -3649,6 +3718,8 @@ TileMap::TileMap(int sx, int sy, int c, int r) {
     move_anim_rate3 = (float)TileMap::hex_step_x / (float)config.frame_rate / anim_duration;
     map_move_frame = -1;
     map_move_frame_max = (float)config.frame_rate * anim_duration;
+
+    player = NULL;
 }
 
 void TileMap::focusOnPlayer(void) {
@@ -5144,8 +5215,53 @@ void isGameOver(void) {
     }
 }
 
+static void updateItems(Character *at) {
+    vector<Grid *> *ground = ground_at_character(at);
+
+    if(ground == NULL) {
+        return;
+    }
+
+    int current_time = at->nextMove;
+
+    /*
+      TODO Grid::updateItems?
+     */
+    for(auto&& grid : *ground) {
+        vector<Item *>::iterator it;
+        for(it = grid->items.begin(); it != grid->items.end();) {
+            maybeVecIterator<Item *> ret = (*it)->update(current_time);
+            if(ret.is_just() == true) {
+                it = ret.get();
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    for(auto& hp : at->inventory_hardpoints) {
+        vector<Item *>::iterator it;
+        for(it = hp->items.begin(); it != hp->items.end();) {
+            maybeVecIterator<Item *> ret = (*it)->update(current_time);
+            if(ret.is_just() == true) {
+                it = ret.get();
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
 static void fade_to_UI(UI *from, UI *to);
 static void removeEncounter(EncounterRecord r);
+static int get_current_time(void) {
+    if(g.map == NULL or g.map->player == NULL) {
+        return 9000;
+    } else {
+        return g.map->player->nextMove;
+    }
+}
+
 
 static void end_turn() {
     Character *c;
@@ -5182,6 +5298,8 @@ static void end_turn() {
     g.map->runWeather();
 
     ActivityKind prev = g.map->player->activity;
+
+    updateItems(g.map->player);
 
     g.map->player->update();
 
@@ -10925,7 +11043,7 @@ void Label::load(istream &is) {
 void Item::save(ostream &os) {
     os << pos.x1 << ' ' << pos.y1 << ' ' << pos.x2 << ' ' << pos.y2 << ' ';
     os << info_index << ' ' << cur_stack << ' ' << rotated << ' ';
-    os << condition << ' ';
+    os << condition << last_updated << ' ';
     if(storage != NULL) {
         os << true << ' ';
         storage->save(os);
@@ -10937,7 +11055,7 @@ void Item::save(ostream &os) {
 void Item::load(istream &is) {
     is >> pos.x1 >> pos.y1 >> pos.x2 >> pos.y2;
     is >> info_index >> cur_stack >> rotated;
-    is >> condition;
+    is >> condition >> last_updated;
     bool has_storage;
     is >> has_storage;
     if(has_storage == true) {
@@ -11530,11 +11648,11 @@ void load(void) {
         load_bitmaps();
         load_ui_sounds();
         init_colors();
-        #ifdef REWRITE_ITEMDEFS
+        //#ifdef REWRITE_ITEMDEFS
         init_iteminfo();
         save_ItemInfo();
         g.item_info.clear();
-        #endif
+        //#endif
         load_ItemInfo();
         calc_iteminfos_params();
         init_hardpointinfo();
