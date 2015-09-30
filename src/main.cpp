@@ -11648,11 +11648,11 @@ void load(void) {
         load_bitmaps();
         load_ui_sounds();
         init_colors();
-        //#ifdef REWRITE_ITEMDEFS
+        #ifdef REWRITE_ITEMDEFS
         init_iteminfo();
         save_ItemInfo();
         g.item_info.clear();
-        //#endif
+        #endif
         load_ItemInfo();
         calc_iteminfos_params();
         init_hardpointinfo();

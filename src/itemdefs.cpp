@@ -6,7 +6,7 @@
 std::vector<ItemInfo>& get_global_iteminfo(void);
 ALLEGRO_BITMAP *get_global_bitmap(size_t n);
 
-#define REWRITE_ITEMDEFS
+//#define REWRITE_ITEMDEFS
 #ifdef REWRITE_ITEMDEFS
 void init_iteminfo(void) {
     ItemInfo tmp;
