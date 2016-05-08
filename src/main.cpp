@@ -11043,7 +11043,7 @@ void Label::load(istream &is) {
 void Item::save(ostream &os) {
     os << pos.x1 << ' ' << pos.y1 << ' ' << pos.x2 << ' ' << pos.y2 << ' ';
     os << info_index << ' ' << cur_stack << ' ' << rotated << ' ';
-    os << condition << last_updated << ' ';
+    os << condition << ' ' << last_updated << ' ';
     if(storage != NULL) {
         os << true << ' ';
         storage->save(os);
@@ -11484,9 +11484,11 @@ static void logo(void) {
 void pressEscape() {
     exitUIs();
 
-    if(g.ui_Items->from_encounter == true) {
+    if(is_game_over() == false) {
+      if(g.ui_Items->from_encounter == true) {
         inventory_to_encounter();
         return;
+      }
     }
     // can't get out of encounter or stories with escape
     if(g.ui == g.ui_Encounter ||
