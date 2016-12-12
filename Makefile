@@ -3,7 +3,7 @@ override CXXFLAGS+=-g -Wall -Wextra -pedantic --std=c++11 $(SANITIZE) -funsigned
 #override CXX=clang++-3.5
 INCLUDES=
 
-LIBS=-lstdc++ `pkg-config --libs allegro-5.0 allegro_primitives-5.0 allegro_color-5.0 allegro_image-5.0 allegro_font-5.0 allegro_ttf-5.0 allegro_dialog-5.0 allegro_audio-5.0 allegro_acodec-5.0`
+LIBS=-lstdc++ `pkg-config --libs allegro-5 allegro_primitives-5 allegro_color-5 allegro_image-5 allegro_font-5 allegro_ttf-5 allegro_dialog-5 allegro_audio-5 allegro_acodec-5`
 
 OBJS= \
 	src/util.o src/rect.o src/widget.o src/config.o src/colors.o src/fontmanager.o src/button.o src/textbutton.o src/barindicator.o src/slider.o src/labelledcheckbox.o src/wound.o src/world.o src/musicplayer.o src/ui.o src/optionsui.o src/sound.o src/fadetransitionui.o src/animation.o src/gridinfo.o src/iteminfo.o src/itemdefs.o src/weatherinfo.o src/main.o

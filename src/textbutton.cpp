@@ -5,6 +5,8 @@
 #include "./fontmanager.h"
 #include "./sound.h"
 
+#include <math.h>
+
 #include <algorithm>
 
 #include <allegro5/allegro.h>

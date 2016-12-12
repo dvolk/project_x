@@ -5,6 +5,8 @@
 #include "./sound.h"
 #include "./colors.h"
 
+#include <math.h>
+
 #include <allegro5/allegro.h>
 #include <stdio.h>
 #include <algorithm>

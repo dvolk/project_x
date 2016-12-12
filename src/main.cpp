@@ -20,6 +20,7 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <random>
 
 #include "./version.h"
 #include "./util.h"
