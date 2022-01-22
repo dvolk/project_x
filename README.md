@@ -19,14 +19,14 @@ Webpage: https://dvolk.github.io/project_x/
 <table>
     <tr>
         <td><img src="https://i.imgur.com/P9MYRkQ.png"></td>
-        <td>    <img src="https://i.imgur.com/VACE1gm.png"></td>
+        <td><img src="https://i.imgur.com/VACE1gm.png"></td>
     </tr>
-        <tr>
-        <td>    <img src="https://i.imgur.com/jUawCUT.png"></td>
-        <td>    <img src="https://i.imgur.com/lkqYxxl.png"></td>
-                </tr>
-            <tr>
-        <td>    <img src="https://i.imgur.com/MuYioFh.png"></td>
-        <td>    <img src="https://i.imgur.com/vrnQkZo.png"></td>
-            </tr>
-    </table>
+    <tr>
+        <td><img src="https://i.imgur.com/jUawCUT.png"></td>
+        <td><img src="https://i.imgur.com/lkqYxxl.png"></td>
+    </tr>
+    <tr>
+        <td><img src="https://i.imgur.com/MuYioFh.png"></td>
+        <td><img src="https://i.imgur.com/vrnQkZo.png"></td>
+    </tr>
+</table>
